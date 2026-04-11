@@ -10,7 +10,25 @@
       "Bash(bun install:*)",
       "Bash(npx tsc:*)",
       "Bash(npx next:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(cd:*)",
+      "Bash(npx drizzle-kit:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npm run:*)",
+      "WebSearch",
+      "WebFetch(domain:unsplash.com)",
+      "Bash(curl -L -o \"/c/Users/utils/Documents/IT Projects/nova-fintech/frontend/public/login-bg.jpg\" \"https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1920&q=80\")",
+      "Bash(curl -L -o \"login-bg-1.jpg\" \"https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1920&q=80\")",
+      "Bash(curl -L -o \"login-bg-2.jpg\" \"https://images.unsplash.com/photo-1551076805-e1869033e561?w=1920&q=80\")",
+      "Bash(curl -L -o \"login-bg-3.jpg\" \"https://images.unsplash.com/photo-1666214280557-f1b5022eb634?w=1920&q=80\")",
+      "Bash(curl -L -o \"login-bg-4.jpg\" \"https://images.unsplash.com/photo-1504439468489-c8920d796a29?w=1920&q=80\")",
+      "Bash(curl -L -o \"login-bg-5.jpg\" \"https://images.unsplash.com/photo-1581594693702-fbdc51b2763b?w=1920&q=80\")",
+      "Bash(ls:*)",
+      "Bash(curl -sL -o \"login-bg-2.jpg\" \"https://images.unsplash.com/photo-1551076805-e1869033e561?w=1920&q=80\")",
+      "Bash(curl -sL -o \"login-bg-3.jpg\" \"https://images.unsplash.com/photo-1504439468489-c8920d796a29?w=1920&q=80\")",
+      "Bash(curl -sL -o \"login-bg-2.jpg\" \"https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=1920&q=80\")",
+      "Bash(curl -sL -o \"login-bg-3.jpg\" \"https://images.unsplash.com/photo-1666214280557-f1b5022eb634?w=1920&q=80\")"
     ]
   }
 }
