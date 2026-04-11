@@ -19,9 +19,21 @@ export function createAuthService(mailService: MailService) {
   }
 
   return {
+    async getMe(userId: string) {
+      const [user] = await findActiveUser("id", userId);
+      if (!user) throw new Error("User not found");
+      return {
+        id: user.id,
+        email: user.email,
+        accountType: user.accountType,
+        isVerified: user.isVerified,
+        createdAt: user.createdAt,
+      };
+    },
+
     async login(email: string, password: string) {
       const [user] = await findActiveUser("email", email);
-      if (!user) {
+      if (!user || !user.password) {
         throw new Error("Invalid credentials");
       }
 
@@ -38,16 +50,49 @@ export function createAuthService(mailService: MailService) {
           email: user.email,
           accountType: user.accountType,
           isVerified: user.isVerified,
-          mustChangePassword: user.mustChangePassword,
           createdAt: user.createdAt,
         },
         ...tokens,
       };
     },
 
+    async setupPassword(token: string, password: string) {
+      const [verification] = await db
+        .select()
+        .from(verifications)
+        .where(
+          and(
+            eq(verifications.type, "account_setup"),
+            eq(verifications.value, token),
+            isNull(verifications.usedAt),
+            gt(verifications.expiresAt, new Date()),
+          ),
+        );
+
+      if (!verification) {
+        throw new Error("Invalid or expired setup token");
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      await db
+        .update(verifications)
+        .set({ usedAt: new Date() })
+        .where(eq(verifications.id, verification.id));
+
+      await db
+        .update(users)
+        .set({
+          password: hashedPassword,
+          isVerified: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, verification.userId));
+    },
+
     async changePassword(userId: string, currentPassword: string, newPassword: string) {
       const [user] = await findActiveUser("id", userId);
-      if (!user) {
+      if (!user || !user.password) {
         throw new Error("User not found");
       }
 
@@ -62,7 +107,6 @@ export function createAuthService(mailService: MailService) {
         .update(users)
         .set({
           password: hashedPassword,
-          mustChangePassword: false,
           updatedAt: new Date(),
         })
         .where(eq(users.id, userId));
@@ -138,7 +182,6 @@ export function createAuthService(mailService: MailService) {
         .update(users)
         .set({
           password: hashedPassword,
-          mustChangePassword: false,
           refreshToken: null,
           updatedAt: new Date(),
         })

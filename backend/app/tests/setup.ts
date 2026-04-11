@@ -7,26 +7,23 @@ let server: Server;
 let baseUrl: string;
 
 export async function setupTestServer() {
-  // Create tables if they don't exist
-  await db.execute(sql`DO $$ BEGIN
-    CREATE TYPE account_type AS ENUM ('user', 'admin');
-  EXCEPTION WHEN duplicate_object THEN NULL;
-  END $$`);
+  // Drop everything and recreate to ensure schema is up to date
+  await db.execute(sql`DROP TABLE IF EXISTS verifications`);
+  await db.execute(sql`DROP TABLE IF EXISTS users`);
+  await db.execute(sql`DROP TYPE IF EXISTS account_type`);
+  await db.execute(sql`DROP TYPE IF EXISTS verification_type`);
 
-  await db.execute(sql`DO $$ BEGIN
-    CREATE TYPE verification_type AS ENUM ('email_verification', 'password_reset');
-  EXCEPTION WHEN duplicate_object THEN NULL;
-  END $$`);
+  await db.execute(sql`CREATE TYPE account_type AS ENUM ('user', 'admin')`);
+  await db.execute(sql`CREATE TYPE verification_type AS ENUM ('email_verification', 'password_reset', 'account_setup')`);
 
   await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE users (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       email VARCHAR(255) NOT NULL UNIQUE,
-      password VARCHAR(255) NOT NULL,
+      password VARCHAR(255),
       account_type account_type NOT NULL DEFAULT 'user',
       refresh_token VARCHAR(500),
       is_verified BOOLEAN NOT NULL DEFAULT false,
-      must_change_password BOOLEAN NOT NULL DEFAULT false,
       deleted_at TIMESTAMP,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -34,7 +31,7 @@ export async function setupTestServer() {
   `);
 
   await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS verifications (
+    CREATE TABLE verifications (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID NOT NULL REFERENCES users(id),
       type verification_type NOT NULL,

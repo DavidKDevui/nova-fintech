@@ -5,7 +5,7 @@ export function createHealthService() {
   return {
     async check() {
       const result = await db.execute(sql`SELECT NOW()`);
-      return { status: "ok", time: result.rows[0].now };
+      return { status: "ok", time: (result.rows[0] as Record<string, unknown>).now };
     },
   };
 }

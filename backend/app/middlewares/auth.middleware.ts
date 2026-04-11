@@ -12,14 +12,16 @@ export interface AuthRequest extends Request {
 }
 
 export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
+  // Read token from cookie first, fallback to Authorization header
+  const token = req.cookies?.accessToken
+    || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+
+  if (!token) {
     res.status(401).json({ error: "Missing or invalid token" });
     return;
   }
 
   try {
-    const token = header.slice(7);
     const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
 
     const [user] = await db

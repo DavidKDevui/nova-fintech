@@ -10,10 +10,12 @@ export function authRoutes(authService: AuthService) {
   // Public
   router.post("/login", controller.login);
   router.post("/refresh-token", controller.refresh);
+  router.post("/setup-password", controller.setupPassword);
   router.post("/forgot-password", controller.forgotPassword);
   router.post("/reset-password", controller.resetPassword);
 
   // Protected
+  router.get("/me", authMiddleware, controller.me);
   router.post("/change-password", authMiddleware, controller.changePassword);
   router.post("/logout", authMiddleware, controller.logout);
   router.delete("/delete-account", authMiddleware, controller.deleteAccount);

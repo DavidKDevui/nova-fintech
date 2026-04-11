@@ -1,8 +1,7 @@
 import crypto from "crypto";
-import bcrypt from "bcrypt";
 import { eq, and, isNull } from "drizzle-orm";
 import { db } from "../db";
-import { users } from "../db/schema";
+import { users, verifications } from "../db/schema";
 import type { MailService } from "./mail.service";
 
 export function createAdminService(mailService: MailService) {
@@ -17,17 +16,9 @@ export function createAdminService(mailService: MailService) {
         throw new Error("Email already exists");
       }
 
-      const tempPassword = crypto.randomBytes(8).toString("hex");
-      const hashedPassword = await bcrypt.hash(tempPassword, 10);
-
       const [user] = await db
         .insert(users)
-        .values({
-          email,
-          password: hashedPassword,
-          isVerified: true,
-          mustChangePassword: true,
-        })
+        .values({ email })
         .returning({
           id: users.id,
           email: users.email,
@@ -35,7 +26,16 @@ export function createAdminService(mailService: MailService) {
           createdAt: users.createdAt,
         });
 
-      await mailService.sendWelcome(email, tempPassword);
+      const token = crypto.randomBytes(32).toString("hex");
+
+      await db.insert(verifications).values({
+        userId: user!.id,
+        type: "account_setup",
+        value: token,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
+      });
+
+      await mailService.sendAccountSetup(email, token);
 
       return user;
     },
@@ -47,7 +47,6 @@ export function createAdminService(mailService: MailService) {
           email: users.email,
           accountType: users.accountType,
           isVerified: users.isVerified,
-          mustChangePassword: users.mustChangePassword,
           createdAt: users.createdAt,
           deletedAt: users.deletedAt,
         })

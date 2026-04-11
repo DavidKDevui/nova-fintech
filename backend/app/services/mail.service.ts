@@ -62,27 +62,25 @@ export function createMailService() {
       logger.info({ to }, "Email verification code sent");
     },
 
-    async sendWelcome(to: string, tempPassword: string) {
-      const loginUrl = `${process.env.FRONTEND_URL || "http://localhost:3001"}/login`;
+    async sendAccountSetup(to: string, token: string) {
+      const setupUrl = `${process.env.FRONTEND_URL || "http://localhost:3001"}/setup-password?token=${token}`;
 
       const html = buildMailHtml([
         { type: "title", content: "Bienvenue sur Nova" },
-        { type: "text", content: "Votre compte a ete cree. Voici vos identifiants de connexion :" },
-        { type: "text", content: `Email : ${to}` },
-        { type: "text", content: `Mot de passe temporaire : ${tempPassword}` },
-        { type: "button", label: "Se connecter", url: loginUrl },
+        { type: "text", content: "Votre compte a ete cree. Cliquez sur le bouton ci-dessous pour definir votre mot de passe." },
+        { type: "button", label: "Definir mon mot de passe", url: setupUrl },
         { type: "divider" },
-        { type: "text", content: "Vous devrez changer votre mot de passe lors de votre premiere connexion." },
+        { type: "text", content: "Ce lien expire dans 24 heures. Si vous n'avez pas demande ce compte, ignorez cet email." },
       ]);
 
       await transporter.sendMail({
         from: process.env.SMTP_FROM || "noreply@nova-fintech.com",
         to,
-        subject: "Bienvenue sur Nova - Vos identifiants",
+        subject: "Bienvenue sur Nova - Definissez votre mot de passe",
         html,
       });
 
-      logger.info({ to }, "Welcome email sent");
+      logger.info({ to }, "Account setup email sent");
     },
   };
 }

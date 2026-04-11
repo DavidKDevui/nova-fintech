@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { logger } from "../logger";
 import type { AuthService } from "../services/auth.service";
 import type { AuthRequest } from "../middlewares/auth.middleware";
+import { setAuthCookies, clearAuthCookies } from "../utils/cookies";
 
 export function createAuthController(authService: AuthService) {
   return {
@@ -13,13 +14,33 @@ export function createAuthController(authService: AuthService) {
           return;
         }
         const data = await authService.login(email, password);
-        res.json(data);
+        setAuthCookies(res, data.accessToken, data.refreshToken);
+        res.json({ user: data.user });
       } catch (err: any) {
         if (err.message === "Invalid credentials") {
           res.status(401).json({ error: err.message });
           return;
         }
         logger.error(err, "Login failed");
+        res.status(500).json({ error: "Internal server error" });
+      }
+    },
+
+    async setupPassword(req: Request, res: Response) {
+      try {
+        const { token, password } = req.body;
+        if (!token || !password) {
+          res.status(400).json({ error: "Token and password are required" });
+          return;
+        }
+        await authService.setupPassword(token, password);
+        res.json({ message: "Password set successfully" });
+      } catch (err: any) {
+        if (err.message === "Invalid or expired setup token") {
+          res.status(400).json({ error: err.message });
+          return;
+        }
+        logger.error(err, "Setup password failed");
         res.status(500).json({ error: "Internal server error" });
       }
     },
@@ -46,15 +67,28 @@ export function createAuthController(authService: AuthService) {
 
     async refresh(req: Request, res: Response) {
       try {
-        const { refreshToken } = req.body;
+        const refreshToken = req.cookies?.refreshToken;
         if (!refreshToken) {
-          res.status(400).json({ error: "Refresh token is required" });
+          res.status(401).json({ error: "No refresh token" });
           return;
         }
         const tokens = await authService.refresh(refreshToken);
-        res.json(tokens);
+        setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+        res.json({ message: "Tokens refreshed" });
       } catch {
+        clearAuthCookies(res);
         res.status(401).json({ error: "Invalid refresh token" });
+      }
+    },
+
+    async me(req: Request, res: Response) {
+      try {
+        const { userId } = req as AuthRequest;
+        const user = await authService.getMe(userId);
+        res.json({ user });
+      } catch (err) {
+        logger.error(err, "Get me failed");
+        res.status(500).json({ error: "Internal server error" });
       }
     },
 
@@ -96,6 +130,7 @@ export function createAuthController(authService: AuthService) {
       try {
         const { userId } = req as AuthRequest;
         await authService.logout(userId);
+        clearAuthCookies(res);
         res.json({ message: "Logged out" });
       } catch (err) {
         logger.error(err, "Logout failed");
@@ -107,6 +142,7 @@ export function createAuthController(authService: AuthService) {
       try {
         const { userId } = req as AuthRequest;
         await authService.deleteAccount(userId);
+        clearAuthCookies(res);
         res.json({ message: "Account deleted" });
       } catch (err: any) {
         if (err.message === "User not found") {
