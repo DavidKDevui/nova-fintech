@@ -10,6 +10,7 @@ export const users = pgTable("users", {
   accountType: accountTypeEnum("account_type").notNull().default("user"),
   refreshToken: varchar("refresh_token", { length: 500 }),
   isVerified: boolean("is_verified").notNull().default(false),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

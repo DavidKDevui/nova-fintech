@@ -8,15 +8,13 @@ export function authRoutes(authService: AuthService) {
   const controller = createAuthController(authService);
 
   // Public
-  router.post("/register", controller.register);
   router.post("/login", controller.login);
   router.post("/refresh-token", controller.refresh);
   router.post("/forgot-password", controller.forgotPassword);
   router.post("/reset-password", controller.resetPassword);
 
-  // Protected (need token)
-  router.post("/verify-email", authMiddleware, controller.verifyEmail);
-  router.post("/resend-verification", authMiddleware, controller.resendVerification);
+  // Protected
+  router.post("/change-password", authMiddleware, controller.changePassword);
   router.post("/logout", authMiddleware, controller.logout);
   router.delete("/delete-account", authMiddleware, controller.deleteAccount);
 

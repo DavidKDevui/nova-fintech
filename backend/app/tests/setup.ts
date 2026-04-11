@@ -26,6 +26,7 @@ export async function setupTestServer() {
       account_type account_type NOT NULL DEFAULT 'user',
       refresh_token VARCHAR(500),
       is_verified BOOLEAN NOT NULL DEFAULT false,
+      must_change_password BOOLEAN NOT NULL DEFAULT false,
       deleted_at TIMESTAMP,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()

@@ -19,33 +19,6 @@ export function createAuthService(mailService: MailService) {
   }
 
   return {
-    async register(email: string, password: string) {
-      const existing = await findActiveUser("email", email);
-      if (existing.length > 0) {
-        throw new Error("Email already exists");
-      }
-
-      const hashedPassword = await bcrypt.hash(password, 10);
-
-      const [user] = await db
-        .insert(users)
-        .values({ email, password: hashedPassword })
-        .returning({
-          id: users.id,
-          email: users.email,
-          accountType: users.accountType,
-          isVerified: users.isVerified,
-          createdAt: users.createdAt,
-        });
-
-      // Send email verification code
-      await this.sendEmailVerification(user.id);
-
-      const tokens = await this.generateTokens(user.id);
-
-      return { user, ...tokens };
-    },
-
     async login(email: string, password: string) {
       const [user] = await findActiveUser("email", email);
       if (!user) {
@@ -65,10 +38,34 @@ export function createAuthService(mailService: MailService) {
           email: user.email,
           accountType: user.accountType,
           isVerified: user.isVerified,
+          mustChangePassword: user.mustChangePassword,
           createdAt: user.createdAt,
         },
         ...tokens,
       };
+    },
+
+    async changePassword(userId: string, currentPassword: string, newPassword: string) {
+      const [user] = await findActiveUser("id", userId);
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      const valid = await bcrypt.compare(currentPassword, user.password);
+      if (!valid) {
+        throw new Error("Invalid current password");
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      await db
+        .update(users)
+        .set({
+          password: hashedPassword,
+          mustChangePassword: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
     },
 
     async refresh(refreshToken: string) {
@@ -93,53 +90,6 @@ export function createAuthService(mailService: MailService) {
       } catch {
         throw new Error("Invalid refresh token");
       }
-    },
-
-    async sendEmailVerification(userId: string) {
-      const [user] = await findActiveUser("id", userId);
-      if (!user) {
-        throw new Error("User not found");
-      }
-
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-      await db.insert(verifications).values({
-        userId,
-        type: "email_verification",
-        value: code,
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 min
-      });
-
-      await mailService.sendEmailVerification(user.email, code);
-    },
-
-    async verifyEmail(userId: string, code: string) {
-      const [verification] = await db
-        .select()
-        .from(verifications)
-        .where(
-          and(
-            eq(verifications.userId, userId),
-            eq(verifications.type, "email_verification"),
-            eq(verifications.value, code),
-            isNull(verifications.usedAt),
-            gt(verifications.expiresAt, new Date()),
-          ),
-        );
-
-      if (!verification) {
-        throw new Error("Invalid or expired code");
-      }
-
-      await db
-        .update(verifications)
-        .set({ usedAt: new Date() })
-        .where(eq(verifications.id, verification.id));
-
-      await db
-        .update(users)
-        .set({ isVerified: true, updatedAt: new Date() })
-        .where(eq(users.id, userId));
     },
 
     async forgotPassword(email: string) {
@@ -188,6 +138,7 @@ export function createAuthService(mailService: MailService) {
         .update(users)
         .set({
           password: hashedPassword,
+          mustChangePassword: false,
           refreshToken: null,
           updatedAt: new Date(),
         })

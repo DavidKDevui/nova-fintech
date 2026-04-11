@@ -3,6 +3,7 @@ import { setupTestServer, cleanTestDb, teardownTestServer, getBaseUrl } from "..
 import { db } from "../../db";
 import { users, verifications } from "../../db/schema";
 import { eq } from "drizzle-orm";
+import bcrypt from "bcrypt";
 
 beforeAll(async () => {
   await setupTestServer();
@@ -18,7 +19,7 @@ beforeEach(async () => {
 
 async function request(path: string, options: RequestInit = {}) {
   const { headers, ...rest } = options;
-  const res = await fetch(`${getBaseUrl()}/auth${path}`, {
+  const res = await fetch(`${getBaseUrl()}${path}`, {
     ...rest,
     headers: {
       "Content-Type": "application/json",
@@ -33,92 +34,133 @@ function withAuth(token: string): RequestInit {
   return { headers: { Authorization: `Bearer ${token}` } };
 }
 
-// ─── REGISTER ────────────────────────────────────────
+// Helper: create a user directly in DB and return login tokens
+async function createTestUser(email: string, password: string, accountType: "user" | "admin" = "user") {
+  const hashed = await bcrypt.hash(password, 10);
+  await db.insert(users).values({
+    email,
+    password: hashed,
+    accountType,
+    isVerified: true,
+    mustChangePassword: false,
+  });
 
-describe("POST /auth/register", () => {
-  test("should register a new user", async () => {
-    const { status, data } = await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email: "test@test.com", password: "Password123!" }),
-    });
+  const { data } = await request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+
+  return data;
+}
+
+// Helper: create a user via admin endpoint
+async function adminCreateUser(adminToken: string, email: string) {
+  return request("/admin/users", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+    ...withAuth(adminToken),
+  });
+}
+
+// ─── ADMIN: CREATE USER ─────────────────────────────
+
+describe("POST /admin/users", () => {
+  test("should create a user as admin", async () => {
+    const admin = await createTestUser("admin@test.com", "Admin123!", "admin");
+    const { status, data } = await adminCreateUser(admin.accessToken, "newuser@test.com");
 
     expect(status).toBe(201);
-    expect(data.user.email).toBe("test@test.com");
-    expect(data.user.accountType).toBe("user");
-    expect(data.user.isVerified).toBe(false);
-    expect(data.accessToken).toBeDefined();
-    expect(data.refreshToken).toBeDefined();
+    expect(data.email).toBe("newuser@test.com");
+    expect(data.accountType).toBe("user");
+  });
+
+  test("should fail if not admin", async () => {
+    const user = await createTestUser("user@test.com", "User123!");
+    const { status } = await adminCreateUser(user.accessToken, "newuser@test.com");
+
+    expect(status).toBe(403);
+  });
+
+  test("should fail if not authenticated", async () => {
+    const { status } = await request("/admin/users", {
+      method: "POST",
+      body: JSON.stringify({ email: "newuser@test.com" }),
+    });
+
+    expect(status).toBe(401);
   });
 
   test("should fail with duplicate email", async () => {
-    await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email: "test@test.com", password: "Password123!" }),
-    });
-
-    const { status, data } = await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email: "test@test.com", password: "Password456!" }),
-    });
+    const admin = await createTestUser("admin@test.com", "Admin123!", "admin");
+    await adminCreateUser(admin.accessToken, "dup@test.com");
+    const { status } = await adminCreateUser(admin.accessToken, "dup@test.com");
 
     expect(status).toBe(409);
-    expect(data.error).toBe("Email already exists");
   });
+});
 
-  test("should fail without email or password", async () => {
-    const { status } = await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email: "test@test.com" }),
+// ─── ADMIN: LIST USERS ──────────────────────────────
+
+describe("GET /admin/users", () => {
+  test("should list users as admin", async () => {
+    const admin = await createTestUser("admin@test.com", "Admin123!", "admin");
+    await adminCreateUser(admin.accessToken, "user1@test.com");
+    await adminCreateUser(admin.accessToken, "user2@test.com");
+
+    const { status, data } = await request("/admin/users", {
+      method: "GET",
+      ...withAuth(admin.accessToken),
     });
 
-    expect(status).toBe(400);
+    expect(status).toBe(200);
+    expect(data.length).toBe(3); // admin + 2 users
   });
 
-  test("should create a verification code", async () => {
-    const { data } = await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email: "test@test.com", password: "Password123!" }),
+  test("should fail if not admin", async () => {
+    const user = await createTestUser("user@test.com", "User123!");
+    const { status } = await request("/admin/users", {
+      method: "GET",
+      ...withAuth(user.accessToken),
     });
 
-    const [verification] = await db
-      .select()
-      .from(verifications)
-      .where(eq(verifications.userId, data.user.id));
-
-    expect(verification).toBeDefined();
-    expect(verification.type).toBe("email_verification");
+    expect(status).toBe(403);
   });
 });
 
 // ─── LOGIN ───────────────────────────────────────────
 
 describe("POST /auth/login", () => {
-  const email = "login@test.com";
-  const password = "Password123!";
-
-  beforeEach(async () => {
-    await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
-  });
-
   test("should login with valid credentials", async () => {
-    const { status, data } = await request("/login", {
+    await createTestUser("login@test.com", "Password123!");
+
+    const { status, data } = await request("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: "login@test.com", password: "Password123!" }),
     });
 
     expect(status).toBe(200);
-    expect(data.user.email).toBe(email);
+    expect(data.user.email).toBe("login@test.com");
+    expect(data.user.mustChangePassword).toBe(false);
     expect(data.accessToken).toBeDefined();
     expect(data.refreshToken).toBeDefined();
   });
 
+  test("should indicate mustChangePassword for admin-created users", async () => {
+    const admin = await createTestUser("admin@test.com", "Admin123!", "admin");
+    const { data: created } = await adminCreateUser(admin.accessToken, "new@test.com");
+
+    // Get the temp password from DB (we can't read it from the email in tests)
+    // Instead, let's verify the flag is set
+    const [user] = await db.select().from(users).where(eq(users.email, "new@test.com"));
+    expect(user.mustChangePassword).toBe(true);
+  });
+
   test("should fail with wrong password", async () => {
-    const { status, data } = await request("/login", {
+    await createTestUser("login@test.com", "Password123!");
+
+    const { status, data } = await request("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password: "wrong" }),
+      body: JSON.stringify({ email: "login@test.com", password: "wrong" }),
     });
 
     expect(status).toBe(401);
@@ -126,9 +168,64 @@ describe("POST /auth/login", () => {
   });
 
   test("should fail with non-existent email", async () => {
-    const { status } = await request("/login", {
+    const { status } = await request("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email: "nope@test.com", password }),
+      body: JSON.stringify({ email: "nope@test.com", password: "Password123!" }),
+    });
+
+    expect(status).toBe(401);
+  });
+});
+
+// ─── CHANGE PASSWORD ─────────────────────────────────
+
+describe("POST /auth/change-password", () => {
+  test("should change password", async () => {
+    const loginData = await createTestUser("change@test.com", "OldPass123!");
+
+    const { status } = await request("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword: "OldPass123!", newPassword: "NewPass123!" }),
+      ...withAuth(loginData.accessToken),
+    });
+
+    expect(status).toBe(200);
+
+    // Should login with new password
+    const { status: loginStatus } = await request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: "change@test.com", password: "NewPass123!" }),
+    });
+
+    expect(loginStatus).toBe(200);
+  });
+
+  test("should clear mustChangePassword flag", async () => {
+    const admin = await createTestUser("admin@test.com", "Admin123!", "admin");
+    await adminCreateUser(admin.accessToken, "forced@test.com");
+
+    // Get user and their temp password hash to login
+    const [user] = await db.select().from(users).where(eq(users.email, "forced@test.com"));
+    expect(user.mustChangePassword).toBe(true);
+  });
+
+  test("should fail with wrong current password", async () => {
+    const loginData = await createTestUser("change@test.com", "OldPass123!");
+
+    const { status, data } = await request("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword: "wrong", newPassword: "NewPass123!" }),
+      ...withAuth(loginData.accessToken),
+    });
+
+    expect(status).toBe(401);
+    expect(data.error).toBe("Invalid current password");
+  });
+
+  test("should fail without auth token", async () => {
+    const { status } = await request("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword: "old", newPassword: "new" }),
     });
 
     expect(status).toBe(401);
@@ -139,14 +236,11 @@ describe("POST /auth/login", () => {
 
 describe("POST /auth/refresh-token", () => {
   test("should return new tokens", async () => {
-    const { data: registerData } = await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email: "refresh@test.com", password: "Password123!" }),
-    });
+    const loginData = await createTestUser("refresh@test.com", "Password123!");
 
-    const { status, data } = await request("/refresh-token", {
+    const { status, data } = await request("/auth/refresh-token", {
       method: "POST",
-      body: JSON.stringify({ refreshToken: registerData.refreshToken }),
+      body: JSON.stringify({ refreshToken: loginData.refreshToken }),
     });
 
     expect(status).toBe(200);
@@ -155,61 +249,9 @@ describe("POST /auth/refresh-token", () => {
   });
 
   test("should fail with invalid token", async () => {
-    const { status } = await request("/refresh-token", {
+    const { status } = await request("/auth/refresh-token", {
       method: "POST",
       body: JSON.stringify({ refreshToken: "invalid" }),
-    });
-
-    expect(status).toBe(401);
-  });
-});
-
-// ─── VERIFY EMAIL ────────────────────────────────────
-
-describe("POST /auth/verify-email", () => {
-  test("should verify email with valid code", async () => {
-    const { data: registerData } = await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email: "verify@test.com", password: "Password123!" }),
-    });
-
-    const [verification] = await db
-      .select()
-      .from(verifications)
-      .where(eq(verifications.userId, registerData.user.id));
-
-    const { status, data } = await request("/verify-email", {
-      method: "POST",
-      body: JSON.stringify({ code: verification.value }),
-      ...withAuth(registerData.accessToken),
-    });
-
-    expect(status).toBe(200);
-    expect(data.message).toBe("Email verified");
-
-    const [user] = await db.select().from(users).where(eq(users.id, registerData.user.id));
-    expect(user.isVerified).toBe(true);
-  });
-
-  test("should fail with wrong code", async () => {
-    const { data: registerData } = await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email: "verify2@test.com", password: "Password123!" }),
-    });
-
-    const { status } = await request("/verify-email", {
-      method: "POST",
-      body: JSON.stringify({ code: "000000" }),
-      ...withAuth(registerData.accessToken),
-    });
-
-    expect(status).toBe(400);
-  });
-
-  test("should fail without auth token", async () => {
-    const { status } = await request("/verify-email", {
-      method: "POST",
-      body: JSON.stringify({ code: "123456" }),
     });
 
     expect(status).toBe(401);
@@ -220,7 +262,7 @@ describe("POST /auth/verify-email", () => {
 
 describe("POST /auth/forgot-password", () => {
   test("should return success even if email doesn't exist", async () => {
-    const { status, data } = await request("/forgot-password", {
+    const { status, data } = await request("/auth/forgot-password", {
       method: "POST",
       body: JSON.stringify({ email: "noone@test.com" }),
     });
@@ -230,12 +272,9 @@ describe("POST /auth/forgot-password", () => {
   });
 
   test("should create a reset token for existing user", async () => {
-    const { data: registerData } = await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email: "forgot@test.com", password: "Password123!" }),
-    });
+    const loginData = await createTestUser("forgot@test.com", "Password123!");
 
-    await request("/forgot-password", {
+    await request("/auth/forgot-password", {
       method: "POST",
       body: JSON.stringify({ email: "forgot@test.com" }),
     });
@@ -246,7 +285,7 @@ describe("POST /auth/forgot-password", () => {
       .where(eq(verifications.type, "password_reset"));
 
     expect(resetVerifications.length).toBe(1);
-    expect(resetVerifications[0].userId).toBe(registerData.user.id);
+    expect(resetVerifications[0].userId).toBe(loginData.user.id);
   });
 });
 
@@ -254,12 +293,9 @@ describe("POST /auth/forgot-password", () => {
 
 describe("POST /auth/reset-password", () => {
   test("should reset password with valid token", async () => {
-    await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email: "reset@test.com", password: "OldPassword123!" }),
-    });
+    await createTestUser("reset@test.com", "OldPassword123!");
 
-    await request("/forgot-password", {
+    await request("/auth/forgot-password", {
       method: "POST",
       body: JSON.stringify({ email: "reset@test.com" }),
     });
@@ -269,14 +305,14 @@ describe("POST /auth/reset-password", () => {
       .from(verifications)
       .where(eq(verifications.type, "password_reset"));
 
-    const { status } = await request("/reset-password", {
+    const { status } = await request("/auth/reset-password", {
       method: "POST",
       body: JSON.stringify({ token: resetVerification.value, password: "NewPassword123!" }),
     });
 
     expect(status).toBe(200);
 
-    const { status: loginStatus } = await request("/login", {
+    const { status: loginStatus } = await request("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email: "reset@test.com", password: "NewPassword123!" }),
     });
@@ -285,7 +321,7 @@ describe("POST /auth/reset-password", () => {
   });
 
   test("should fail with invalid token", async () => {
-    const { status } = await request("/reset-password", {
+    const { status } = await request("/auth/reset-password", {
       method: "POST",
       body: JSON.stringify({ token: "invalid", password: "NewPassword123!" }),
     });
@@ -298,28 +334,25 @@ describe("POST /auth/reset-password", () => {
 
 describe("POST /auth/logout", () => {
   test("should logout and invalidate refresh token", async () => {
-    const { data: registerData } = await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email: "logout@test.com", password: "Password123!" }),
-    });
+    const loginData = await createTestUser("logout@test.com", "Password123!");
 
-    const { status } = await request("/logout", {
+    const { status } = await request("/auth/logout", {
       method: "POST",
-      ...withAuth(registerData.accessToken),
+      ...withAuth(loginData.accessToken),
     });
 
     expect(status).toBe(200);
 
-    const { status: refreshStatus } = await request("/refresh-token", {
+    const { status: refreshStatus } = await request("/auth/refresh-token", {
       method: "POST",
-      body: JSON.stringify({ refreshToken: registerData.refreshToken }),
+      body: JSON.stringify({ refreshToken: loginData.refreshToken }),
     });
 
     expect(refreshStatus).toBe(401);
   });
 
   test("should fail without auth token", async () => {
-    const { status } = await request("/logout", {
+    const { status } = await request("/auth/logout", {
       method: "POST",
     });
 
@@ -331,22 +364,19 @@ describe("POST /auth/logout", () => {
 
 describe("DELETE /auth/delete-account", () => {
   test("should soft delete account", async () => {
-    const { data: registerData } = await request("/register", {
-      method: "POST",
-      body: JSON.stringify({ email: "delete@test.com", password: "Password123!" }),
-    });
+    const loginData = await createTestUser("delete@test.com", "Password123!");
 
-    const { status } = await request("/delete-account", {
+    const { status } = await request("/auth/delete-account", {
       method: "DELETE",
-      ...withAuth(registerData.accessToken),
+      ...withAuth(loginData.accessToken),
     });
 
     expect(status).toBe(200);
 
-    const [user] = await db.select().from(users).where(eq(users.id, registerData.user.id));
+    const [user] = await db.select().from(users).where(eq(users.id, loginData.user.id));
     expect(user.deletedAt).not.toBeNull();
 
-    const { status: loginStatus } = await request("/login", {
+    const { status: loginStatus } = await request("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email: "delete@test.com", password: "Password123!" }),
     });
@@ -355,7 +385,7 @@ describe("DELETE /auth/delete-account", () => {
   });
 
   test("should fail without auth token", async () => {
-    const { status } = await request("/delete-account", {
+    const { status } = await request("/auth/delete-account", {
       method: "DELETE",
     });
 

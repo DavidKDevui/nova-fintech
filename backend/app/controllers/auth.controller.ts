@@ -5,25 +5,6 @@ import type { AuthRequest } from "../middlewares/auth.middleware";
 
 export function createAuthController(authService: AuthService) {
   return {
-    async register(req: Request, res: Response) {
-      try {
-        const { email, password } = req.body;
-        if (!email || !password) {
-          res.status(400).json({ error: "Email and password are required" });
-          return;
-        }
-        const data = await authService.register(email, password);
-        res.status(201).json(data);
-      } catch (err: any) {
-        if (err.message === "Email already exists") {
-          res.status(409).json({ error: err.message });
-          return;
-        }
-        logger.error(err, "Registration failed");
-        res.status(500).json({ error: "Internal server error" });
-      }
-    },
-
     async login(req: Request, res: Response) {
       try {
         const { email, password } = req.body;
@@ -39,6 +20,26 @@ export function createAuthController(authService: AuthService) {
           return;
         }
         logger.error(err, "Login failed");
+        res.status(500).json({ error: "Internal server error" });
+      }
+    },
+
+    async changePassword(req: Request, res: Response) {
+      try {
+        const { userId } = req as AuthRequest;
+        const { currentPassword, newPassword } = req.body;
+        if (!currentPassword || !newPassword) {
+          res.status(400).json({ error: "Current password and new password are required" });
+          return;
+        }
+        await authService.changePassword(userId, currentPassword, newPassword);
+        res.json({ message: "Password changed" });
+      } catch (err: any) {
+        if (err.message === "Invalid current password") {
+          res.status(401).json({ error: err.message });
+          return;
+        }
+        logger.error(err, "Change password failed");
         res.status(500).json({ error: "Internal server error" });
       }
     },
@@ -87,39 +88,6 @@ export function createAuthController(authService: AuthService) {
           return;
         }
         logger.error(err, "Reset password failed");
-        res.status(500).json({ error: "Internal server error" });
-      }
-    },
-
-    // Protected routes — userId comes from JWT via middleware
-
-    async verifyEmail(req: Request, res: Response) {
-      try {
-        const { userId } = req as AuthRequest;
-        const { code } = req.body;
-        if (!code) {
-          res.status(400).json({ error: "Code is required" });
-          return;
-        }
-        await authService.verifyEmail(userId, code);
-        res.json({ message: "Email verified" });
-      } catch (err: any) {
-        if (err.message === "Invalid or expired code") {
-          res.status(400).json({ error: err.message });
-          return;
-        }
-        logger.error(err, "Email verification failed");
-        res.status(500).json({ error: "Internal server error" });
-      }
-    },
-
-    async resendVerification(req: Request, res: Response) {
-      try {
-        const { userId } = req as AuthRequest;
-        await authService.sendEmailVerification(userId);
-        res.json({ message: "Verification code sent" });
-      } catch (err) {
-        logger.error(err, "Resend verification failed");
         res.status(500).json({ error: "Internal server error" });
       }
     },
