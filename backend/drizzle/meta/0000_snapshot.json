@@ -1,0 +1,189 @@
+{
+  "id": "b4d4fa2b-7026-4239-b35c-2d0e5c7c1a74",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password": {
+          "name": "password",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_type": {
+          "name": "account_type",
+          "type": "account_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'user'"
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_verified": {
+          "name": "is_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.verifications": {
+      "name": "verifications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "verification_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "verifications_user_id_users_id_fk": {
+          "name": "verifications_user_id_users_id_fk",
+          "tableFrom": "verifications",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.account_type": {
+      "name": "account_type",
+      "schema": "public",
+      "values": [
+        "user",
+        "admin"
+      ]
+    },
+    "public.verification_type": {
+      "name": "verification_type",
+      "schema": "public",
+      "values": [
+        "email_verification",
+        "password_reset"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
