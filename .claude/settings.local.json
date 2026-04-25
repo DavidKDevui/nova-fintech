@@ -28,7 +28,30 @@
       "Bash(curl -sL -o \"login-bg-2.jpg\" \"https://images.unsplash.com/photo-1551076805-e1869033e561?w=1920&q=80\")",
       "Bash(curl -sL -o \"login-bg-3.jpg\" \"https://images.unsplash.com/photo-1504439468489-c8920d796a29?w=1920&q=80\")",
       "Bash(curl -sL -o \"login-bg-2.jpg\" \"https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=1920&q=80\")",
-      "Bash(curl -sL -o \"login-bg-3.jpg\" \"https://images.unsplash.com/photo-1666214280557-f1b5022eb634?w=1920&q=80\")"
+      "Bash(curl -sL -o \"login-bg-3.jpg\" \"https://images.unsplash.com/photo-1666214280557-f1b5022eb634?w=1920&q=80\")",
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"loginAction\\\\|login\\(\" C:/Users/utils/Documents/IT Projects/nova-fintech/frontend/src --include=*.ts --include=*.tsx)",
+      "Bash(wsl hostname:*)",
+      "WebFetch(domain:docs.bridgeapi.io)",
+      "Bash(grep -r \"refreshToken\\\\|refresh_token\\\\|refresh.*token\" --include=*.ts --include=*.tsx --include=*.js --include=*.jsx --exclude-dir=node_modules --exclude-dir=.next --exclude-dir=dist .)",
+      "Bash(grep -r \"refresh\\\\|token\" --include=*.ts --include=*.tsx --include=*.js --include=*.jsx --exclude-dir=node_modules --exclude-dir=.next --exclude-dir=dist .)",
+      "Bash(find frontend/src -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\) ! -path */node_modules/* ! -path */.next/*)",
+      "Bash(find . -path ./backend/* -o -path ./server/* -o -path ./api/*)",
+      "Bash(grep -r \"jwt\\\\|JWT\" --include=*.ts --include=*.tsx --exclude-dir=node_modules --exclude-dir=.next ./frontend/src)",
+      "Bash(node -e \"console.log\\(require\\(''./package.json''\\).dependencies.next\\)\")",
+      "Bash(node -e \":*)",
+      "Bash(find 'C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend\\\\node_modules\\\\next\\\\dist\\\\docs/' -name *middleware* -o -name *proxy* -o -name *routing*)",
+      "Bash(find '/c/Users/utils/Documents/IT Projects/nova-fintech' -type f \\\\\\(-name *bridge* -o -name *Bridge* \\\\\\))",
+      "WebFetch(domain:mon-entreprise.urssaf.fr)",
+      "WebFetch(domain:openfisca.org)",
+      "WebFetch(domain:data.economie.gouv.fr)",
+      "WebFetch(domain:api.gouv.fr)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:legislation.fr.openfisca.org)",
+      "Bash(cat frontend/drizzle/*.sql)",
+      "Bash(grep -l \"bridge_user_uuid\" frontend/drizzle/*.sql)",
+      "WebFetch(domain:www.bridgeapi.io)",
+      "Bash(grep -r \"connectSession\\\\|bridge.*callback\\\\|connect-sessions\\\\|bridge.*session\" /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src --include=*.ts --include=*.tsx)"
     ]
   }
 }
