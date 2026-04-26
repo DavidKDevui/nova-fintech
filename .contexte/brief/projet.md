@@ -8,10 +8,11 @@ Concurrent/reference : libe.app
 Professionnels de sante liberaux en exercice individuel (V1), puis cabinets de groupe SCP (V3).
 
 ## Stack
-- Backend : Express + Bun + TypeScript + Drizzle ORM + PostgreSQL
-- Frontend : Next.js (app web responsive)
+- Frontend/Backend : Next.js 16 (App Router, Server Actions) + TypeScript
+- ORM : Drizzle ORM + PostgreSQL
 - Hebergement : Infomaniak (staging + production, a mettre en place)
 - Conformite RGPD, hebergement EU
+- Pas de certification HDS — pas de stockage de donnees de sante en clair
 
 ## Sources de donnees
 
@@ -36,27 +37,51 @@ Professionnels de sante liberaux en exercice individuel (V1), puis cabinets de g
 ## Features V1
 
 ### Auth & Compte
-- [x] Inscription email + mot de passe + verification email
+- [x] Inscription par invitation email (admin invite, user setup son mdp)
 - [x] Connexion JWT + refresh token
 - [x] Mot de passe oublie (reset par email)
 - [x] Suppression de compte (soft delete, RGPD)
-- [ ] Profil utilisateur (nom, specialite, structure)
-- [ ] Backoffice admin : creation de comptes par email + changement mot de passe a la premiere connexion
+- [x] Profil utilisateur (nom, prenom, profession, regime fiscal, date debut activite)
+- [x] Onboarding guide premiere connexion (modal multi-etapes)
+- [x] Backoffice admin : invitation de praticiens par email
+- [x] Enum account_type : "practitioner" | "admin"
+- [x] Route group (protected) pour les pages praticien
 
 ### Dashboard financier
+- [x] Resume CA en attente (total + ventilation par statut)
+- [x] Ventilation honoraires / majorations / ferie / IFD
+- [x] Bandeau suggestion de lien cabinet
 - [ ] Vue globale CA declare vs CA paye
 - [ ] Solde estime disponible (apres charges)
-- [ ] Liste des transactions recentes (filtres date/montant/type)
-- [ ] Taux de rejet de factures + alerte seuil + detail (qui a rejete, patient)
-- [ ] Impositions passees (historique)
+- [ ] Taux de rejet de factures + alerte seuil + detail
 - [ ] Evolution mensuelle en graphique (CA/depenses/solde 12 mois)
 - [ ] Comparaison N vs N-1
 
 ### Import Ozzen
-- [ ] Upload manuel bordereaux (PDF/CSV)
-- [ ] Parsing automatique
-- [ ] Historique horodate des imports
-- [ ] Gestion erreurs de parsing + alertes
+- [x] Upload manuel bordereaux PDF (admin/statements)
+- [x] Detection type de document (rattrapage / noemie / releve / non-Ozzen)
+- [x] Parsing automatique des rattrapages (383 passages, total exact)
+- [x] Preview des donnees avant import
+- [x] Detection des doublons (date+moment+invoice+cotation+practitioner+total)
+- [x] Historique horodate des imports avec suppression
+- [x] Creation de cabinet a la volee depuis l'import
+- [x] Detection auto des liens praticien-cabinet post-import
+- [ ] Parsing des retours Noemie
+- [ ] Reconciliation rattrapages <-> Noemie
+
+### Cabinets & Liaison praticien
+- [x] Table practices (nom + FINESS)
+- [x] Liaison many-to-many praticien-cabinet (practices_links)
+- [x] Suggestions automatiques de lien (practices_links_suggestions)
+- [x] Name matching normalise (accents, tirets, ordre, concatenation)
+- [x] Bandeau de suggestion sur le dashboard praticien
+- [x] Detection a l'onboarding + a chaque import
+
+### Facturation (/facturation)
+- [x] Tableau de tous les passages du praticien
+- [x] Filtres : cabinet, statut, plage de dates
+- [x] Tri par colonne (date, cabinet, n° facture, statut, total)
+- [x] Resume par statut en cards
 
 ### Bridge
 - [ ] Connexion compte bancaire pro

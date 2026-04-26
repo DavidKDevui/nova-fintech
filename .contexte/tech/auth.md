@@ -15,7 +15,7 @@
 | id | UUID | PK, auto-generated |
 | email | VARCHAR(255) | unique, not null |
 | password | VARCHAR(255) | nullable (null tant que le user n'a pas setup son mdp) |
-| account_type | ENUM(user, admin) | default: user |
+| account_type | ENUM(practitioner, admin) | default: practitioner |
 | refresh_token | VARCHAR(500) | hashed, nullable |
 | is_verified | BOOLEAN | default: false, passe a true apres setup-password |
 | deleted_at | TIMESTAMP | nullable (soft delete) |

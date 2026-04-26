@@ -51,7 +51,16 @@
       "Bash(cat frontend/drizzle/*.sql)",
       "Bash(grep -l \"bridge_user_uuid\" frontend/drizzle/*.sql)",
       "WebFetch(domain:www.bridgeapi.io)",
-      "Bash(grep -r \"connectSession\\\\|bridge.*callback\\\\|connect-sessions\\\\|bridge.*session\" /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src --include=*.ts --include=*.tsx)"
+      "Bash(grep -r \"connectSession\\\\|bridge.*callback\\\\|connect-sessions\\\\|bridge.*session\" /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src --include=*.ts --include=*.tsx)",
+      "Bash(source .env)",
+      "Bash(find 'C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend' -type f \\\\\\(-iname *practice* -o -iname *cabinet* \\\\\\))",
+      "Bash(pg_isready -h 172.21.53.153 -p 5432)",
+      "Bash(npx --yes rimraf \"C:/Users/utils/Documents/IT Projects/nova-fintech/frontend/.next\")",
+      "Bash(mkdir -p \"\\(protected\\)\")",
+      "Bash(mv dashboard:*)",
+      "Bash(find \"C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend\\\\src\\\\app\\\\\\(protected\\)\" -type f -name \"*.tsx\")",
+      "Bash(find:*)",
+      "Bash(node -e \"const p = require\\(''pdf-parse''\\); console.log\\(typeof p, Object.keys\\(p\\)\\)\")"
     ]
   }
 }
