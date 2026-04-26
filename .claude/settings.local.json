@@ -60,7 +60,13 @@
       "Bash(mv dashboard:*)",
       "Bash(find \"C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend\\\\src\\\\app\\\\\\(protected\\)\" -type f -name \"*.tsx\")",
       "Bash(find:*)",
-      "Bash(node -e \"const p = require\\(''pdf-parse''\\); console.log\\(typeof p, Object.keys\\(p\\)\\)\")"
+      "Bash(node -e \"const p = require\\(''pdf-parse''\\); console.log\\(typeof p, Object.keys\\(p\\)\\)\")",
+      "WebFetch(domain:www.urssaf.fr)",
+      "WebFetch(domain:remplacement-ide-liberal.fr)",
+      "WebFetch(domain:www.compta-idel.fr)",
+      "WebFetch(domain:www.carpimko.com)",
+      "Bash(find /c/Users/utils/Documents/IT Projects/nova-fintech -type f \\\\\\(-name *.sql -o -name *schema* \\\\\\))",
+      "Bash(grep -r \"chart\\\\|Chart\\\\|graph\\\\|Graph\\\\|recharts\\\\|visx\" /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src --include=*.ts --include=*.tsx)"
     ]
   }
 }
