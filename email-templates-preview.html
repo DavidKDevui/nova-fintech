@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Actidec — Aperçu des templates emails</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Sora', system-ui, sans-serif;
+      background: linear-gradient(135deg, #FFFCF9 0%, #FFF9F2 50%, #FFF7ED 100%);
+      color: #0f172a;
+      min-height: 100vh;
+      padding: 48px 20px;
+      letter-spacing: -0.02em;
+    }
+    header { text-align: center; margin-bottom: 48px; }
+    header h1 { font-size: 28px; font-weight: 700; margin-bottom: 6px; }
+    header p { color: #64748b; font-size: 14px; font-weight: 500; }
+    .template-section { max-width: 700px; margin: 0 auto 56px; }
+    .template-label {
+      display: inline-block; padding: 4px 14px; border-radius: 20px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: 16px;
+    }
+    .label-invite { background: #FFF7ED; color: #C2580F; border: 1px solid #FED7AA; }
+    .label-reset { background: #FAF5FF; color: #7C4FA0; border: 1px solid #E9D5FF; }
+    .label-delete { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
+    .email-window {
+      border-radius: 14px; overflow: hidden;
+      box-shadow: 0 8px 40px rgba(154,52,18,0.08), 0 1px 4px rgba(0,0,0,0.04);
+      border: 1px solid #e2e8f0;
+    }
+    .email-chrome {
+      background: #fff; padding: 12px 20px;
+      display: flex; align-items: center; gap: 7px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .email-chrome .dot { width: 11px; height: 11px; border-radius: 50%; }
+    .dot-1 { background: #FB923C; }
+    .dot-2 { background: #FDBA74; }
+    .dot-3 { background: #EC6C12; }
+    .email-chrome .subj { margin-left: 10px; color: #64748b; font-size: 12px; font-weight: 500; }
+    hr.sep { max-width: 700px; margin: 0 auto 56px; border: none; border-top: 1px solid #FED7AA; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" width="180" height="44" style="margin-bottom:16px">
+      <text x="10" y="58" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="52" fill="none" stroke="#0f172a" stroke-width="1.5" letter-spacing="-2">actidec</text>
+      <text x="10" y="58" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="52" fill="#EC6C12" letter-spacing="-2" opacity="0.15">actidec</text>
+    </svg>
+    <h1>Templates Emails</h1>
+    <p>Apercu des 3 templates &mdash; rendu identique a l'envoi reel</p>
+  </header>
+
+  <!-- ══ Template 1: Invitation ══ -->
+  <section class="template-section">
+    <span class="template-label label-invite">Invitation de compte</span>
+    <div class="email-window">
+      <div class="email-chrome">
+        <div class="dot dot-1"></div><div class="dot dot-2"></div><div class="dot dot-3"></div>
+        <span class="subj">Actidec - Vous avez été invité à rejoindre la plateforme</span>
+      </div>
+      <!-- ↓ Exact output of buildMailHtml() ↓ -->
+      <div style="margin:0;padding:0;background:#FFFCF9;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#FFFCF9;padding:40px 0">
+          <tr><td align="center">
+            <table width="600" cellpadding="0" cellspacing="0"><tr><td style="padding:0 0 32px">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" width="160" height="38" style="display:block">
+                <text x="10" y="58" font-family="'Sora',system-ui,-apple-system,sans-serif" font-weight="800" font-size="52" fill="none" stroke="#0f172a" stroke-width="1.5" letter-spacing="-2">actidec</text>
+                <text x="10" y="58" font-family="'Sora',system-ui,-apple-system,sans-serif" font-weight="800" font-size="52" fill="#EC6C12" letter-spacing="-2" opacity="0.15">actidec</text>
+              </svg>
+            </td></tr></table>
+            <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e2e8f0">
+              <tr><td style="padding:40px 44px">
+                <h1 style="color:#0f172a;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:24px;font-weight:700;margin:0 0 8px;letter-spacing:-0.02em">Vous avez été invité à rejoindre Actidec</h1>
+                <p style="color:#334155;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;margin:0 0 16px">Un administrateur vous a invité sur la plateforme Actidec. Configurez votre mot de passe pour accéder à votre espace.</p>
+                <table cellpadding="0" cellspacing="0" style="margin:20px 0"><tr><td style="border-radius:8px;background:#EC6C12" align="center">
+                  <a href="#" style="display:inline-block;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;padding:10px 20px;border:none;border-radius:6px">Configurer mon compte &nbsp;<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;display:inline-block"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+                </td></tr></table>
+                <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+                <p style="color:#64748b;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;margin:0 0 16px">Ce lien expire dans 24 heures. Si vous n'avez pas demandé ce compte, ignorez cet email.</p>
+              </td></tr>
+            </table>
+            <table width="600" cellpadding="0" cellspacing="0"><tr><td style="padding:24px 0;text-align:center">
+              <p style="color:#64748b;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;margin:0">Actidec &mdash; Trésorerie pour professionnels de santé</p>
+            </td></tr></table>
+          </td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <hr class="sep">
+
+  <!-- ══ Template 2: Reset password ══ -->
+  <section class="template-section">
+    <span class="template-label label-reset">Réinitialisation mot de passe</span>
+    <div class="email-window">
+      <div class="email-chrome">
+        <div class="dot dot-1"></div><div class="dot dot-2"></div><div class="dot dot-3"></div>
+        <span class="subj">Actidec - Réinitialisation de mot de passe</span>
+      </div>
+      <div style="margin:0;padding:0;background:#FFFCF9;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#FFFCF9;padding:40px 0">
+          <tr><td align="center">
+            <table width="600" cellpadding="0" cellspacing="0"><tr><td style="padding:0 0 32px">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" width="160" height="38" style="display:block">
+                <text x="10" y="58" font-family="'Sora',system-ui,-apple-system,sans-serif" font-weight="800" font-size="52" fill="none" stroke="#0f172a" stroke-width="1.5" letter-spacing="-2">actidec</text>
+                <text x="10" y="58" font-family="'Sora',system-ui,-apple-system,sans-serif" font-weight="800" font-size="52" fill="#EC6C12" letter-spacing="-2" opacity="0.15">actidec</text>
+              </svg>
+            </td></tr></table>
+            <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e2e8f0">
+              <tr><td style="padding:40px 44px">
+                <h1 style="color:#0f172a;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:24px;font-weight:700;margin:0 0 8px;letter-spacing:-0.02em">Réinitialisation de mot de passe</h1>
+                <p style="color:#64748b;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:500;margin:0 0 24px;letter-spacing:-0.01em">Une demande a été effectuée sur votre compte</p>
+                <p style="color:#334155;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;margin:0 0 16px">Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe.</p>
+                <table cellpadding="0" cellspacing="0" style="margin:20px 0"><tr><td style="border-radius:8px;background:#EC6C12" align="center">
+                  <a href="#" style="display:inline-block;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;padding:10px 20px;border:none;border-radius:6px">Réinitialiser mon mot de passe &nbsp;<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;display:inline-block"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></a>
+                </td></tr></table>
+                <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+                <p style="color:#64748b;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;margin:0 0 16px">Ce lien expire dans 1 heure. Si vous n'avez pas fait cette demande, ignorez cet email.</p>
+              </td></tr>
+            </table>
+            <table width="600" cellpadding="0" cellspacing="0"><tr><td style="padding:24px 0;text-align:center">
+              <p style="color:#64748b;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;margin:0">Actidec &mdash; Trésorerie pour professionnels de santé</p>
+            </td></tr></table>
+          </td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <hr class="sep">
+
+  <!-- ══ Template 3: Account deleted ══ -->
+  <section class="template-section">
+    <span class="template-label label-delete">Suppression de compte</span>
+    <div class="email-window">
+      <div class="email-chrome">
+        <div class="dot dot-1"></div><div class="dot dot-2"></div><div class="dot dot-3"></div>
+        <span class="subj">Actidec - Votre compte a été supprimé</span>
+      </div>
+      <div style="margin:0;padding:0;background:#FFFCF9;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#FFFCF9;padding:40px 0">
+          <tr><td align="center">
+            <table width="600" cellpadding="0" cellspacing="0"><tr><td style="padding:0 0 32px">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" width="160" height="38" style="display:block">
+                <text x="10" y="58" font-family="'Sora',system-ui,-apple-system,sans-serif" font-weight="800" font-size="52" fill="none" stroke="#0f172a" stroke-width="1.5" letter-spacing="-2">actidec</text>
+                <text x="10" y="58" font-family="'Sora',system-ui,-apple-system,sans-serif" font-weight="800" font-size="52" fill="#EC6C12" letter-spacing="-2" opacity="0.15">actidec</text>
+              </svg>
+            </td></tr></table>
+            <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e2e8f0">
+              <tr><td style="padding:40px 44px">
+                <h1 style="color:#0f172a;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:24px;font-weight:700;margin:0 0 8px;letter-spacing:-0.02em">Votre compte a été supprimé</h1>
+                <p style="color:#334155;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;margin:0 0 16px">Votre compte Actidec ainsi que toutes les données associées ont été définitivement supprimés, conformément à votre demande.</p>
+                <table cellpadding="0" cellspacing="0" width="100%" style="margin:16px 0"><tr>
+                  <td style="background:#FFF7ED;border-left:3px solid #EC6C12;border-radius:0 6px 6px 0;padding:14px 16px">
+                    <p style="color:#334155;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;margin:0">Si vous n'êtes pas à l'origine de cette action, contactez-nous immédiatement.</p>
+                  </td>
+                </tr></table>
+                <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+                <p style="color:#64748b;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;margin:0 0 16px">Nous sommes désolés de vous voir partir. Si vous changez d'avis, un administrateur pourra vous inviter à nouveau.</p>
+              </td></tr>
+            </table>
+            <table width="600" cellpadding="0" cellspacing="0"><tr><td style="padding:24px 0;text-align:center">
+              <p style="color:#64748b;font-family:'Sora','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;margin:0">Actidec &mdash; Trésorerie pour professionnels de santé</p>
+            </td></tr></table>
+          </td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <hr class="sep">
+
+  <!-- ══ Logo Proposals ══ -->
+  <section class="template-section">
+    <span class="template-label" style="background:#F0FDF4;color:#166534;border:1px solid #BBF7D0;">Propositions de logo</span>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:16px">
+
+      <!-- Proposal 1: Clean wordmark with accent bar -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">1 — Wordmark + barre d'accent</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="240" height="60">
+          <text x="10" y="58" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="52" fill="#0f172a" letter-spacing="-2">actidec</text>
+          <rect x="10" y="66" width="48" height="5" rx="2.5" fill="#EC6C12"/>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Typo bold + trait orange sous "acti"</p>
+      </div>
+
+      <!-- Proposal 2: Monogram A+D in circle -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">2 — Monogramme A dans cercle</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="240" height="60">
+          <circle cx="36" cy="40" r="28" fill="#EC6C12"/>
+          <text x="24" y="52" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="32" fill="#ffffff">A</text>
+          <text x="76" y="56" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="44" fill="#0f172a" letter-spacing="-1.5">ctidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Initiale dans pastille orange + suite en noir</p>
+      </div>
+
+      <!-- Proposal 3: Chart/activity pulse icon -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">3 — Icône activité/pulse</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="270" height="60">
+          <!-- Activity pulse icon -->
+          <polyline points="8,48 18,48 24,28 32,58 38,38 44,48 54,48" fill="none" stroke="#EC6C12" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="66" y="56" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="44" fill="#0f172a" letter-spacing="-1.5">actidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Courbe d'activité (clin d'œil santé + finance)</p>
+      </div>
+
+      <!-- Proposal 4: Stacked with tagline -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">4 — Wordmark + baseline</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 80" width="210" height="60">
+          <text x="10" y="44" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="42" fill="#0f172a" letter-spacing="-1.5">actidec</text>
+          <text x="10" y="66" font-family="'Sora',system-ui,sans-serif" font-weight="500" font-size="13" fill="#EC6C12" letter-spacing="0.5">PILOTEZ VOTRE ACTIVITÉ</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Nom + tagline orange en dessous</p>
+      </div>
+
+      <!-- Proposal 5: Rounded square icon + text -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">5 — Carré arrondi + trending up</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="270" height="60">
+          <rect x="8" y="12" width="56" height="56" rx="14" fill="#0f172a"/>
+          <polyline points="20,52 32,38 42,44 52,26" fill="none" stroke="#EC6C12" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="52" cy="26" r="3" fill="#EC6C12"/>
+          <text x="78" y="54" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="42" fill="#0f172a" letter-spacing="-1.5">actidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Icône croissance dans carré noir + nom</p>
+      </div>
+
+      <!-- Proposal 6: Split color -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">6 — Bicolore acti|dec</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="225" height="60">
+          <text x="10" y="56" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="50" fill="#EC6C12" letter-spacing="-2">acti</text>
+          <text x="140" y="56" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="50" fill="#0f172a" letter-spacing="-2">dec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">"acti" en orange, "dec" en noir — activité + décision</p>
+      </div>
+
+    </div>
+
+    <!-- ══ ROUND 2 — Nouvelles propositions ══ -->
+    <p style="font-size:11px;font-weight:600;color:#EC6C12;text-transform:uppercase;letter-spacing:0.05em;margin:48px 0 16px;border-top:2px solid #FED7AA;padding-top:24px">Round 2 — Nouvelles directions</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px">
+
+      <!-- 7: Shield / protection financière -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">7 — Bouclier financier</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="270" height="60">
+          <!-- Shield icon -->
+          <path d="M28 12 L48 6 L48 38 C48 52 38 60 28 64 C18 60 8 52 8 38 L8 6 Z" fill="none" stroke="#EC6C12" stroke-width="3.5" stroke-linejoin="round"/>
+          <polyline points="18,36 26,44 40,28" fill="none" stroke="#EC6C12" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="62" y="50" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="38" fill="#0f172a" letter-spacing="-1.5">actidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Bouclier + check — protection de votre trésorerie</p>
+      </div>
+
+      <!-- 8: Hexagone tech / moderne -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">8 — Hexagone tech</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="270" height="60">
+          <polygon points="28,8 48,18 48,38 28,48 8,38 8,18" fill="#EC6C12" stroke="none"/>
+          <text x="17" y="36" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="22" fill="#fff">A</text>
+          <text x="60" y="42" font-family="'Sora',system-ui,sans-serif" font-weight="300" font-size="36" fill="#0f172a" letter-spacing="-0.5">actidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Hexagone orange + typo light — tech et moderne</p>
+      </div>
+
+      <!-- 9: Stacked bars / dashboard feel -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">9 — Barres empilées</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="270" height="60">
+          <!-- Mini bar chart -->
+          <rect x="10" y="44" width="8" height="20" rx="2" fill="#FED7AA"/>
+          <rect x="22" y="32" width="8" height="32" rx="2" fill="#FDBA74"/>
+          <rect x="34" y="20" width="8" height="44" rx="2" fill="#EC6C12"/>
+          <rect x="46" y="28" width="8" height="36" rx="2" fill="#C2580F"/>
+          <text x="66" y="52" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="40" fill="#0f172a" letter-spacing="-1.5">actidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Mini graphique barres — esprit tableau de bord</p>
+      </div>
+
+      <!-- 10: Dot grid / constellation -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">10 — Constellation de points</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="270" height="60">
+          <!-- Connected dots -->
+          <circle cx="14" cy="46" r="4" fill="#EC6C12"/>
+          <circle cx="30" cy="30" r="4" fill="#EC6C12"/>
+          <circle cx="46" cy="40" r="4" fill="#EC6C12"/>
+          <circle cx="38" cy="18" r="3" fill="#FDBA74"/>
+          <line x1="14" y1="46" x2="30" y2="30" stroke="#EC6C12" stroke-width="2" opacity="0.5"/>
+          <line x1="30" y1="30" x2="46" y2="40" stroke="#EC6C12" stroke-width="2" opacity="0.5"/>
+          <line x1="30" y1="30" x2="38" y2="18" stroke="#FDBA74" stroke-width="1.5" opacity="0.4"/>
+          <text x="62" y="48" font-family="'Sora',system-ui,sans-serif" font-weight="600" font-size="36" fill="#0f172a" letter-spacing="-1">actidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Réseau de points connectés — données et intelligence</p>
+      </div>
+
+      <!-- 11: Rounded pill badge -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">11 — Pill badge encadré</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 70" width="270" height="63">
+          <rect x="4" y="8" width="292" height="54" rx="27" fill="none" stroke="#0f172a" stroke-width="3"/>
+          <text x="150" y="46" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="34" fill="#0f172a" letter-spacing="-1" text-anchor="middle">actidec</text>
+          <circle cx="258" cy="35" r="8" fill="#EC6C12"/>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Logo encapsulé en pilule — clean et app-like</p>
+      </div>
+
+      <!-- 12: Gradient letter A avec ombre -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">12 — Lettre A gradient + ombre</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="270" height="60">
+          <defs>
+            <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#EC6C12"/>
+              <stop offset="100%" style="stop-color:#C2580F"/>
+            </linearGradient>
+          </defs>
+          <rect x="6" y="10" width="50" height="50" rx="12" fill="url(#grad1)"/>
+          <text x="18" y="48" font-family="'Sora',system-ui,sans-serif" font-weight="900" font-size="36" fill="#fff">A</text>
+          <text x="68" y="48" font-family="'Sora',system-ui,sans-serif" font-weight="600" font-size="36" fill="#0f172a" letter-spacing="-1">actidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Carré gradient orange + A blanc — icône d'app</p>
+      </div>
+
+      <!-- 13: Semicircle gauge / compteur -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">13 — Jauge / compteur</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="270" height="60">
+          <!-- Gauge arc -->
+          <path d="M10,55 A25,25 0 0,1 60,55" fill="none" stroke="#e2e8f0" stroke-width="6" stroke-linecap="round"/>
+          <path d="M10,55 A25,25 0 0,1 48,32" fill="none" stroke="#EC6C12" stroke-width="6" stroke-linecap="round"/>
+          <!-- Needle -->
+          <line x1="35" y1="55" x2="44" y2="36" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="35" cy="55" r="3.5" fill="#0f172a"/>
+          <text x="74" y="50" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="38" fill="#0f172a" letter-spacing="-1.5">actidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Compteur / jauge — pilotage et mesure</p>
+      </div>
+
+      <!-- 14: Minimal slash separator -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">14 — Slash séparateur</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 70" width="270" height="60">
+          <text x="10" y="50" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="40" fill="#0f172a" letter-spacing="-1.5">acti</text>
+          <line x1="138" y1="12" x2="126" y2="58" stroke="#EC6C12" stroke-width="4" stroke-linecap="round"/>
+          <text x="148" y="50" font-family="'Sora',system-ui,sans-serif" font-weight="400" font-size="40" fill="#0f172a" letter-spacing="-1.5">dec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Slash orange entre "acti" bold et "dec" light</p>
+      </div>
+
+      <!-- 15: Circle ring + arrow up -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">15 — Anneau + flèche montante</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="270" height="60">
+          <circle cx="32" cy="40" r="22" fill="none" stroke="#e2e8f0" stroke-width="5"/>
+          <path d="M32,62 A22,22 0 1,1 54,40" fill="none" stroke="#EC6C12" stroke-width="5" stroke-linecap="round"/>
+          <!-- Arrow pointing up-right -->
+          <polyline points="26,44 32,30 38,44" fill="none" stroke="#EC6C12" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          <line x1="32" y1="30" x2="32" y2="50" stroke="#EC6C12" stroke-width="3" stroke-linecap="round"/>
+          <text x="66" y="50" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="38" fill="#0f172a" letter-spacing="-1.5">actidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Anneau de progression + flèche — croissance</p>
+      </div>
+
+      <!-- 16: Lowercase geometric avec point -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">16 — Point final géométrique</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 70" width="270" height="60">
+          <text x="10" y="50" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="42" fill="#0f172a" letter-spacing="-2">actidec</text>
+          <rect x="262" y="38" width="12" height="12" rx="3" fill="#EC6C12"/>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Wordmark sobre + carré orange comme point final</p>
+      </div>
+
+    </div>
+
+    <!-- ══ ROUND 3 — Jeu typographique ══ -->
+    <p style="font-size:11px;font-weight:600;color:#EC6C12;text-transform:uppercase;letter-spacing:0.05em;margin:48px 0 16px;border-top:2px solid #FED7AA;padding-top:24px">Round 3 — Variations typographiques</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px">
+
+      <!-- 17: Ultra thin large -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">17 — Ultra thin XXL</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="270" height="60">
+          <text x="10" y="60" font-family="'Sora',system-ui,sans-serif" font-weight="200" font-size="62" fill="#0f172a" letter-spacing="-3">actidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Extra light, très grande taille — luxe, épuré</p>
+      </div>
+
+      <!-- 18: Ultra thin + bold accent -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">18 — Thin + "dec" bold</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" width="270" height="60">
+          <text x="10" y="58" font-family="'Sora',system-ui,sans-serif" font-weight="200" font-size="54" fill="#0f172a" letter-spacing="-2">acti</text>
+          <text x="148" y="58" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="54" fill="#0f172a" letter-spacing="-2">dec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Contraste light/black — tension visuelle</p>
+      </div>
+
+      <!-- 19: All caps spaced out small -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">19 — Capitales espacées</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 60" width="270" height="45">
+          <text x="180" y="40" font-family="'Sora',system-ui,sans-serif" font-weight="600" font-size="28" fill="#0f172a" letter-spacing="8" text-anchor="middle">ACTIDEC</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Majuscules, letterspacing large — premium, sérieux</p>
+      </div>
+
+      <!-- 20: Caps spaced + line through -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">20 — Capitales + filet</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 60" width="270" height="45">
+          <line x1="10" y1="30" x2="60" y2="30" stroke="#EC6C12" stroke-width="2"/>
+          <text x="72" y="38" font-family="'Sora',system-ui,sans-serif" font-weight="500" font-size="24" fill="#0f172a" letter-spacing="6">ACTIDEC</text>
+          <line x1="290" y1="30" x2="350" y2="30" stroke="#EC6C12" stroke-width="2"/>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Lignes encadrantes — élégant, institutionnel</p>
+      </div>
+
+      <!-- 21: Mono/code style -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">21 — Monospace / tech</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 70" width="270" height="56">
+          <text x="10" y="48" font-family="'Geist Mono','SF Mono','Fira Code',monospace" font-weight="700" font-size="40" fill="#0f172a" letter-spacing="0">actidec</text>
+          <rect x="10" y="56" width="24" height="3" fill="#EC6C12"/>
+          <rect x="38" y="56" width="24" height="3" fill="#EC6C12" opacity="0.6"/>
+          <rect x="66" y="56" width="24" height="3" fill="#EC6C12" opacity="0.3"/>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Monospace bold + barres dégradées — tech/fintech</p>
+      </div>
+
+      <!-- 22: Italic speed -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">22 — Italic dynamique</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" width="270" height="60">
+          <text x="10" y="58" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="50" fill="#0f172a" letter-spacing="-2" font-style="italic">actidec</text>
+          <line x1="10" y1="68" x2="100" y2="68" stroke="#EC6C12" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Italic + trait — mouvement, dynamisme</p>
+      </div>
+
+      <!-- 23: Mixed case ActiDec -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">23 — CamelCase ActiDec</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="270" height="60">
+          <text x="10" y="56" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="48" fill="#0f172a" letter-spacing="-2">Acti</text>
+          <text x="148" y="56" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="48" fill="#EC6C12" letter-spacing="-2">Dec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">CamelCase — "Dec" en orange, lisibilité immédiate</p>
+      </div>
+
+      <!-- 24: Stencil / cutout feel -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">24 — Outlined / contour</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" width="270" height="60">
+          <text x="10" y="58" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="52" fill="none" stroke="#0f172a" stroke-width="1.5" letter-spacing="-2">actidec</text>
+          <text x="10" y="58" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="52" fill="#EC6C12" letter-spacing="-2" opacity="0.15">actidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Contour seul avec remplissage transparent — aérien</p>
+      </div>
+
+      <!-- 25: Super condensed + dot -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">25 — Condensé compact</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 80" width="210" height="60">
+          <text x="10" y="58" font-family="'Sora','Arial Narrow',system-ui,sans-serif" font-weight="900" font-size="58" fill="#0f172a" letter-spacing="-5" textLength="220" lengthAdjust="spacingAndGlyphs">actidec</text>
+          <circle cx="248" cy="52" r="7" fill="#EC6C12"/>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Lettres compressées + point orange — compact, punchy</p>
+      </div>
+
+      <!-- 26: Two-line stacked -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">26 — Empilé deux lignes</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" width="150" height="60">
+          <text x="100" y="36" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="34" fill="#EC6C12" letter-spacing="-1.5" text-anchor="middle">ACTI</text>
+          <text x="100" y="68" font-family="'Sora',system-ui,sans-serif" font-weight="300" font-size="34" fill="#0f172a" letter-spacing="-1.5" text-anchor="middle">DEC</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">ACTI bold orange / DEC light noir — vertical, icônique</p>
+      </div>
+
+      <!-- 27: Géométrique avec ligature -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">27 — Serif élégant</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" width="270" height="60">
+          <text x="10" y="56" font-family="'Georgia','Times New Roman',serif" font-weight="400" font-size="46" fill="#0f172a" letter-spacing="-1">Actidec</text>
+          <line x1="10" y1="64" x2="56" y2="64" stroke="#EC6C12" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Serif classique — sérieux, confiance, finance traditionnelle</p>
+      </div>
+
+      <!-- 28: Rounded / friendly -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">28 — Arrondi friendly</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" width="270" height="60">
+          <text x="10" y="54" font-family="'Nunito','Quicksand','Sora',system-ui,sans-serif" font-weight="800" font-size="44" fill="#0f172a" letter-spacing="-1">actidec</text>
+          <circle cx="295" cy="46" r="6" fill="#EC6C12"/>
+          <circle cx="310" cy="38" r="4" fill="#FDBA74"/>
+          <circle cx="320" cy="46" r="3" fill="#FED7AA"/>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Font arrondie + bulles — accessible, friendly</p>
+      </div>
+
+      <!-- 29: Uppercase small + icon left aligned -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">29 — Small caps + trending</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 60" width="270" height="50">
+          <!-- Small trending arrow -->
+          <polyline points="12,38 22,22 34,30 46,14" fill="none" stroke="#EC6C12" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="38,14 46,14 46,22" fill="none" stroke="#EC6C12" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="62" y="36" font-family="'Sora',system-ui,sans-serif" font-weight="600" font-size="22" fill="#0f172a" letter-spacing="4">ACTIDEC</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Petites caps espacées + icône trending — pro, dashboard</p>
+      </div>
+
+      <!-- 30: Gradient text -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">30 — Gradient text</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" width="270" height="60">
+          <defs>
+            <linearGradient id="textgrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" style="stop-color:#0f172a"/>
+              <stop offset="60%" style="stop-color:#0f172a"/>
+              <stop offset="100%" style="stop-color:#EC6C12"/>
+            </linearGradient>
+          </defs>
+          <text x="10" y="56" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="48" fill="url(#textgrad)" letter-spacing="-2">actidec</text>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8">Dégradé noir → orange — transition subtile</p>
+      </div>
+
+    </div>
+
+    <!-- Dark versions round 2 -->
+    <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin:32px 0 16px">Versions fond sombre — Round 2</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+      <div style="background:#0f172a;border-radius:14px;padding:32px;text-align:center">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="180" height="45">
+          <rect x="8" y="12" width="56" height="56" rx="14" fill="#EC6C12"/>
+          <polyline points="20,52 32,38 42,44 52,26" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="52" cy="26" r="3" fill="#fff"/>
+          <text x="78" y="54" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="42" fill="#ffffff" letter-spacing="-1.5">actidec</text>
+        </svg>
+        <p style="font-size:10px;color:#64748b;margin-top:8px">5 inversé (carré orange)</p>
+      </div>
+      <div style="background:#0f172a;border-radius:14px;padding:32px;text-align:center">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="180" height="45">
+          <path d="M10,55 A25,25 0 0,1 60,55" fill="none" stroke="#334155" stroke-width="6" stroke-linecap="round"/>
+          <path d="M10,55 A25,25 0 0,1 48,32" fill="none" stroke="#EC6C12" stroke-width="6" stroke-linecap="round"/>
+          <line x1="35" y1="55" x2="44" y2="36" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="35" cy="55" r="3.5" fill="#fff"/>
+          <text x="74" y="50" font-family="'Sora',system-ui,sans-serif" font-weight="700" font-size="38" fill="#ffffff" letter-spacing="-1.5">actidec</text>
+        </svg>
+        <p style="font-size:10px;color:#64748b;margin-top:8px">13 — Jauge</p>
+      </div>
+      <div style="background:#0f172a;border-radius:14px;padding:32px;text-align:center">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 70" width="180" height="45">
+          <text x="10" y="50" font-family="'Sora',system-ui,sans-serif" font-weight="800" font-size="40" fill="#ffffff" letter-spacing="-1.5">acti</text>
+          <line x1="138" y1="12" x2="126" y2="58" stroke="#EC6C12" stroke-width="4" stroke-linecap="round"/>
+          <text x="148" y="50" font-family="'Sora',system-ui,sans-serif" font-weight="400" font-size="40" fill="#94a3b8" letter-spacing="-1.5">dec</text>
+        </svg>
+        <p style="font-size:10px;color:#64748b;margin-top:8px">14 — Slash</p>
+      </div>
+    </div>
+  </section>
+
+</body>
+</html>
+
+</body>
+</html>

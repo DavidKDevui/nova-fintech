@@ -1,4 +1,4 @@
-# NOVA - Brief Projet
+# ACTIDEC - Brief Projet
 
 ## Vision
 App web de visualisation et prevoyance de tresorerie pour les professionnels de sante liberaux (infirmiers, kines, sages-femmes, etc.).

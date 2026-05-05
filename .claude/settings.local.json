@@ -66,7 +66,32 @@
       "WebFetch(domain:www.compta-idel.fr)",
       "WebFetch(domain:www.carpimko.com)",
       "Bash(find /c/Users/utils/Documents/IT Projects/nova-fintech -type f \\\\\\(-name *.sql -o -name *schema* \\\\\\))",
-      "Bash(grep -r \"chart\\\\|Chart\\\\|graph\\\\|Graph\\\\|recharts\\\\|visx\" /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src --include=*.ts --include=*.tsx)"
+      "Bash(grep -r \"chart\\\\|Chart\\\\|graph\\\\|Graph\\\\|recharts\\\\|visx\" /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src --include=*.ts --include=*.tsx)",
+      "Bash(node -e ':*)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js|html\\)$\")",
+      "Bash(find /c/Users/utils/Documents/IT Projects/nova-fintech -type f \\\\\\(-name tailwind.config.* -o -name globals.css -o -name app.css -o -name layout.tsx -o -name layout.jsx -o -name components.json -o -name .shadcn* \\\\\\))",
+      "WebFetch(domain:fr.openfisca.org)",
+      "WebFetch(domain:api.openfisca.fr)",
+      "WebFetch(domain:legislation.openfisca.fr)",
+      "WebFetch(domain:api.fr.openfisca.org)",
+      "Bash(find \"C:/Users/utils/Documents/IT Projects/nova-fintech/frontend/src/app\" -type d -name \"\\(protected\\)\")",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src/app/\\(protected\\)/$f/**)",
+      "Bash(echo \"=== $f/client.tsx \\(first line\\) ===\")",
+      "Bash(done)",
+      "Bash(node -e \"const pdfParse = require\\(''''./frontend/node_modules/pdf-parse/lib/pdf-parse''''\\); const fs = require\\(''''fs''''\\); const buf = fs.readFileSync\\(''''.contexte/brief/borderau-example/Retours NOEMIE 2025.pdf''''\\); pdfParse\\(buf\\).then\\(d => { const lines = d.text.split\\(''''\\\\n''''\\).slice\\(0, 80\\); console.log\\(lines.join\\(''''\\\\n''''\\)\\); }\\);\")",
+      "mcp__claude_ai_Google_Drive__download_file_content",
+      "Bash(cat /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src/app/\\\\\\(protected\\\\\\)/dashboard/page.tsx)",
+      "Bash(cat /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src/app/\\\\\\(protected\\\\\\)/dashboard/client.tsx)",
+      "Bash(cat /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src/app/\\\\\\(protected\\\\\\)/transactions/client.tsx)",
+      "Bash(cat /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src/app/\\\\\\(protected\\\\\\)/deadlines/client.tsx)",
+      "Bash(cat /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src/app/\\\\\\(protected\\\\\\)/facturation/client.tsx)",
+      "Bash(cat /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src/app/\\\\\\(protected\\\\\\)/profile/client.tsx)",
+      "Bash(cat /c/Users/utils/Documents/IT Projects/nova-fintech/frontend/src/app/\\\\\\(protected\\\\\\)/help/client.tsx)",
+      "Bash(find 'C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend\\\\src\\\\app\\\\api' -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))",
+      "Bash(psql \"$DATABASE_URL\" -c \"DELETE FROM bank_transactions; DELETE FROM bank_accounts; UPDATE practitioners SET bridge_user_uuid = NULL;\")",
+      "Bash(curl:*)"
     ]
   }
 }

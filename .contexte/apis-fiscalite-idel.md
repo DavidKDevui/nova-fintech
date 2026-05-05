@@ -287,7 +287,7 @@ Valeur de référence utilisée par plusieurs calculs. Récupérable via :
 
 ```
 ┌─────────────────────────────────────────────┐
-│              Nova-Fintech App               │
+│              Actidec App                    │
 ├─────────────────────────────────────────────┤
 │                                             │
 │  ┌─────────────┐    ┌────────────────────┐  │
