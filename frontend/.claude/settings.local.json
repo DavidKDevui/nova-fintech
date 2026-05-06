@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(find 'C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend/src/lib' -type f -name *calendar* -o -name *deadline* -o -name *fiscal*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"DeadlinesClient\\\\|DeadlinesPage\" 'C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend/src' --include=*.ts --include=*.tsx)",
+      "Bash(find \"C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend/src/app/\\(protected\\)/deadlines\" -type f)",
+      "Bash(wc:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}

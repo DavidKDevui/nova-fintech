@@ -5,8 +5,10 @@ import { usePractitioner } from "@/providers/practitioner-provider";
 import { useData } from "@/providers/data-provider";
 import { Modal } from "@/components/modal";
 import { ConnectBankBanner } from "@/components/connect-bank-banner";
+import { toast } from "sonner";
 import { connectBankAction } from "@/actions/bridge";
 import { setDefaultBankAccountAction } from "@/actions/bank-account";
+import { getBankAlertAction, upsertBankAlertAction } from "@/actions/bank-alert";
 import {
   ResponsiveContainer,
   BarChart,
@@ -49,7 +51,44 @@ export function TransactionsClient() {
   const [pendingDefaultId, setPendingDefaultId] = useState<string | null>(null);
   const [savingDefault, setSavingDefault] = useState(false);
 
+  // Alert state
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertThreshold, setAlertThreshold] = useState("");
+  const [alertEnabled, setAlertEnabled] = useState(false);
+  const [alertLoading, setAlertLoading] = useState(false);
+  const [alertSaving, setAlertSaving] = useState(false);
+  const [alertLoaded, setAlertLoaded] = useState(false);
+  const alertConfigured = alertLoaded && alertEnabled && alertThreshold !== "";
+
   const needsDefaultAccount = hp?.bridgeUserUuid && !hp.defaultBankAccountId && accounts.length > 1 && !loading;
+
+  // Load alert state on mount
+  useEffect(() => {
+    if (!hp?.defaultBankAccountId || alertLoaded) return;
+    getBankAlertAction().then(({ alert }) => {
+      if (alert) {
+        setAlertThreshold(String(Number(alert.threshold)));
+        setAlertEnabled(alert.enabled);
+      }
+      setAlertLoaded(true);
+    });
+  }, [hp?.defaultBankAccountId, alertLoaded]);
+
+  const saveAlert = useCallback(async () => {
+    const value = parseFloat(alertThreshold);
+    if (isNaN(value) || value < 0) return;
+    setAlertSaving(true);
+    const result = await upsertBankAlertAction(value, alertEnabled);
+    setAlertSaving(false);
+    if (result.success) {
+      setShowAlertModal(false);
+      if (alertEnabled) {
+        toast.success(`Alerte paramétrée à ${formatCurrency(value)}`);
+      } else {
+        toast.success("Alerte désactivée");
+      }
+    }
+  }, [alertThreshold, alertEnabled]);
 
   // Auto-set default if only one account
   useEffect(() => {
@@ -287,6 +326,18 @@ export function TransactionsClient() {
             <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{formatCurrency(totalBalance)}</p>
             <p className="text-xs text-gray-400 mt-1">{filteredAccounts.length} compte{filteredAccounts.length > 1 ? "s" : ""}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowAlertModal(true)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border transition-all ${
+              alertConfigured
+                ? "border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100"
+                : "border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50"
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={alertConfigured ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            {alertConfigured ? `Alerte : ${formatCurrency(Number(alertThreshold))}` : "Alerte seuil"}
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -635,6 +686,69 @@ export function TransactionsClient() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Alert threshold modal */}
+      <Modal open={showAlertModal} onClose={() => setShowAlertModal(false)}>
+        <div className="flex flex-col gap-5">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Alerte de trésorerie</h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Recevez un email si le solde de votre compte passe sous un seuil défini.
+            </p>
+          </div>
+
+          {alertLoading ? (
+            <div className="py-6 text-center text-sm text-gray-400">Chargement...</div>
+          ) : (
+            <>
+              <div>
+                <label htmlFor="alert-threshold" className="block text-sm font-medium text-gray-700 mb-1">
+                  Seuil d&apos;alerte (€)
+                </label>
+                <input
+                  id="alert-threshold"
+                  type="number"
+                  min="0"
+                  step="100"
+                  value={alertThreshold}
+                  onChange={(e) => setAlertThreshold(e.target.value)}
+                  placeholder="Ex : 2000"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-400 mt-1.5">
+                  Vous serez notifié par email (maximum une fois tous les 7 jours).
+                </p>
+              </div>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={alertEnabled}
+                  onClick={() => setAlertEnabled((v) => !v)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                    alertEnabled ? "bg-brand-600" : "bg-gray-200"
+                  }`}
+                >
+                  <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    alertEnabled ? "translate-x-5" : "translate-x-0"
+                  }`} />
+                </button>
+                <span className="text-sm text-gray-700">Alerte activée</span>
+              </label>
+
+              <button
+                type="button"
+                disabled={!alertThreshold || alertSaving}
+                onClick={saveAlert}
+                className="w-full bg-brand-600 text-white text-sm font-medium py-2.5 rounded-lg transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {alertSaving ? "Enregistrement..." : "Enregistrer l'alerte"}
+              </button>
+            </>
           )}
         </div>
       </Modal>

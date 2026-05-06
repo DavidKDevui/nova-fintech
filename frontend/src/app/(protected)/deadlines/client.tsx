@@ -96,7 +96,7 @@ export function DeadlinesClient() {
   }, [prefs, estimate, lastMonthWithData]);
 
   const upcoming = useMemo(() => {
-    const events = getUpcomingEvents(currentMonth, currentDay, 6, calendar);
+    const events = getUpcomingEvents(currentMonth, currentDay, 6, calendar, { maxDays: 30 });
     if (filter === "all") return events;
     return events.filter((e) => e.type === filter);
   }, [currentMonth, currentDay, filter, calendar]);
@@ -207,7 +207,7 @@ export function DeadlinesClient() {
       <div className="bg-white/70 backdrop-blur-xl border border-white/50 rounded-lg overflow-hidden flex flex-col lg:max-h-[540px]">
         <div className="px-5 py-4 border-b border-gray-100 shrink-0">
           <h2 className="text-sm font-bold text-gray-900">Prochaines échéances</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{upcoming.length} échéance{upcoming.length > 1 ? "s" : ""} à venir</p>
+          <p className="text-xs text-gray-400 mt-0.5">{upcoming.length} échéance{upcoming.length > 1 ? "s" : ""} dans les 30 prochains jours</p>
         </div>
         {upcoming.length === 0 ? (
           <p className="px-5 py-8 text-sm text-gray-400 text-center">Aucune échéance à venir pour ce filtre.</p>
@@ -221,7 +221,21 @@ export function DeadlinesClient() {
                     <p className="text-[10px] uppercase text-gray-400">{MONTH_NAMES[evt.month]?.slice(0, 3)}</p>
                     <p className="text-xl font-bold text-gray-900 -mt-0.5">{evt.day}</p>
                   </div>
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${EVENT_DOT[evt.type]}`} />
+                  <div className="w-16 flex items-center justify-center shrink-0">
+                    {evt.type === "urssaf" ? (
+                      <img src="/logo-urssaf.svg" alt="URSSAF" className="h-5 w-full object-contain" />
+                    ) : evt.type === "carpimko" ? (
+                      <img src="/logo-carpimko.png" alt="CARPIMKO" className="h-5 w-full object-contain" />
+                    ) : evt.type === "ir" ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-violet-500"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M2 10h2m16 0h2M2 14h2m16 0h2"/></svg>
+                    ) : evt.type === "cfe" ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01M8 14h.01M16 14h.01M12 14h.01"/></svg>
+                    ) : evt.type === "tf" ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-teal-500"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-800">{evt.label}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
@@ -229,8 +243,21 @@ export function DeadlinesClient() {
                     </p>
                   </div>
                   {evt.estimatedAmount != null && evt.estimatedAmount > 0 ? (
-                    <span className="text-sm font-semibold text-gray-900 shrink-0">~{formatCurrency(evt.estimatedAmount)}</span>
-                  ) : null}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-sm font-semibold text-gray-900">~{formatCurrency(evt.estimatedAmount)}</span>
+                      <div className="relative group">
+                        <div className="w-4 h-4 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-[10px] font-bold cursor-help hover:bg-gray-200 hover:text-gray-600 transition-colors">i</div>
+                        <div className="absolute right-0 top-6 w-72 bg-gray-900 text-white text-xs rounded-lg px-3.5 py-3 hidden group-hover:block z-[9999] shadow-lg space-y-2">
+                          {getEstimateTooltip(evt.type, estimate, prefs)}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs text-gray-300 shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      Estimation à venir
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -356,6 +383,58 @@ export function DeadlinesClient() {
         ))}
       </div>
     </div>
+  );
+}
+
+function getEstimateTooltip(
+  type: string,
+  estimate: CotisationsEstimate | null,
+  prefs: PaymentPreferences,
+) {
+  if (!estimate) return null;
+
+  let label = "";
+  let annuel = 0;
+  let echeance = 0;
+  let freq = "";
+
+  if (type === "urssaf") {
+    label = "URSSAF";
+    annuel = estimate.urssafAnnuel;
+    echeance = estimate.urssafParEcheance;
+    freq = prefs.urssafFrequency === "monthly" ? "12 mensualités" : "4 trimestres";
+  } else if (type === "carpimko") {
+    label = "CARPIMKO";
+    annuel = estimate.carpimkoAnnuel;
+    echeance = estimate.carpimkoParEcheance;
+    freq = prefs.carpimkoFrequency === "monthly" ? "10 mensualités (jan-oct)" : "2 semestres";
+  } else if (type === "ir") {
+    label = "Impôt sur le revenu (PAS)";
+    annuel = estimate.pasAnnuel;
+    echeance = estimate.pasParEcheance;
+    freq = prefs.pasFrequency === "monthly" ? "12 mensualités" : "4 trimestres";
+  } else {
+    return null;
+  }
+
+  return (
+    <>
+      <p className="font-semibold text-white/90">{label}</p>
+      <div className="space-y-1 text-[11px] text-white/70">
+        <div className="flex justify-between">
+          <span>CA annualisé</span>
+          <span className="text-white font-medium">{formatCurrency(estimate.revenuAnnualise)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Cotisation annuelle</span>
+          <span className="text-white font-medium">{formatCurrency(annuel)}</span>
+        </div>
+        <div className="border-t border-white/10 pt-1 flex justify-between">
+          <span>Par échéance ({freq})</span>
+          <span className="text-white font-semibold">{formatCurrency(echeance)}</span>
+        </div>
+      </div>
+    </>
   );
 }
 

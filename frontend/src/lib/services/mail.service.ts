@@ -57,3 +57,24 @@ export async function sendResetPassword(to: string, token: string) {
     { type: "text", content: "Ce lien expire dans 1 heure. Si vous n'avez pas fait cette demande, ignorez cet email.", muted: true },
   ]);
 }
+
+export async function sendTreasuryAlert(to: string, data: {
+  accountName: string;
+  currentBalance: string;
+  threshold: string;
+}) {
+  const fmtCurrency = (v: string) =>
+    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number(v));
+
+  await sendMail(to, "Actidec - Alerte trésorerie", [
+    { type: "title", content: "Alerte trésorerie" },
+    { type: "text", content: `Le solde de votre compte « ${data.accountName} » est passé sous votre seuil d'alerte.` },
+    { type: "list", items: [
+      `Solde actuel : ${fmtCurrency(data.currentBalance)}`,
+      `Seuil configuré : ${fmtCurrency(data.threshold)}`,
+    ]},
+    { type: "button", label: "Voir mes transactions", url: `${APP_URL}/transactions`, icon: "arrow-right" },
+    { type: "divider" },
+    { type: "text", content: "Vous recevez cet email car vous avez configuré une alerte de trésorerie sur Actidec. Vous ne serez pas notifié à nouveau avant 7 jours.", muted: true },
+  ]);
+}

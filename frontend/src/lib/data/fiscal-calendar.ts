@@ -165,12 +165,25 @@ export function getUpcomingEvents(
   currentDay: number,
   count = 3,
   calendar: Record<number, CalendarEvent[]> = CALENDAR,
+  { maxDays }: { maxDays?: number } = {},
 ) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), currentMonth, currentDay);
+  const limit = maxDays != null
+    ? new Date(today.getTime() + maxDays * 86400000)
+    : null;
+  const monthsToScan = limit ? 3 : count; // 3 months is enough for a 30-day window
+
   const events: (CalendarEvent & { month: number })[] = [];
-  for (let offset = 0; offset < count; offset++) {
+  for (let offset = 0; offset < monthsToScan; offset++) {
     const m = (currentMonth + offset) % 12;
+    const year = now.getFullYear() + (currentMonth + offset >= 12 ? 1 : 0);
     for (const evt of calendar[m] || []) {
       if (offset === 0 && evt.day < currentDay) continue;
+      if (limit) {
+        const evtDate = new Date(year, m, evt.day);
+        if (evtDate > limit) continue;
+      }
       events.push({ ...evt, month: m });
     }
   }

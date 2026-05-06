@@ -113,7 +113,11 @@
       "mcp__claude_ai_Vercel__list_deployments",
       "mcp__claude_ai_Vercel__get_deployment_build_logs",
       "mcp__claude_ai_Vercel__get_runtime_logs",
-      "mcp__claude_ai_Vercel__get_project"
+      "mcp__claude_ai_Vercel__get_project",
+      "WebFetch(domain:finess.esante.gouv.fr)",
+      "Bash(xargs wc:*)",
+      "Bash(grep -r \"cron\\\\|schedule\\\\|interval\" . --include=*.ts --include=*.json)",
+      "Bash(npx eslint:*)"
     ]
   }
 }

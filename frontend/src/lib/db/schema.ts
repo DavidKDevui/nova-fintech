@@ -96,6 +96,24 @@ export const bankTransactions = pgTable("bank_transactions", {
   index("idx_bank_transactions_date").on(table.date),
 ]);
 
+// ── Bank alerts ──
+
+export const bankAlerts = pgTable("bank_alerts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  practitionerId: uuid("practitioner_id")
+    .notNull()
+    .references(() => practitioners.id, { onDelete: "cascade" }),
+  bankAccountId: uuid("bank_account_id")
+    .notNull()
+    .references(() => bankAccounts.id, { onDelete: "cascade" }),
+  threshold: numeric("threshold", { precision: 12, scale: 2 }).notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  lastTriggeredAt: timestamp("last_triggered_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_bank_alerts_practitioner").on(table.practitionerId),
+]);
+
 // ── Practices (cabinets infirmiers) ──
 
 export const practices = pgTable("practices", {

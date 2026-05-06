@@ -159,6 +159,17 @@ CREATE TABLE IF NOT EXISTS "care_payments" (
   "created_at" timestamp DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS "bank_alerts" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "practitioner_id" uuid NOT NULL REFERENCES "practitioners"("id") ON DELETE CASCADE,
+  "bank_account_id" uuid NOT NULL REFERENCES "bank_accounts"("id") ON DELETE CASCADE,
+  "threshold" numeric(12,2) NOT NULL,
+  "enabled" boolean DEFAULT true NOT NULL,
+  "last_triggered_at" timestamp,
+  "created_at" timestamp DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "idx_bank_alerts_practitioner" ON "bank_alerts"("practitioner_id");
+
 CREATE TABLE IF NOT EXISTS "invitations" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "email" varchar(255) NOT NULL,
