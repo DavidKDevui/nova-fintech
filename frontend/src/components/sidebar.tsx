@@ -273,14 +273,16 @@ export function Sidebar() {
         <div className="relative border-t border-white/40 p-3" ref={menuRef}>
           {showMenu && (
             <div className={`absolute bottom-full mb-2 bg-white border border-gray-200 py-1 animate-fade-up-fast ${collapsed ? "left-1 right-1" : "left-3 right-3"}`}>
-              <Link
-                href="/profile"
-                onClick={() => setShowMenu(false)}
-                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2.5"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                {!collapsed && "Mon profil"}
-              </Link>
+              {!isAdmin && (
+                <Link
+                  href="/profile"
+                  onClick={() => setShowMenu(false)}
+                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2.5"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  {!collapsed && "Mon profil"}
+                </Link>
+              )}
               <button
                 onClick={() => { setShowMenu(false); setShowLogout(true); }}
                 className="w-full px-4 py-2.5 text-left text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2.5"

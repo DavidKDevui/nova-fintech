@@ -290,7 +290,7 @@ export function FacturationClient() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} width={45} />
-              <Tooltip contentStyle={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 4, fontSize: 13 }} formatter={(value: number, name: string) => [formatCurrency(value), STATUS_CONFIG[name]?.label || name]} />
+              <Tooltip contentStyle={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 4, fontSize: 13 }} formatter={(value, name) => [formatCurrency(Number(value)), STATUS_CONFIG[String(name)]?.label || String(name)]} />
               <Legend formatter={(value: string) => <span className="text-xs text-gray-500">{STATUS_CONFIG[value]?.label || value}</span>} />
               {compareMode ? (
                 <>
