@@ -106,7 +106,14 @@
       "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 npx drizzle-kit migrate)",
       "Bash(npx --yes nodemailer -e \":*)",
       "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 node init-db.mjs)",
-      "Bash(echo $DATABASE_URL)"
+      "Bash(echo $DATABASE_URL)",
+      "WebFetch(domain:nova-fintech.vercel.app)",
+      "mcp__claude_ai_Vercel__list_teams",
+      "mcp__claude_ai_Vercel__list_projects",
+      "mcp__claude_ai_Vercel__list_deployments",
+      "mcp__claude_ai_Vercel__get_deployment_build_logs",
+      "mcp__claude_ai_Vercel__get_runtime_logs",
+      "mcp__claude_ai_Vercel__get_project"
     ]
   }
 }

@@ -72,10 +72,7 @@ const BRAND = {
 
 // ── Logo SVG (inline, same as logo.tsx) ──
 
-const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" width="140" height="34" style="display:block">
-  <text x="10" y="58" font-family="'Sora',system-ui,-apple-system,sans-serif" font-weight="800" font-size="52" fill="none" stroke="${BRAND.slate900}" stroke-width="1.5" letter-spacing="-2">actidec</text>
-  <text x="10" y="58" font-family="'Sora',system-ui,-apple-system,sans-serif" font-weight="800" font-size="52" fill="${BRAND.orange600}" letter-spacing="-2" opacity="0.15">actidec</text>
-</svg>`;
+const LOGO_HTML = `<span style="font-family:${BRAND.font};font-size:28px;font-weight:800;letter-spacing:-0.04em;color:${BRAND.slate900};text-decoration:none">actidec</span>`;
 
 // ── Icons (inline SVG, 14px) ──
 
@@ -159,7 +156,7 @@ export function buildMailHtml(blocks: Block[]): string {
       <td align="center">
         <!-- Logo -->
         <table width="600" cellpadding="0" cellspacing="0"><tr><td style="padding:0 0 32px">
-          ${LOGO_SVG}
+          ${LOGO_HTML}
         </td></tr></table>
 
         <!-- Content card -->
