@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { initialSyncAction } from "@/actions/bridge";
 
-export default function BridgeCallbackPage() {
+function BridgeCallback() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +13,7 @@ export default function BridgeCallbackPage() {
     async function sync() {
       // Bridge redirige avec success=false si l'utilisateur annule
       if (searchParams.get("success") === "false") {
-        setError("Connexion bancaire annulee.");
+        setError("Connexion bancaire annulée.");
         return;
       }
 
@@ -58,5 +58,13 @@ export default function BridgeCallbackPage() {
         <p className="text-gray-600">Synchronisation de vos comptes bancaires...</p>
       </div>
     </div>
+  );
+}
+
+export default function BridgeCallbackPage() {
+  return (
+    <Suspense>
+      <BridgeCallback />
+    </Suspense>
   );
 }

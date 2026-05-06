@@ -1,12 +1,16 @@
 "use client";
 
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { resetPasswordAction } from "@/actions/auth";
 import { Logo } from "@/components/logo";
 
 export default function ResetPasswordPage() {
+  return <Suspense><ResetPasswordContent /></Suspense>;
+}
+
+function ResetPasswordContent() {
   const [state, action, pending] = useActionState(resetPasswordAction, null);
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";

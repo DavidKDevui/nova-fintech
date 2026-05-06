@@ -1,12 +1,16 @@
 "use client";
 
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { setupPasswordAction } from "@/actions/auth";
 import { Logo } from "@/components/logo";
 
 export default function SetupPasswordPage() {
+  return <Suspense><SetupPasswordContent /></Suspense>;
+}
+
+function SetupPasswordContent() {
   const [state, action, pending] = useActionState(setupPasswordAction, null);
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
