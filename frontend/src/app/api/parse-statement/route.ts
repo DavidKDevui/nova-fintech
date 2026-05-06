@@ -82,9 +82,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Erreur lors de l'analyse du fichier PDF." });
   }
 }
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
