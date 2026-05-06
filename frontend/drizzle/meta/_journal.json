@@ -1,0 +1,83 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1776715667068,
+      "tag": "0000_glorious_betty_ross",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776716077259,
+      "tag": "0001_white_mastermind",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776720063992,
+      "tag": "0002_add_previous_refresh_token",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777123427307,
+      "tag": "0003_solid_mikhail_rasputin",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777156587326,
+      "tag": "0004_bent_morlun",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777156722963,
+      "tag": "0005_powerful_natasha_romanoff",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777188795188,
+      "tag": "0006_thankful_kylun",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1777190104833,
+      "tag": "0007_salty_puff_adder",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777363200000,
+      "tag": "0008_add_payment_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777449600000,
+      "tag": "0009_add_default_bank_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1777536000000,
+      "tag": "0010_add_retrocession_rate",
+      "breakpoints": true
+    }
+  ]
+}

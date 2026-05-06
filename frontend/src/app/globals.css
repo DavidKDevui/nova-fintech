@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #FFF7ED;
+  --color-brand-100: #FFEDD5;
+  --color-brand-200: #FED7AA;
+  --color-brand-300: #FDBA74;
+  --color-brand-400: #FB923C;
+  --color-brand-500: #F97316;
+  --color-brand-600: #EC6C12;
+  --color-brand-700: #C2580F;
+  --color-brand-800: #9A3412;
+  --color-brand-900: #7C2D12;
+  --color-brand-950: #431407;
+
+  --color-secondary-50: #FAF5FF;
+  --color-secondary-100: #F3E8FF;
+  --color-secondary-200: #E9D5FF;
+  --color-secondary-300: #D8B4FE;
+  --color-secondary-400: #B98ADA;
+  --color-secondary-500: #9060B6;
+  --color-secondary-600: #7C4FA0;
+  --color-secondary-700: #6B3F8A;
+  --color-secondary-800: #5A3374;
+  --color-secondary-900: #49285E;
+  --color-secondary-950: #2E1A3D;
+}
+
+* {
+  font-family: var(--font-sora), system-ui, sans-serif;
+}
+
+button,
+[type="submit"],
+[role="button"] {
+  cursor: pointer;
+}
+
+body {
+  background: linear-gradient(135deg, #FFFCF9 0%, #FFF9F2 50%, #FFF7ED 100%);
+  letter-spacing: -0.02em;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.3s ease-out both;
+}
+
+.animate-fade-up-fast {
+  animation: fade-up 0.15s ease-out both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.8s ease-out both;
+}
+
+.animate-fade-in-fast {
+  animation: fade-in 0.15s ease-out both;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.7s ease-out both;
+}
+
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-step-in {
+  animation: step-in 0.3s ease-out both;
+}
+
+/* Mobile drawer */
+.drawer-overlay {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.drawer-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drawer-panel {
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.drawer-overlay.open .drawer-panel {
+  transform: translateX(0);
+}
