@@ -5,12 +5,19 @@ import { initDatabase } from "./init";
 
 const connectionString = process.env.DATABASE_URL?.replace(/[?&]sslmode=[^&]*/g, "");
 
-const pool = new pg.Pool({
+const globalForPg = globalThis as unknown as { pgPool?: pg.Pool };
+
+const pool = globalForPg.pgPool ?? new pg.Pool({
   connectionString,
   ssl: {
     rejectUnauthorized: false,
   },
+  max: 1,
 });
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPg.pgPool = pool;
+}
 
 pool.query("SELECT 1")
   .then(() => {
