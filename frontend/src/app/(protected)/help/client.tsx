@@ -29,7 +29,7 @@ export function HelpClient() {
       <div>
         <h1 className="text-xl md:text-2xl font-bold mb-2">Aide — Comprendre vos charges</h1>
         <p className="text-sm text-gray-500 leading-relaxed">
-          En tant qu'infirmier(e) libéral(e), vous êtes soumis(e) à plusieurs prélèvements obligatoires.
+          En tant qu&apos;infirmier(e) libéral(e), vous êtes soumis(e) à plusieurs prélèvements obligatoires.
           Cette page vous explique simplement <strong>quoi</strong>, <strong>combien</strong> et <strong>quand</strong> vous payez.
         </p>
       </div>
@@ -38,7 +38,7 @@ export function HelpClient() {
       <div className="bg-violet-50 border border-violet-200 rounded-lg p-5">
         <h2 className="text-sm font-bold text-violet-900 mb-3">En bref : où va votre argent ?</h2>
         <p className="text-sm text-violet-800 leading-relaxed mb-4">
-          Sur un chiffre d'affaires de <strong>70 000 EUR</strong> (bénéfice net d'environ 50 000 EUR),
+          Sur un chiffre d&apos;affaires de <strong>70 000 EUR</strong> (bénéfice net d&apos;environ 50 000 EUR),
           vous reversez entre <strong>25 000 et 31 000 EUR</strong> par an en impôts et cotisations.
           Il vous reste <strong>environ 40 à 50 EUR sur chaque 100 EUR</strong> facturé.
         </p>
@@ -150,8 +150,8 @@ export function HelpClient() {
             <div>
               <p className="text-sm font-semibold text-green-900">CVAE : non concerné(e)</p>
               <p className="text-sm text-green-700 mt-1">
-                La CVAE ne s'applique qu'au-delà de 500 000 EUR de chiffre d'affaires.
-                En pratique, aucun(e) IDEL n'est concerné(e).
+                La CVAE ne s&apos;applique qu&apos;au-delà de 500 000 EUR de chiffre d&apos;affaires.
+                En pratique, aucun(e) IDEL n&apos;est concerné(e).
               </p>
             </div>
           </div>
@@ -370,7 +370,7 @@ function Explainer({
     <div className={`border-l-4 ${c.border} pl-4 space-y-2`}>
       <p className={`text-sm font-bold ${c.title}`}>{title}</p>
       <div>
-        <p className={`text-xs font-semibold uppercase tracking-wider ${c.accent} opacity-60`}>C'est quoi ?</p>
+        <p className={`text-xs font-semibold uppercase tracking-wider ${c.accent} opacity-60`}>C&apos;est quoi ?</p>
         <p className="text-sm text-gray-600 mt-0.5">{what}</p>
       </div>
       <div>

@@ -72,7 +72,7 @@ export function PracticeTable({
           <tr className="border-b border-gray-200/50 text-left text-gray-500">
             <th className="px-4 md:px-6 py-4 font-medium">Nom</th>
             <th className="px-4 md:px-6 py-4 font-medium">FINESS</th>
-            <th className="px-4 md:px-6 py-4 font-medium">Date d'ajout</th>
+            <th className="px-4 md:px-6 py-4 font-medium">Date d&apos;ajout</th>
             <th className="px-4 md:px-6 py-4 font-medium text-right">Actions</th>
           </tr>
         </thead>

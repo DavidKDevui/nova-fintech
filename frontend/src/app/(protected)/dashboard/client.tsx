@@ -163,7 +163,7 @@ export function DashboardClient() {
               <div className="bg-green-50 rounded-lg p-3">
                 <div className="flex items-center gap-1.5">
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-700"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-                  <p className="text-xs font-medium text-green-700">Entrées d'argent</p>
+                  <p className="text-xs font-medium text-green-700">Entrées d&apos;argent</p>
                 </div>
                 <p className="text-lg font-bold text-green-700 mt-0.5">+{formatCurrency(revenus30j)}</p>
                 <p className="text-xs text-gray-400">30 derniers jours glissants</p>
@@ -189,7 +189,7 @@ export function DashboardClient() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-green-50 rounded-lg p-3">
-                  <p className="text-xs font-medium text-green-700">Entrées d'argent</p>
+                  <p className="text-xs font-medium text-green-700">Entrées d&apos;argent</p>
                   <p className="text-lg font-bold text-green-700 mt-0.5">+3 200 €</p>
                   <p className="text-xs text-gray-400">30 derniers jours glissants</p>
                 </div>

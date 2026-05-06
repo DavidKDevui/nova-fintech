@@ -1,12 +1,15 @@
 "use client";
 
+import { Suspense } from "react";
 import { Toaster } from "sonner";
 import { ToastHandler } from "@/components/toast-handler";
 
 export function ToastProvider() {
   return (
     <>
-      <ToastHandler />
+      <Suspense>
+        <ToastHandler />
+      </Suspense>
       <Toaster
         position="bottom-right"
         toastOptions={{
