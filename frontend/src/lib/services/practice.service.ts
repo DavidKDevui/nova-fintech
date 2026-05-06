@@ -1,6 +1,13 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db";
-import { practices } from "../db/schema";
+import {
+  practices,
+  practiceLinks,
+  practiceLinkSuggestions,
+  carePassages,
+  carePayments,
+  statementUploads,
+} from "../db/schema";
 
 export async function listPractices() {
   return db
@@ -43,5 +50,26 @@ export async function updatePractice(id: string, name: string, finess: string) {
 }
 
 export async function deletePractice(id: string) {
-  await db.delete(practices).where(eq(practices.id, id));
+  // Check if there are care passages or payments linked to this practice
+  const [passageCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(carePassages)
+    .where(eq(carePassages.practiceId, id));
+  const [paymentCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(carePayments)
+    .where(eq(carePayments.practiceId, id));
+
+  if (Number(passageCount?.count) > 0 || Number(paymentCount?.count) > 0) {
+    throw new Error(
+      "Impossible de supprimer ce cabinet : des passages de soins ou des paiements y sont rattachés."
+    );
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(statementUploads).where(eq(statementUploads.practiceId, id));
+    await tx.delete(practiceLinkSuggestions).where(eq(practiceLinkSuggestions.practiceId, id));
+    await tx.delete(practiceLinks).where(eq(practiceLinks.practiceId, id));
+    await tx.delete(practices).where(eq(practices.id, id));
+  });
 }
