@@ -47,6 +47,20 @@ export async function login(email: string, password: string) {
   };
 }
 
+export async function isTokenValid(token: string): Promise<boolean> {
+  const [invitation] = await db
+    .select({ id: invitations.id })
+    .from(invitations)
+    .where(
+      and(
+        eq(invitations.token, token),
+        isNull(invitations.usedAt),
+        gt(invitations.expiresAt, new Date()),
+      ),
+    );
+  return !!invitation;
+}
+
 export async function setupPassword(token: string, password: string) {
   validatePassword(password);
 
@@ -141,6 +155,21 @@ export async function forgotPassword(email: string) {
   });
 
   await mail.sendResetPassword(email, token);
+}
+
+export async function isResetTokenValid(token: string): Promise<boolean> {
+  const [verification] = await db
+    .select({ id: verifications.id })
+    .from(verifications)
+    .where(
+      and(
+        eq(verifications.type, "password_reset"),
+        eq(verifications.value, token),
+        isNull(verifications.usedAt),
+        gt(verifications.expiresAt, new Date()),
+      ),
+    );
+  return !!verification;
 }
 
 export async function resetPassword(token: string, newPassword: string) {
