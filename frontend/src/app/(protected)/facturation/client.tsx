@@ -128,14 +128,14 @@ export function FacturationClient() {
       // Année N
       const bucket = monthMap.get(`${y}-${m}`);
       if (bucket && status in bucket) {
-        (bucket as Record<string, number>)[status] += amount;
+        (bucket as unknown as Record<string, number>)[status] += amount;
       }
 
       // Année N-1
       if (y === String(prevYear)) {
         const prevBucket = months[parseInt(m!) - 1];
         if (prevBucket) {
-          (prevBucket as Record<string, number>)[`${status}_prev`] += amount;
+          (prevBucket as unknown as Record<string, number>)[`${status}_prev`] += amount;
         }
       }
     }
