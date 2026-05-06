@@ -7,11 +7,11 @@ const connectionString = process.env.DATABASE_URL?.replace(/[?&]sslmode=[^&]*/g,
 
 const globalForPg = globalThis as unknown as { pgPool?: pg.Pool };
 
+const isProduction = process.env.NODE_ENV === "production";
+
 const pool = globalForPg.pgPool ?? new pg.Pool({
   connectionString,
-  ssl: {
-    rejectUnauthorized: false,
-  },
+  ...(isProduction && { ssl: { rejectUnauthorized: false } }),
   max: 1,
 });
 

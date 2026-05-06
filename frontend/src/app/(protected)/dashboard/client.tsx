@@ -118,7 +118,7 @@ export function DashboardClient() {
             </div>
           </div>
         ) : (
-          <div className="bg-white/70 backdrop-blur-xl border border-white/50 rounded-lg p-6 text-center">
+          <div className="bg-white/70 backdrop-blur-xl border border-white/50 rounded-lg p-6 flex items-center justify-center min-h-[200px]">
             <p className="text-sm text-gray-400">Aucune donnée de facturation disponible.</p>
           </div>
         )}
