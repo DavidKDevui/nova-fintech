@@ -29,14 +29,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   }
 
   if (session.accountType !== "practitioner") {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Accès refusé</h1>
-          <p className="text-sm text-gray-500">Vous n&apos;avez pas accès à cette section.</p>
-        </div>
-      </div>
-    );
+    redirect("/admin/users");
   }
 
   const practitionerProfile = await practitionerService.getByUserId(session.id);
