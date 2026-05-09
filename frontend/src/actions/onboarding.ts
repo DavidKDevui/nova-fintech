@@ -13,6 +13,7 @@ export async function completeOnboardingAction(_prevState: unknown, formData: Fo
 
   const firstName = (formData.get("firstName") as string)?.trim();
   const lastName = (formData.get("lastName") as string)?.trim();
+  const rppsNumber = (formData.get("rppsNumber") as string)?.trim();
   const profession = formData.get("profession") as string;
   const activityStartDate = formData.get("activityStartDate") as string;
   const taxRegime = formData.get("taxRegime") as string;
@@ -20,8 +21,12 @@ export async function completeOnboardingAction(_prevState: unknown, formData: Fo
   const retrocessionValue = (formData.get("retrocessionValue") as string)?.trim() || null;
   const pasFrequency = formData.get("pasFrequency") as string;
 
-  if (!firstName || !lastName || !profession || !activityStartDate || !taxRegime || !pasFrequency) {
+  if (!firstName || !lastName || !rppsNumber || !profession || !activityStartDate || !taxRegime || !pasFrequency) {
     return { error: "Tous les champs sont requis" };
+  }
+
+  if (!/^\d{11}$/.test(rppsNumber)) {
+    return { error: "Le numéro RPPS doit contenir exactement 11 chiffres" };
   }
 
   if (!["nurse"].includes(profession)) {
@@ -54,6 +59,7 @@ export async function completeOnboardingAction(_prevState: unknown, formData: Fo
       userId: session.id,
       firstName,
       lastName,
+      rppsNumber,
       profession: profession as "nurse",
       activityStartDate,
       taxRegime: taxRegime as "bnc" | "micro_bnc",

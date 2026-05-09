@@ -136,6 +136,10 @@ export async function changePassword(userId: string, currentPassword: string, ne
     throw new Error("Invalid current password");
   }
 
+  if (currentPassword === newPassword) {
+    throw new Error("Same password");
+  }
+
   const hashedPassword = await bcrypt.hash(newPassword, 12);
   await db.update(users).set({ password: hashedPassword, updatedAt: new Date() }).where(eq(users.id, userId));
 }

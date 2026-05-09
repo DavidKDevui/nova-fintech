@@ -14,6 +14,7 @@ export async function updateProfileAction(_prevState: unknown, formData: FormDat
   try {
     const firstName = (formData.get("firstName") as string)?.trim();
     const lastName = (formData.get("lastName") as string)?.trim();
+    const rppsNumber = (formData.get("rppsNumber") as string)?.trim();
     const profession = formData.get("profession") as string;
     const activityStartDate = formData.get("activityStartDate") as string;
     const taxRegime = formData.get("taxRegime") as string;
@@ -24,6 +25,7 @@ export async function updateProfileAction(_prevState: unknown, formData: FormDat
     const pasFrequency = formData.get("pasFrequency") as string;
     const pasRate = (formData.get("pasRate") as string)?.trim() || "10";
     const carpimkoFrequency = formData.get("carpimkoFrequency") as string;
+    const carpimkoPayDay = formData.get("carpimkoPayDay") as string;
 
     if (!firstName || !lastName || !profession || !activityStartDate || !taxRegime) {
       return { error: "Tous les champs sont requis" };
@@ -34,6 +36,7 @@ export async function updateProfileAction(_prevState: unknown, formData: FormDat
       .set({
         firstName,
         lastName,
+        rppsNumber: rppsNumber || null,
         profession: profession as "nurse",
         activityStartDate,
         taxRegime: taxRegime as "bnc" | "micro_bnc",
@@ -44,6 +47,7 @@ export async function updateProfileAction(_prevState: unknown, formData: FormDat
         pasFrequency: (pasFrequency as "monthly" | "quarterly") || "monthly",
         pasRate,
         carpimkoFrequency: (carpimkoFrequency as "monthly" | "semi_annual") || "monthly",
+        carpimkoPayDay: (carpimkoPayDay as "5" | "10" | "15" | "20" | "25") || "10",
         updatedAt: new Date(),
       })
       .where(eq(practitioners.userId, session.id));

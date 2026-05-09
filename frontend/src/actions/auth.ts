@@ -105,6 +105,40 @@ export async function resetPasswordAction(_prevState: unknown, formData: FormDat
   }
 }
 
+export async function changePasswordAction(_prevState: unknown, formData: FormData) {
+  const session = await getSession();
+  if (!session) {
+    return { error: "Session expirée, veuillez vous reconnecter" };
+  }
+
+  const currentPassword = formData.get("currentPassword") as string;
+  const newPassword = formData.get("newPassword") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    return { error: "Tous les champs sont requis" };
+  }
+
+  if (newPassword !== confirmPassword) {
+    return { error: "Les nouveaux mots de passe ne correspondent pas" };
+  }
+
+  try {
+    await authService.changePassword(session.id, currentPassword, newPassword);
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === "Invalid current password") {
+      return { error: "Mot de passe actuel incorrect" };
+    }
+    if (message === "Same password") {
+      return { error: "Le nouveau mot de passe doit être différent de l'ancien" };
+    }
+    // validatePassword errors are already in French
+    return { error: message };
+  }
+}
+
 export async function deleteAccountAction() {
   const session = await getSession();
   if (!session) {

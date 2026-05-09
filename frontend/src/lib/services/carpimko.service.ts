@@ -1,59 +1,27 @@
-// ── Barèmes CARPIMKO 2024 ──
+import taxesData from "@/lib/constants/taxes.json";
+
+// ── Barèmes CARPIMKO ──
 // Source : carpimko.com/cotisations
-// Ces barèmes sont mis à jour annuellement.
-// TODO: externaliser dans un fichier de config ou en base pour mise à jour sans redéploiement.
+// Barèmes externalisés dans /lib/constants/taxes.json
 
-const BAREME = {
-  2024: {
-    pss: 46_368, // Plafond Sécurité Sociale annuel
+const BAREME = taxesData.carpimko as Record<string, Bareme>;
 
-    // Retraite complémentaire — forfaitaire par tranche de revenus
-    retraiteComplementaire: {
-      tranche1: { plafond: 39_732, montant: 2_432 },
-      tranche2: { plafond: 158_928, taux: 0.03 },
-    },
-
-    // ASV (Avantage Supplémentaire Vieillesse)
-    asv: {
-      forfaitaire: 636,
-      proportionnel: { plafond: 231_840, taux: 0.004 },
-    },
-
-    // Invalidité-décès — forfaitaire
-    invaliditeDeces: 776,
-
-    // Indemnités journalières
-    indemnitesJournalieres: {
-      plafond: 139_104, // 3 × PSS
-      taux: 0.003,
-      minimum: 139,
-    },
-  },
-
-  2025: {
-    pss: 47_100,
-
-    retraiteComplementaire: {
-      tranche1: { plafond: 40_359, montant: 2_472 },
-      tranche2: { plafond: 161_436, taux: 0.03 },
-    },
-
-    asv: {
-      forfaitaire: 648,
-      proportionnel: { plafond: 235_500, taux: 0.004 },
-    },
-
-    invaliditeDeces: 790,
-
-    indemnitesJournalieres: {
-      plafond: 141_300,
-      taux: 0.003,
-      minimum: 141,
-    },
-  },
-} as const;
-
-type Annee = keyof typeof BAREME;
+type Bareme = {
+  retraiteComplementaire: {
+    tranche1: { plafond: number; montant: number };
+    tranche2: { plafond: number; taux: number };
+  };
+  asv: {
+    forfaitaire: number;
+    proportionnel: { plafond: number; taux: number };
+  };
+  invaliditeDeces: number;
+  indemnitesJournalieres: {
+    plafond: number;
+    taux: number;
+    minimum: number;
+  };
+};
 
 export type CarpimkoResult = {
   retraiteComplementaire: number;
@@ -63,13 +31,13 @@ export type CarpimkoResult = {
   totalCarpimko: number;
 };
 
-function getBareme(annee: number) {
-  const b = BAREME[annee as Annee];
+function getBareme(annee: number): Bareme {
+  const b = BAREME[String(annee)];
   if (b) return b;
 
   // Fallback : utiliser le barème de l'année la plus récente disponible
   const annees = Object.keys(BAREME).map(Number).sort((a, b) => b - a);
-  const fallback = BAREME[annees[0] as Annee];
+  const fallback = BAREME[String(annees[0])];
   if (!fallback) {
     throw new Error(`Aucun barème CARPIMKO disponible.`);
   }
@@ -78,7 +46,7 @@ function getBareme(annee: number) {
 
 // ── Calculs ──
 
-function calculerRetraiteComplementaire(revenu: number, bareme: typeof BAREME[Annee]): number {
+function calculerRetraiteComplementaire(revenu: number, bareme: Bareme): number {
   const { tranche1, tranche2 } = bareme.retraiteComplementaire;
 
   // Tranche 1 : montant forfaitaire
@@ -93,13 +61,13 @@ function calculerRetraiteComplementaire(revenu: number, bareme: typeof BAREME[An
   return montant;
 }
 
-function calculerASV(revenu: number, bareme: typeof BAREME[Annee]): number {
+function calculerASV(revenu: number, bareme: Bareme): number {
   const { forfaitaire, proportionnel } = bareme.asv;
   const assiette = Math.min(revenu, proportionnel.plafond);
   return forfaitaire + assiette * proportionnel.taux;
 }
 
-function calculerIndemnitesJournalieres(revenu: number, bareme: typeof BAREME[Annee]): number {
+function calculerIndemnitesJournalieres(revenu: number, bareme: Bareme): number {
   const { plafond, taux, minimum } = bareme.indemnitesJournalieres;
   const assiette = Math.min(revenu, plafond);
   return Math.max(assiette * taux, minimum);

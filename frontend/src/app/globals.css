@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @theme {
   --color-brand-50: #FFF7ED;
@@ -37,7 +38,7 @@ button,
 }
 
 body {
-  background: linear-gradient(135deg, #FFFCF9 0%, #FFF9F2 50%, #FFF7ED 100%);
+  background: linear-gradient(135deg, #FFFFFE 0%, #FFFEFD 50%, #FFFDFB 100%);
   letter-spacing: -0.02em;
 }
 

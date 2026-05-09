@@ -3,7 +3,8 @@
 import { createContext, useContext, useCallback, useEffect, useState, type ReactNode } from "react";
 import { getPendingSuggestions, getPendingSuggestionsCount } from "@/actions/practice-links";
 import { getFacturationData, type FacturationSummary, type CarePassageRow } from "@/actions/facturation";
-import { fetchLocalAccountsAction, fetchLocalTransactionsAction } from "@/actions/bridge";
+import { fetchLocalAccountsAction } from "@/actions/bridge";
+import { getUncategorizedCountAction } from "@/actions/transaction";
 import { usePractitioner } from "./practitioner-provider";
 import { useUser } from "./user-provider";
 
@@ -34,6 +35,7 @@ type Transaction = {
   cleanDescription: string | null;
   operationType: string | null;
   categoryId: number | null;
+  category: string | null;
 };
 
 interface DataContextValue {
@@ -53,6 +55,8 @@ interface DataContextValue {
   transactions: Transaction[];
   transactionsLoading: boolean;
   transactionsError: string;
+  uncategorizedCount: number;
+  setUncategorizedCount: React.Dispatch<React.SetStateAction<number>>;
 
   // Refresh
   refresh: () => Promise<void>;
@@ -72,6 +76,8 @@ const DataContext = createContext<DataContextValue>({
   transactions: [],
   transactionsLoading: true,
   transactionsError: "",
+  uncategorizedCount: 0,
+  setUncategorizedCount: () => {},
   refresh: async () => {},
   refreshFacturation: async () => {},
   refreshTransactions: async () => {},
@@ -97,6 +103,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [transactionsError, setTransactionsError] = useState("");
+  const [uncategorizedCount, setUncategorizedCount] = useState(0);
 
   const refreshFacturation = useCallback(async () => {
     if (isAdmin || !hp) {
@@ -119,21 +126,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return;
     }
     setTransactionsError("");
-    const [accResult, txResult] = await Promise.all([
+    const [accResult, uncatCount] = await Promise.all([
       fetchLocalAccountsAction(),
-      fetchLocalTransactionsAction(),
+      getUncategorizedCountAction(),
     ]);
+    setUncategorizedCount(uncatCount);
 
     if (accResult.error) {
       setTransactionsError(accResult.error);
     } else if (accResult.accounts) {
       setAccounts(accResult.accounts as Account[]);
-    }
-
-    if (txResult.error && !accResult.error) {
-      setTransactionsError(txResult.error);
-    } else if (txResult.transactions) {
-      setTransactions(txResult.transactions as Transaction[]);
     }
 
     setTransactionsLoading(false);
@@ -170,6 +172,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       transactions,
       transactionsLoading,
       transactionsError,
+      uncategorizedCount,
+      setUncategorizedCount,
       refresh,
       refreshFacturation,
       refreshTransactions,

@@ -1,50 +1,15 @@
 import { NextResponse } from "next/server";
-import { createHmac, timingSafeEqual } from "crypto";
 import { eq, and, isNull, lte, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { bankAlerts, bankAccounts, practitioners, users } from "@/lib/db/schema";
 import { sendTreasuryAlert } from "@/lib/services/mail.service";
+import { verifyCronRequest } from "@/lib/cron-auth";
 
 const COOLDOWN_DAYS = 7;
-const MAX_TIMESTAMP_DRIFT_MS = 5 * 60 * 1000;
-const CRON_SECRET = process.env.CRON_SECRET;
-
-function verifySignature(body: string, signature: string): boolean {
-  if (!CRON_SECRET) return false;
-  const expected = createHmac("sha256", CRON_SECRET).update(body).digest("hex");
-  try {
-    return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-  } catch {
-    return false;
-  }
-}
-
-function verifyTimestamp(body: string): boolean {
-  try {
-    const parsed = JSON.parse(body);
-    const timestamp = parsed.timestamp;
-    if (typeof timestamp !== "number") return false;
-    return Math.abs(Date.now() - timestamp) <= MAX_TIMESTAMP_DRIFT_MS;
-  } catch {
-    return false;
-  }
-}
 
 export async function POST(request: Request) {
-  if (!CRON_SECRET) {
-    return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
-  }
-
-  const body = await request.text();
-  const signature = request.headers.get("x-signature");
-
-  if (!signature || !verifySignature(body, signature)) {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-  }
-
-  if (!verifyTimestamp(body)) {
-    return NextResponse.json({ error: "Expired or invalid timestamp" }, { status: 401 });
-  }
+  const auth = await verifyCronRequest(request);
+  if (!auth.ok) return auth.response;
 
   try {
     const cooldownDate = new Date();

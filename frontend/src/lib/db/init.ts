@@ -44,11 +44,13 @@ CREATE TABLE IF NOT EXISTS "practitioners" (
   "pas_rate" numeric(4,1) DEFAULT '10' NOT NULL,
   "retrocession_type" "retrocession_type",
   "retrocession_value" numeric(10,2),
+  "rpps_number" varchar(11),
   "bridge_user_uuid" varchar(255),
   "default_bank_account_id" uuid,
   "created_at" timestamp DEFAULT now() NOT NULL,
   "updated_at" timestamp DEFAULT now() NOT NULL,
-  CONSTRAINT "practitioners_user_id_unique" UNIQUE("user_id")
+  CONSTRAINT "practitioners_user_id_unique" UNIQUE("user_id"),
+  CONSTRAINT "practitioners_rpps_number_unique" UNIQUE("rpps_number")
 );
 
 CREATE TABLE IF NOT EXISTS "bank_accounts" (
@@ -170,6 +172,9 @@ CREATE TABLE IF NOT EXISTS "bank_alerts" (
 );
 CREATE INDEX IF NOT EXISTS "idx_bank_alerts_practitioner" ON "bank_alerts"("practitioner_id");
 
+ALTER TABLE "practitioners" ADD COLUMN IF NOT EXISTS "rpps_number" varchar(11);
+DO $$ BEGIN ALTER TABLE "practitioners" ADD CONSTRAINT "practitioners_rpps_number_unique" UNIQUE("rpps_number"); EXCEPTION WHEN duplicate_object THEN null; END $$;
+
 CREATE TABLE IF NOT EXISTS "invitations" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "email" varchar(255) NOT NULL,
@@ -189,6 +194,8 @@ CREATE TABLE IF NOT EXISTS "verifications" (
   "used_at" timestamp,
   "created_at" timestamp DEFAULT now() NOT NULL
 );
+
+ALTER TABLE "bank_transactions" ADD COLUMN IF NOT EXISTS "category" varchar(50);
 `;
 
 export async function initDatabase(pool: pg.Pool) {

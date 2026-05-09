@@ -1,0 +1,906 @@
+"use client";
+
+import { useState, useEffect, useCallback, useMemo, useActionState } from "react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { getMonthlyActivityAction, getTransactionKpisAction } from "@/actions/transaction";
+import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
+import { getFiscalSituationAction, upsertFiscalSituationAction } from "@/actions/fiscal-situation";
+import { useData } from "@/providers/data-provider";
+import { usePractitioner } from "@/providers/practitioner-provider";
+import { buildCalendar, type PaymentPreferences, DEFAULT_PREFERENCES } from "@/lib/data/fiscal-calendar";
+
+const TABS = [
+  { key: "activity", label: "Mon activité" },
+  { key: "contributions", label: "Mes cotisations sociales" },
+  { key: "taxes", label: "Mes impôts" },
+  { key: "summary", label: "Ma synthèse" },
+] as const;
+
+type Tab = (typeof TABS)[number]["key"];
+
+const MONTH_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
+
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(amount);
+}
+
+export function ManagementClient() {
+  const [tab, setTab] = useState<Tab>("activity");
+
+  return (
+    <div>
+      {/* Tabs */}
+      <div className="flex items-center gap-0 border-b border-gray-100 mb-6">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
+              tab === t.key ? "border-brand-600 text-brand-600" : "border-transparent text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      {tab === "activity" && <ActivityTab />}
+
+      {tab === "contributions" && <ContributionsTab />}
+
+      {tab === "taxes" && <TaxesTab />}
+
+      {tab === "summary" && (
+        <p className="text-sm text-gray-500">Ma synthèse — en cours de construction.</p>
+      )}
+    </div>
+  );
+}
+
+// ── Activity Tab ──
+
+function ActivityTab() {
+  const hp = usePractitioner();
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth();
+  const [year, setYear] = useState(currentYear);
+  const [loading, setLoading] = useState(true);
+  const [kpis, setKpis] = useState({ encaissement: 0, decaissement: 0, cotisations: 0, remuneration: 0 });
+  type MonthData = { name: string; revenus: number; cotisations: number; autresDepenses: number; urssaf: number; carpimko: number; chargesPro: number; retrocession: number; madelin: number; impots: number; remuneration: number };
+  const [chartData, setChartData] = useState<MonthData[]>([]);
+  const [vacations, setVacations] = useState<number[]>(Array(12).fill(0));
+  const [depensesOpen, setDepensesOpen] = useState(false);
+  const [remOpen, setRemOpen] = useState(false);
+
+  const fetchData = useCallback(async (y: number) => {
+    setLoading(true);
+    const [kpiResult, monthlyResult] = await Promise.all([
+      getTransactionKpisAction(null, y),
+      getMonthlyActivityAction(y),
+    ]);
+    setKpis({ encaissement: kpiResult.encaissement, decaissement: kpiResult.decaissement, cotisations: kpiResult.cotisations ?? 0, remuneration: kpiResult.remuneration ?? 0 });
+    setChartData(
+      monthlyResult.months.map((m) => ({
+        name: MONTH_LABELS[m.month - 1]!,
+        revenus: m.income,
+        cotisations: m.cotisations,
+        autresDepenses: m.autresDepenses,
+        urssaf: m.urssaf,
+        carpimko: m.carpimko,
+        chargesPro: m.chargesPro,
+        retrocession: m.retrocession,
+        madelin: m.madelin,
+        impots: m.impots,
+        remuneration: m.remuneration,
+      })),
+    );
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchData(year);
+  }, [year, fetchData]);
+
+  return (
+    <div>
+      {/* KPI cards */}
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-green-600 shrink-0">
+              <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
+              <path d="M12 16V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+              <path d="M8 12l4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+            </svg>
+            <p className="text-xs font-medium text-gray-500">Chiffre d&apos;affaires</p>
+          </div>
+          {loading ? (
+            <div className="h-7 bg-gray-200 rounded w-24 animate-pulse mt-1" />
+          ) : (
+            <p className="text-xl font-bold text-gray-900">{formatCurrency(kpis.encaissement)}</p>
+          )}
+        </div>
+
+        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-red-500 shrink-0">
+              <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
+              <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+              <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+            </svg>
+            <p className="text-xs font-medium text-gray-500">Dépenses</p>
+          </div>
+          {loading ? (
+            <div className="h-7 bg-gray-200 rounded w-24 animate-pulse mt-1" />
+          ) : (
+            <p className="text-xl font-bold text-gray-900">{formatCurrency(kpis.decaissement)}</p>
+          )}
+        </div>
+
+        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-orange-500 shrink-0">
+              <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
+              <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+              <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+            </svg>
+            <p className="text-xs font-medium text-gray-500">Dont cotisations sociales</p>
+          </div>
+          {loading ? (
+            <div className="h-7 bg-gray-200 rounded w-24 animate-pulse mt-1" />
+          ) : (
+            <p className="text-xl font-bold text-gray-900">{formatCurrency(kpis.cotisations)}</p>
+          )}
+        </div>
+
+        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-brand-600 shrink-0">
+              <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.3" />
+              <path d="M12 7v4l2.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+              <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.5" />
+            </svg>
+            <p className="text-xs font-medium text-gray-500">Rém. avant impôt</p>
+          </div>
+          {loading ? (
+            <div className="h-7 bg-gray-200 rounded w-24 animate-pulse mt-1" />
+          ) : (
+            <p className="text-xl font-bold text-gray-900">{formatCurrency(
+              chartData.reduce((s, m) => s + m.revenus - m.urssaf - m.carpimko - m.chargesPro - m.retrocession - m.madelin, 0)
+            )}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Chart + monthly breakdown (aligned) */}
+      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3">
+          <h2 className="text-base font-semibold text-gray-900">Revenus et dépenses</h2>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setYear((y) => y - 1)}
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <span className="text-sm font-semibold text-gray-900 w-12 text-center">{year}</span>
+            <button
+              type="button"
+              onClick={() => setYear((y) => y + 1)}
+              disabled={year >= currentYear}
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="px-5 pb-5">
+            <div className="h-64 bg-gray-100 rounded animate-pulse" />
+          </div>
+        ) : (
+          <>
+            <div className="pb-2">
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={chartData} barGap={2} barCategoryGap="20%" margin={{ left: 200, right: 0, top: 5, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} hide />
+                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={0} />
+                  <Tooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                    formatter={(value: number, name: string) => {
+                      const labels: Record<string, string> = { revenus: "Revenus", cotisations: "Cotisations sociales", autresDepenses: "Autres dépenses" };
+                      return [formatCurrency(value), labels[name] ?? name];
+                    }}
+                    labelStyle={{ fontWeight: 600, marginBottom: 4 }}
+                  />
+                  <Legend
+                    iconType="circle"
+                    iconSize={8}
+                    wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                    formatter={(value: string) => {
+                      const labels: Record<string, string> = { revenus: "Revenus", cotisations: "Cotisations sociales", autresDepenses: "Autres dépenses" };
+                      return labels[value] ?? value;
+                    }}
+                  />
+                  <Bar dataKey="revenus" fill="#22c55e" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="autresDepenses" stackId="depenses" fill="#ef4444" />
+                  <Bar dataKey="cotisations" stackId="depenses" fill="#f97316" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Horizontal monthly breakdown */}
+            <div className="border-t border-gray-100 text-xs">
+              {/* Header */}
+              <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+                <div className="px-3 py-3.5" />
+                {chartData.map((m) => (
+                  <div key={m.name} className="py-3.5 text-center font-semibold text-gray-500">{m.name}</div>
+                ))}
+              </div>
+              {/* CA */}
+              <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+                <div className="px-3 py-3.5 text-sm font-semibold text-gray-700">Chiffre d&apos;affaires</div>
+                {chartData.map((m) => (
+                  <div key={m.name} className="py-3.5 text-center font-medium text-gray-700">
+                    {m.revenus > 0 ? formatCurrency(m.revenus) : "—"}
+                  </div>
+                ))}
+              </div>
+              {/* Dépenses */}
+              <div
+                className="grid border-b border-gray-50 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}
+                onClick={() => setDepensesOpen((v) => !v)}
+              >
+                <div className="px-3 py-3.5 text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                  Dépenses
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform ${depensesOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+                {chartData.map((m) => {
+                  const dep = m.cotisations + m.autresDepenses;
+                  return (
+                    <div key={m.name} className="py-3.5 text-center font-medium text-gray-700">
+                      {dep > 0 ? formatCurrency(dep) : "—"}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Sub-rows dépenses */}
+              {depensesOpen && (
+                <>
+                  {([
+                    { key: "urssaf", label: "URSSAF" },
+                    { key: "carpimko", label: "CARPIMKO" },
+                    { key: "chargesPro", label: "Charges pro" },
+                    { key: "retrocession", label: "Rétrocession" },
+                    { key: "madelin", label: "Madelin" },
+                  ] as const).map((sub) => (
+                    <div key={sub.key} className="grid border-b border-gray-50 bg-gray-50/30" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+                      <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-gray-500">{sub.label}</div>
+                      {chartData.map((m) => {
+                        const val = m[sub.key];
+                        return (
+                          <div key={m.name} className="py-2.5 text-center text-xs font-medium text-gray-500">
+                            {val > 0 ? formatCurrency(val) : "—"}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </>
+              )}
+              {/* Rém. avant impôt */}
+              <div
+                className="grid border-b border-gray-50 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}
+                onClick={() => setRemOpen((v) => !v)}
+              >
+                <div className="px-3 py-3.5 text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                  Rém. avant impôt
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform ${remOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+                {chartData.map((m) => {
+                  const charges = m.urssaf + m.carpimko + m.chargesPro + m.retrocession + m.madelin;
+                  const res = m.revenus - charges;
+                  const empty = m.revenus === 0 && charges === 0;
+                  return (
+                    <div key={m.name} className={`py-3.5 text-center font-medium ${empty ? "text-gray-300" : res >= 0 ? "text-gray-900" : "text-red-500"}`}>
+                      {empty ? "—" : formatCurrency(res)}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Sub-rows rém. avant impôt */}
+              {remOpen && (
+                <>
+                  <div className="grid border-b border-gray-50 bg-gray-50/30" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+                    <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-gray-500">Rémunération versée</div>
+                    {chartData.map((m) => (
+                      <div key={m.name} className="py-2.5 text-center text-xs font-medium text-gray-500">
+                        {m.remuneration > 0 ? formatCurrency(m.remuneration) : "—"}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid border-b border-gray-50 bg-gray-50/30" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+                    <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-gray-500">Provision d&apos;impôt estimée</div>
+                    {chartData.map((m, i) => {
+                      const isFuture = year > currentYear || (year === currentYear && i >= currentMonth);
+                      // Past months: show real tax transactions
+                      if (!isFuture) {
+                        return (
+                          <div key={m.name} className="py-2.5 text-center text-xs font-medium text-gray-500">
+                            {m.impots > 0 ? formatCurrency(m.impots) : "—"}
+                          </div>
+                        );
+                      }
+                      // Current/future months: estimate = rém. avant impôt × taux PAS
+                      const pasRate = hp ? parseFloat(hp.pasRate) / 100 : 0;
+                      const charges = m.urssaf + m.carpimko + m.chargesPro + m.retrocession + m.madelin;
+                      const remAvantImpot = m.revenus - charges;
+                      const estimated = remAvantImpot > 0 ? Math.round(remAvantImpot * pasRate) : 0;
+                      return (
+                        <div key={m.name} className="py-2.5 text-center text-xs font-medium text-gray-400 italic">
+                          {estimated > 0 ? `~${formatCurrency(estimated)}` : "—"}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {/* Vacances */}
+              <div className="grid" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+                <div className="px-3 py-3.5 text-sm font-semibold text-gray-700">Vacances (jours)</div>
+                {chartData.map((m, i) => (
+                  <div key={m.name} className="py-2.5 flex items-center justify-center">
+                    <input
+                      type="number"
+                      min="0"
+                      max="31"
+                      value={vacations[i] || 0}
+                      onChange={(e) => {
+                        const v = Math.max(0, Math.min(31, parseInt(e.target.value) || 0));
+                        setVacations((prev) => { const next = [...prev]; next[i] = v; return next; });
+                      }}
+                      className="w-10 text-center text-xs font-medium text-gray-700 border border-gray-200 rounded hover:border-gray-300 focus:border-brand-500 focus:outline-none bg-transparent transition-colors py-1"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Contributions Tab ──
+
+function ContributionsTab() {
+  const hp = usePractitioner();
+  const { facturationSummary } = useData();
+  const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
+  const [cardsLoading, setCardsLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(true);
+  const [monthlyData, setMonthlyData] = useState<{ urssaf: number; carpimko: number }[]>(Array(12).fill({ urssaf: 0, carpimko: 0 }));
+
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+
+  const totalCA = useMemo(() => {
+    if (!facturationSummary) return 0;
+    return facturationSummary.byStatus.paye.total;
+  }, [facturationSummary]);
+
+  // Build calendar to know which months have payments
+  const prefs: PaymentPreferences = useMemo(() => {
+    if (!hp) return DEFAULT_PREFERENCES;
+    return {
+      urssafFrequency: hp.urssafFrequency,
+      urssafPayDay: hp.urssafPayDay,
+      pasFrequency: hp.pasFrequency,
+      carpimkoFrequency: hp.carpimkoFrequency,
+      carpimkoPayDay: hp.carpimkoPayDay,
+      activityStartDate: hp.activityStartDate,
+    };
+  }, [hp]);
+
+  const calendar = useMemo(() => buildCalendar(prefs), [prefs]);
+
+  // Load estimate (only once, independent of year)
+  useEffect(() => {
+    if (totalCA <= 0) { setCardsLoading(false); return; }
+    getCotisationsEstimate(totalCA).then((est) => {
+      if (est) setEstimate(est);
+      setCardsLoading(false);
+    }).catch(() => setCardsLoading(false));
+  }, [totalCA]);
+
+  // Load monthly data (depends on year)
+  useEffect(() => {
+    setTableLoading(true);
+    getMonthlyActivityAction(year).then((monthly) => {
+      if (monthly.months) {
+        setMonthlyData(monthly.months.map((m) => ({ urssaf: m.urssaf, carpimko: m.carpimko })));
+      }
+      setTableLoading(false);
+    }).catch(() => setTableLoading(false));
+  }, [year]);
+
+  // Estimated amounts per month based on calendar events
+  const estimatedMonths = useMemo(() => {
+    if (!estimate) return Array(12).fill({ urssaf: 0, carpimko: 0 });
+    return Array.from({ length: 12 }, (_, i) => {
+      const events = calendar[i] || [];
+      const hasUrssaf = events.some((e) => e.type === "urssaf");
+      const hasCarpimko = events.some((e) => e.type === "carpimko");
+      return {
+        urssaf: hasUrssaf ? estimate.urssafParEcheance : 0,
+        carpimko: hasCarpimko ? estimate.carpimkoParEcheance : 0,
+      };
+    });
+  }, [estimate, calendar]);
+
+  return (
+    <div className="space-y-6">
+      {/* Cards */}
+      <div className="grid grid-cols-2 gap-6">
+        {/* URSSAF */}
+        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+          <div className="flex items-center gap-4 mb-6">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-urssaf.svg" alt="URSSAF" className="h-8" />
+          </div>
+          <div className="flex items-center gap-1.5 mb-1">
+            <p className="text-xs text-gray-400">Montant total estimé des cotisations {currentYear}</p>
+            <InfoTooltip text={`Montant total estimé de vos cotisations Urssaf à payer en ${currentYear}, réduit du remboursement estimé (régularisation négative) au titre de ${currentYear - 1}.`} />
+          </div>
+          {cardsLoading ? (
+            <div className="h-8 bg-gray-200 rounded w-28 animate-pulse mb-4" />
+          ) : (
+            <p className="text-2xl font-bold text-gray-900 mb-4">
+              {estimate ? `~${formatCurrency(estimate.urssafAnnuel)}` : "—"}
+            </p>
+          )}
+          <div className="flex items-center gap-1.5 mb-1">
+            <p className="text-xs text-gray-400">Montant par échéance</p>
+            <InfoTooltip text={`Estimation d'un excédent de cotisations Urssaf versé en ${currentYear - 1}, qui vous sera remboursé en ${currentYear - 1}.`} />
+          </div>
+          {cardsLoading ? (
+            <div className="h-8 bg-gray-200 rounded w-28 animate-pulse" />
+          ) : (
+            <p className="text-2xl font-bold text-gray-900">
+              {estimate ? `~${formatCurrency(estimate.urssafParEcheance)}` : "—"}
+            </p>
+          )}
+        </div>
+
+        {/* CARPIMKO */}
+        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+          <div className="flex items-center gap-4 mb-6">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-carpimko.png" alt="CARPIMKO" className="h-8" />
+          </div>
+          <div className="flex items-center gap-1.5 mb-1">
+            <p className="text-xs text-gray-400">Montant total estimé des cotisations {currentYear}</p>
+            <InfoTooltip text={`Montant total estimé de vos cotisations Carpimko à payer en ${currentYear}, intégrant la régularisation estimée au titre de ${currentYear - 1}.`} />
+          </div>
+          {cardsLoading ? (
+            <div className="h-8 bg-gray-200 rounded w-28 animate-pulse mb-4" />
+          ) : (
+            <p className="text-2xl font-bold text-gray-900 mb-4">
+              {estimate ? `~${formatCurrency(estimate.carpimkoAnnuel)}` : "—"}
+            </p>
+          )}
+          <div className="flex items-center gap-1.5 mb-1">
+            <p className="text-xs text-gray-400">Montant par échéance</p>
+            <InfoTooltip text={`Estimation d'un ajustement des cotisations Carpimko de ${currentYear - 1} à payer en ${currentYear}.`} />
+          </div>
+          {cardsLoading ? (
+            <div className="h-8 bg-gray-200 rounded w-28 animate-pulse" />
+          ) : (
+            <p className="text-2xl font-bold text-gray-900">
+              {estimate ? `~${formatCurrency(estimate.carpimkoParEcheance)}` : "—"}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Monthly table */}
+      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3">
+          <h2 className="text-base font-semibold text-gray-900">Détail mensuel</h2>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setYear((y) => y - 1)}
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <span className="text-sm font-semibold text-gray-900 w-12 text-center">{year}</span>
+            <button
+              type="button"
+              onClick={() => setYear((y) => y + 1)}
+              disabled={year >= currentYear}
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </div>
+        {tableLoading ? (
+          <div className="px-5 pb-5">
+            <div className="h-32 bg-gray-100 rounded animate-pulse" />
+          </div>
+        ) : (
+          <div className="border-t border-gray-100 text-xs">
+            {/* Header */}
+            <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+              <div className="px-3 py-3.5" />
+              {MONTH_LABELS.map((m) => (
+                <div key={m} className="py-3.5 text-center font-semibold text-gray-500">{m}</div>
+              ))}
+            </div>
+            {/* URSSAF */}
+            <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+              <div className="px-3 py-3.5 flex items-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo-urssaf.svg" alt="URSSAF" className="h-5" />
+              </div>
+              {monthlyData.map((m, i) => {
+                const reel = m.urssaf;
+                const canEstimate = year > currentYear || (year === currentYear && i >= new Date().getMonth());
+                const est = canEstimate ? (estimatedMonths[i]?.urssaf ?? 0) : 0;
+                if (reel > 0) {
+                  return <div key={i} className="py-3.5 text-center font-medium text-gray-700">{formatCurrency(reel)}</div>;
+                }
+                if (est > 0) {
+                  return <div key={i} className="py-3.5 text-center font-medium text-gray-400 italic">~{formatCurrency(est)}</div>;
+                }
+                return <div key={i} className="py-3.5 text-center font-medium text-gray-300">—</div>;
+              })}
+            </div>
+            {/* CARPIMKO */}
+            <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+              <div className="px-3 py-3.5 flex items-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo-carpimko.png" alt="CARPIMKO" className="h-5" />
+              </div>
+              {monthlyData.map((m, i) => {
+                const reel = m.carpimko;
+                const canEstimate = year > currentYear || (year === currentYear && i >= new Date().getMonth());
+                const est = canEstimate ? (estimatedMonths[i]?.carpimko ?? 0) : 0;
+                if (reel > 0) {
+                  return <div key={i} className="py-3.5 text-center font-medium text-gray-700">{formatCurrency(reel)}</div>;
+                }
+                if (canEstimate) {
+                  return <div key={i} className="py-3.5 text-center font-medium text-gray-400 italic">{est > 0 ? `~${formatCurrency(est)}` : "0 €"}</div>;
+                }
+                return <div key={i} className="py-3.5 text-center font-medium text-gray-300">—</div>;
+              })}
+            </div>
+            {/* Total */}
+            <div className="grid" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+              <div className="px-3 py-3.5 text-sm font-semibold text-gray-900">Total</div>
+              {monthlyData.map((m, i) => {
+                const reelTotal = m.urssaf + m.carpimko;
+                const canEstimate = year > currentYear || (year === currentYear && i >= new Date().getMonth());
+                const estTotal = canEstimate ? ((estimatedMonths[i]?.urssaf ?? 0) + (estimatedMonths[i]?.carpimko ?? 0)) : 0;
+                const hasReel = reelTotal > 0;
+                const value = hasReel ? reelTotal : estTotal;
+                if (value > 0) {
+                  return (
+                    <div key={i} className={`py-3.5 text-center font-semibold ${hasReel ? "text-gray-900" : "text-gray-400 italic"}`}>
+                      {hasReel ? formatCurrency(value) : `~${formatCurrency(value)}`}
+                    </div>
+                  );
+                }
+                return <div key={i} className="py-3.5 text-center font-semibold text-gray-300">—</div>;
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Taxes Tab ──
+
+const IR_TRANCHES = [
+  { min: 0, max: 11_294, rate: 0 },
+  { min: 11_294, max: 28_797, rate: 11 },
+  { min: 28_797, max: 82_341, rate: 30 },
+  { min: 82_341, max: 177_106, rate: 41 },
+  { min: 177_106, max: Infinity, rate: 45 },
+];
+
+function computeIR(revenuImposable: number, parts: number) {
+  const quotient = revenuImposable / parts;
+  let impot = 0;
+  let currentTrancheIndex = 0;
+  let fillPercent = 0;
+  let distanceToNext = 0;
+
+  for (let i = 0; i < IR_TRANCHES.length; i++) {
+    const t = IR_TRANCHES[i]!;
+    const trancheBase = Math.min(quotient, t.max) - t.min;
+    if (trancheBase > 0) {
+      impot += trancheBase * (t.rate / 100);
+      currentTrancheIndex = i;
+    }
+    if (quotient <= t.max) {
+      const trancheWidth = t.max - t.min;
+      fillPercent = trancheWidth === Infinity ? 0 : Math.round(((quotient - t.min) / trancheWidth) * 100);
+      distanceToNext = t.max === Infinity ? 0 : Math.round((t.max - quotient) * parts);
+      break;
+    }
+  }
+
+  impot = Math.round(impot * parts);
+  const tauxMoyen = revenuImposable > 0 ? Math.round((impot / revenuImposable) * 100) : 0;
+
+  return { impot, tauxMoyen, currentTrancheIndex, fillPercent, distanceToNext };
+}
+
+function TaxesTab() {
+  const hp = usePractitioner();
+  const { facturationSummary } = useData();
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+
+  const [situation, setSituation] = useState<"celibataire" | "marie" | "pacse">("celibataire");
+  const [enfants, setEnfants] = useState(0);
+  const [autresRevenus, setAutresRevenus] = useState(0);
+  const [dbLoaded, setDbLoaded] = useState(false);
+  const [saveState, saveAction, saving] = useActionState(upsertFiscalSituationAction, null);
+
+  // Load fiscal situation from DB when year changes
+  useEffect(() => {
+    setDbLoaded(false);
+    getFiscalSituationAction(year).then((res) => {
+      if (res) {
+        setSituation(res.maritalStatus as "celibataire" | "marie" | "pacse");
+        setEnfants(res.dependentChildren);
+        setAutresRevenus(Number(res.otherIncome));
+      } else {
+        setSituation("celibataire");
+        setEnfants(0);
+        setAutresRevenus(0);
+      }
+      setDbLoaded(true);
+    }).catch(() => {
+      setDbLoaded(true);
+    });
+  }, [year]);
+
+  const parts = useMemo(() => {
+    let p = situation === "celibataire" ? 1 : 2;
+    if (enfants >= 1) p += 0.5;
+    if (enfants >= 2) p += 0.5;
+    if (enfants >= 3) p += enfants - 2;
+    return p;
+  }, [situation, enfants]);
+
+  const revenuBNC = useMemo(() => {
+    if (!facturationSummary) return 0;
+    const ca = facturationSummary.byStatus.paye.total;
+    if (!hp) return 0;
+    return hp.taxRegime === "micro_bnc" ? Math.round(ca * 0.66) : ca;
+  }, [facturationSummary, hp]);
+
+  const monthsElapsed = new Date().getMonth() + 1;
+  const revenuAnnualise = monthsElapsed >= 2 ? Math.round((revenuBNC / monthsElapsed) * 12) : revenuBNC;
+  const revenuImposable = revenuAnnualise + autresRevenus;
+
+  const ir = useMemo(() => computeIR(revenuImposable, parts), [revenuImposable, parts]);
+
+  const pasRate = hp ? parseFloat(hp.pasRate) / 100 : 0;
+  const pasAnnuel = Math.round(revenuAnnualise * pasRate);
+  const regularisation = ir.impot - pasAnnuel;
+
+  const currentTranche = IR_TRANCHES[ir.currentTrancheIndex]!;
+
+  return (
+    <div className="grid grid-cols-2 gap-6">
+      {/* Ma situation fiscale */}
+      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-base font-semibold text-gray-900">Ma situation fiscale</h3>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setYear((y) => y - 1)}
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <span className="text-sm font-semibold text-gray-900 w-12 text-center">{year}</span>
+            <button
+              type="button"
+              onClick={() => setYear((y) => y + 1)}
+              disabled={year >= currentYear}
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </div>
+        <form action={saveAction} className="space-y-4">
+          <input type="hidden" name="year" value={year} />
+          <div>
+            <label className="block text-sm text-gray-500 mb-1.5">Situation conjugale</label>
+            <select
+              name="maritalStatus"
+              value={situation}
+              onChange={(e) => setSituation(e.target.value as "celibataire" | "marie" | "pacse")}
+              className="w-full border border-gray-200 bg-transparent px-3 py-2 rounded-md text-sm transition-all hover:border-gray-400 focus:border-gray-900 focus:outline-none appearance-none cursor-pointer"
+            >
+              <option value="celibataire">Célibataire</option>
+              <option value="marie">Marié(e)</option>
+              <option value="pacse">Pacsé(e)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-500 mb-1.5">Nombre d&apos;enfants à charge</label>
+            <input
+              type="number"
+              name="dependentChildren"
+              min="0"
+              max="20"
+              value={enfants}
+              onChange={(e) => setEnfants(Math.max(0, parseInt(e.target.value) || 0))}
+              className="w-full border border-gray-200 bg-transparent px-3 py-2 rounded-md text-sm transition-all hover:border-gray-400 focus:border-gray-900 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-500 mb-1.5">Autres revenus BNC ou salariés du foyer en {year}</label>
+            <div className="relative">
+              <input
+                type="number"
+                name="otherIncome"
+                min="0"
+                step="100"
+                value={autresRevenus || ""}
+                onChange={(e) => setAutresRevenus(Math.max(0, parseInt(e.target.value) || 0))}
+                placeholder="0"
+                className="w-full border border-gray-200 bg-transparent px-3 py-2 pr-8 rounded-md text-sm transition-all hover:border-gray-400 focus:border-gray-900 focus:outline-none"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">€</span>
+            </div>
+            <p className="mt-1 text-xs text-gray-400">Revenus nets imposables du conjoint ou autres activités.</p>
+          </div>
+          <div className="pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-500">Nombre de parts fiscales</span>
+              <span className="font-semibold text-gray-900">{parts}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm mt-1">
+              <span className="text-gray-500">Revenu imposable estimé</span>
+              <span className="font-semibold text-gray-900">{formatCurrency(revenuImposable)}</span>
+            </div>
+          </div>
+
+          {saveState?.error && (
+            <p className="bg-red-50 p-3 rounded-md text-sm text-red-600">{saveState.error}</p>
+          )}
+          {saveState?.success && (
+            <p className="bg-green-50 p-3 rounded-md text-sm text-green-600">Situation fiscale enregistrée.</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={saving || !dbLoaded}
+            className="flex items-center gap-2 bg-gray-900 px-5 py-3 rounded-md text-sm font-medium text-white transition-all hover:bg-black active:scale-[0.98] disabled:bg-gray-300 disabled:opacity-60 disabled:hover:bg-gray-300 disabled:active:scale-100 disabled:cursor-not-allowed"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            {saving ? "Enregistrement..." : "Enregistrer"}
+          </button>
+        </form>
+      </div>
+
+      {/* Mon imposition estimée */}
+      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+        <h3 className="text-base font-semibold text-gray-900 mb-5">Mon imposition estimée</h3>
+        <div className="space-y-4">
+          <div>
+            <div className="flex items-center gap-1.5 mb-1">
+              <p className="text-xs text-gray-400">Impôt estimé sur les revenus {year}</p>
+              <InfoTooltip text={`Estimation de l'impôt sur le revenu basée sur votre CA annualisé, votre situation familiale et le barème progressif ${year}.`} />
+            </div>
+            <p className="text-2xl font-bold text-gray-900">{formatCurrency(ir.impot)}</p>
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5 mb-1">
+              <p className="text-xs text-gray-400">Régularisation {year} payée en {year + 1}</p>
+              <InfoTooltip text={`Différence entre l'impôt estimé et les acomptes PAS déjà versés. Un montant positif signifie un complément à payer, négatif un remboursement.`} />
+            </div>
+            <p className={`text-2xl font-bold ${regularisation >= 0 ? "text-red-500" : "text-green-600"}`}>
+              {regularisation >= 0 ? "+" : ""}{formatCurrency(regularisation)}
+            </p>
+          </div>
+
+          <div className="pt-4 border-t border-gray-100">
+            <p className="text-sm font-medium text-gray-900 mb-1">Tranche marginale d&apos;imposition</p>
+            <p className="text-xs text-gray-400 mb-3">
+              Vous remplissez {ir.fillPercent} % de cette tranche.
+              {ir.distanceToNext > 0 && ` Dans ${formatCurrency(ir.distanceToNext)} de revenus imposables supplémentaires, vous passerez à la tranche supérieure.`}
+            </p>
+
+            {/* Tranche bar */}
+            <div className="flex rounded-full overflow-hidden h-3 mb-2">
+              {IR_TRANCHES.map((t, i) => {
+                const isActive = i === ir.currentTrancheIndex;
+                const isPast = i < ir.currentTrancheIndex;
+                return (
+                  <div
+                    key={t.rate}
+                    className={`relative flex-1 transition-all ${
+                      isPast ? "bg-brand-600" : isActive ? "bg-brand-200" : "bg-gray-100"
+                    }`}
+                  >
+                    {isActive && (
+                      <div
+                        className="absolute inset-y-0 left-0 bg-brand-600 rounded-r-full"
+                        style={{ width: `${ir.fillPercent}%` }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex text-[10px] font-medium text-gray-400">
+              {IR_TRANCHES.map((t, i) => (
+                <div key={t.rate} className={`flex-1 text-center ${i === ir.currentTrancheIndex ? "text-brand-600 font-bold" : ""}`}>
+                  {t.rate} %
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 flex items-center justify-between">
+              <span className="text-sm text-gray-500">Taux moyen</span>
+              <span className="text-sm font-bold text-gray-900">{ir.tauxMoyen} %</span>
+            </div>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-sm text-gray-500">Tranche marginale</span>
+              <span className="text-sm font-bold text-gray-900">{currentTranche.rate} %</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Shared components ──
+
+function InfoTooltip({ text }: { text: string }) {
+  const [show, setShow] = useState(false);
+
+  return (
+    <div className="relative inline-flex">
+      <button
+        type="button"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onClick={() => setShow((v) => !v)}
+        className="flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 transition-colors shrink-0 cursor-help"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      </button>
+      {show && (
+        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg leading-relaxed">
+          {text}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+        </div>
+      )}
+    </div>
+  );
+}

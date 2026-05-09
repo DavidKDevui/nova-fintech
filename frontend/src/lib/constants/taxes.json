@@ -1,0 +1,36 @@
+{
+  "carpimko": {
+    "2024": {
+      "retraiteComplementaire": {
+        "tranche1": { "plafond": 39732, "montant": 2432 },
+        "tranche2": { "plafond": 158928, "taux": 0.03 }
+      },
+      "asv": {
+        "forfaitaire": 636,
+        "proportionnel": { "plafond": 231840, "taux": 0.004 }
+      },
+      "invaliditeDeces": 776,
+      "indemnitesJournalieres": {
+        "plafond": 139104,
+        "taux": 0.003,
+        "minimum": 139
+      }
+    },
+    "2025": {
+      "retraiteComplementaire": {
+        "tranche1": { "plafond": 40359, "montant": 2472 },
+        "tranche2": { "plafond": 161436, "taux": 0.03 }
+      },
+      "asv": {
+        "forfaitaire": 648,
+        "proportionnel": { "plafond": 235500, "taux": 0.004 }
+      },
+      "invaliditeDeces": 790,
+      "indemnitesJournalieres": {
+        "plafond": 141300,
+        "taux": 0.003,
+        "minimum": 141
+      }
+    }
+  }
+}

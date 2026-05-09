@@ -107,6 +107,35 @@ function extractResult(response: Record<string, unknown>, annee: number): OpenFi
   };
 }
 
+// ── Paramètres ──
+
+type OpenFiscaParameterResponse = {
+  values: Record<string, number>;
+};
+
+/**
+ * Récupère le Plafond Annuel de la Sécurité Sociale (PASS) pour une année donnée.
+ * Endpoint : /parameter/prelevements_sociaux.pss.plafond_securite_sociale_annuel
+ */
+export async function getPlafondSecuriteSociale(annee: number): Promise<number> {
+  const response = await openfiscaFetch<OpenFiscaParameterResponse>(
+    "/parameter/prelevements_sociaux.pss.plafond_securite_sociale_annuel"
+  );
+
+  // Trouver la valeur applicable : la plus récente dont la date est <= au 1er janvier de l'année
+  const targetDate = `${annee}-01-01`;
+  let applicableValue = 0;
+
+  const sortedDates = Object.keys(response.values).sort();
+  for (const date of sortedDates) {
+    if (date <= targetDate) {
+      applicableValue = response.values[date];
+    }
+  }
+
+  return applicableValue;
+}
+
 export async function simulerCotisationsURSSAF(input: OpenFiscaInput): Promise<OpenFiscaResult> {
   const payload = buildSimulationPayload(input);
 

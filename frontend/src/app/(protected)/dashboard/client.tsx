@@ -1,11 +1,22 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useUser } from "@/providers/user-provider";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { useData } from "@/providers/data-provider";
 import { PracticeSuggestionBanner } from "@/components/practice-suggestion-banner";
+import { getTransactionKpisAction } from "@/actions/transaction";
+import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
+import {
+  buildCalendar,
+  MONTH_NAMES,
+  EVENT_DOT,
+  EVENT_LABEL,
+  getUpcomingEvents,
+  type PaymentPreferences,
+  DEFAULT_PREFERENCES,
+} from "@/lib/data/fiscal-calendar";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   en_attente: { label: "En attente", color: "text-amber-700", bg: "bg-amber-50" },
@@ -22,6 +33,8 @@ export function DashboardClient() {
     accounts,
     transactions,
     transactionsLoading: bankLoading,
+    uncategorizedCount,
+    pendingSuggestionsCount,
   } = useData();
 
   const name = hp?.firstName || user.email.split("@")[0] || "";
@@ -33,46 +46,137 @@ export function DashboardClient() {
     : null;
   const solde = defaultAccount ? Number(defaultAccount.balance) : null;
 
-  // Last 30 days revenue & expenses on default account
-  const { revenus30j, depenses30j } = useMemo(() => {
-    if (!hp?.defaultBankAccountId) return { revenus30j: 0, depenses30j: 0 };
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const cutoff = thirtyDaysAgo.toISOString().split("T")[0]!;
+  // KPIs from server (same as /transactions)
+  const [kpiEncaissement, setKpiEncaissement] = useState(0);
+  const [kpiDecaissement, setKpiDecaissement] = useState(0);
+  const [kpiNbDepenses, setKpiNbDepenses] = useState(0);
+  const [kpiLoading, setKpiLoading] = useState(true);
 
-    let rev = 0;
-    let dep = 0;
+  useEffect(() => {
+    if (!hp?.bridgeUserUuid) { setKpiLoading(false); return; }
+    getTransactionKpisAction(hp.defaultBankAccountId).then((result) => {
+      setKpiEncaissement(result.encaissement);
+      setKpiDecaissement(result.decaissement);
+      setKpiNbDepenses(result.nbTransactionsDepenses ?? 0);
+      setKpiLoading(false);
+    });
+  }, [hp?.bridgeUserUuid, hp?.defaultBankAccountId]);
+
+  // Profile completion
+  const profileCompletion = useMemo(() => {
+    if (!hp) return 0;
+    const fields = [
+      hp.firstName,
+      hp.lastName,
+      hp.profession,
+      hp.activityStartDate,
+      hp.taxRegime,
+      hp.rppsNumber,
+      hp.bridgeUserUuid,
+    ];
+    const filled = fields.filter(Boolean).length;
+    return Math.round((filled / fields.length) * 100);
+  }, [hp]);
+
+  const hasWarnings = !bankConnected || uncategorizedCount > 0;
+
+  // Évolution trésorerie vs mois dernier
+  const soldePrevMonth = useMemo(() => {
+    if (solde === null) return null;
+    const now = new Date();
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    let thisMonthBalance = 0;
     for (const tx of transactions) {
-      if (tx.bankAccountId !== hp.defaultBankAccountId) continue;
-      if (tx.date < cutoff) continue;
-      const amount = Number(tx.amount);
-      if (amount >= 0) rev += amount;
-      else dep += Math.abs(amount);
+      if (hp?.defaultBankAccountId && tx.bankAccountId !== hp.defaultBankAccountId) continue;
+      if (tx.date.startsWith(thisMonth)) thisMonthBalance += Number(tx.amount);
     }
-    return { revenus30j: Math.round(rev * 100) / 100, depenses30j: Math.round(dep * 100) / 100 };
-  }, [transactions, hp?.defaultBankAccountId]);
+    return solde - thisMonthBalance;
+  }, [transactions, hp?.defaultBankAccountId, solde]);
 
   return (
-    <div>
-      <h1 className="text-xl md:text-2xl font-bold mb-1">Hello, {name}</h1>
-      <p className="text-sm text-gray-400 mb-6 md:mb-8">Voici un aperçu de votre activité.</p>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-start">
+      <div>
+        <h1 className="text-xl md:text-2xl font-bold mb-1">Hello {name},</h1>
+        <p className="text-sm text-gray-400 mb-4">On fait le point ensemble ?</p>
 
-      <PracticeSuggestionBanner />
+        {profileCompletion < 100 && (
+          <div className="rounded-lg bg-white backdrop-blur-xl border border-gray-200/70 px-3.5 py-3 mb-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-gray-600">Profil complété</span>
+              <span className="text-sm font-semibold text-gray-900">{profileCompletion}%</span>
+            </div>
+            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-brand-600 rounded-full transition-all" style={{ width: `${profileCompletion}%` }} />
+            </div>
+            <Link href="/profile" className="text-xs text-gray-400 hover:text-gray-600 mt-1.5 inline-block transition-colors">
+              Compléter mon profil
+            </Link>
+          </div>
+        )}
 
-      {/* Row 1: existing Facturation + Trésorerie */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FacturationCard loading={loading} summary={summary} />
-        <TresorerieCard
-          bankLoading={bankLoading}
-          bankConnected={bankConnected}
-          solde={solde}
-          defaultAccount={defaultAccount}
-          revenus30j={revenus30j}
-          depenses30j={depenses30j}
-        />
+        {hasWarnings && (
+          <div className="flex flex-col gap-1.5">
+            {!bankConnected && (
+              <div className="bg-red-50 px-4 py-3 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                    <rect x="2" y="4" width="20" height="16" rx="3" fill="#F87171" opacity="0.6" />
+                    <rect x="2" y="4" width="20" height="5" rx="3" fill="#EF4444" />
+                    <line x1="6" y1="13" x2="10" y2="13" stroke="#FCA5A5" strokeWidth="1.5" />
+                    <line x1="6" y1="16" x2="12" y2="16" stroke="#FCA5A5" strokeWidth="1.5" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-red-900">Compte bancaire non connecté</p>
+                    <p className="text-xs text-red-700">Connectez votre banque pour suivre votre trésorerie.</p>
+                  </div>
+                  <Link href="/transactions" className="shrink-0 bg-red-600 px-2.5 py-1 text-xs font-medium text-white rounded-md hover:bg-red-700 transition-colors">
+                    Connecter
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {uncategorizedCount > 0 && (
+              <div className="bg-amber-50 px-4 py-3 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                    <rect x="3" y="3" width="18" height="18" rx="3" fill="#FBBF24" opacity="0.5" />
+                    <rect x="3" y="3" width="18" height="6" rx="3" fill="#F59E0B" />
+                    <rect x="7" y="12" width="4" height="2" rx="0.5" fill="#FDE68A" />
+                    <rect x="13" y="12" width="4" height="2" rx="0.5" fill="#FDE68A" />
+                    <rect x="7" y="16" width="4" height="2" rx="0.5" fill="#FDE68A" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-amber-900">{uncategorizedCount} transaction{uncategorizedCount > 1 ? "s" : ""} à catégoriser</p>
+                    <p className="text-xs text-amber-700">Catégorisez vos transactions pour un suivi précis.</p>
+                  </div>
+                  <Link href="/transactions" className="shrink-0 bg-amber-600 px-2.5 py-1 text-xs font-medium text-white rounded-md hover:bg-amber-700 transition-colors">
+                    Voir
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <PracticeSuggestionBanner />
       </div>
 
+      <div className="flex flex-col gap-4">
+        <FacturationCard loading={loading} summary={summary} />
+        <TresorerieCard
+          bankLoading={bankLoading || kpiLoading}
+          bankConnected={bankConnected}
+          solde={solde}
+          soldePrevMonth={soldePrevMonth}
+          encaissement={kpiEncaissement}
+          decaissement={kpiDecaissement}
+          ca={summary?.byStatus.paye.total ?? 0}
+          nbFactures={summary?.byStatus.paye.count ?? 0}
+          nbTransactionsDepenses={kpiNbDepenses}
+        />
+        <EcheancesCard hp={hp} totalCA={summary?.byStatus.paye.total ?? 0} />
+      </div>
     </div>
   );
 }
@@ -91,7 +195,7 @@ function FacturationCard({ loading, summary }: { loading: boolean; summary: Retu
     <Card>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <SectionLabel icon={<DocIcon />}>Total CA — Payé</SectionLabel>
+          <h2 className="text-lg font-semibold text-gray-900">Suivi de mon activité</h2>
           <p className="text-3xl font-bold text-gray-900">{formatCurrency(summary.totalCA)}</p>
           <p className="text-xs text-gray-400 mt-1">{summary.byStatus.paye.count} facture{summary.byStatus.paye.count > 1 ? "s" : ""}</p>
         </div>
@@ -125,87 +229,151 @@ function FacturationCard({ loading, summary }: { loading: boolean; summary: Retu
   );
 }
 
-/* ─── 0b. Trésorerie (existing) ─── */
+/* ─── 0b. Trésorerie (row de 4 KPIs) ─── */
 function TresorerieCard({
-  bankLoading, bankConnected, solde, defaultAccount, revenus30j, depenses30j,
+  bankLoading, bankConnected, solde, soldePrevMonth, encaissement, decaissement, ca, nbFactures, nbTransactionsDepenses,
 }: {
-  bankLoading: boolean; bankConnected: boolean; solde: number | null;
-  defaultAccount: { name: string; lastSyncAt: Date | null } | null | undefined;
-  revenus30j: number; depenses30j: number;
+  bankLoading: boolean; bankConnected: boolean; solde: number | null; soldePrevMonth: number | null;
+  encaissement: number; decaissement: number; ca: number; nbFactures: number; nbTransactionsDepenses: number;
 }) {
   if (bankLoading) return <SkeletonCard />;
-  if (bankConnected && solde !== null) {
-    return (
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <SectionLabel icon={<CreditCardIcon />}>Trésorerie disponible</SectionLabel>
-            <p className="text-3xl font-bold text-gray-900">{formatCurrency(solde)}</p>
-            <p className="text-xs text-gray-400 mt-1">
-              {defaultAccount?.name}
-              {defaultAccount?.lastSyncAt && (
-                <span className="ml-2 text-gray-300">· Synchro {formatDateRelative(new Date(defaultAccount.lastSyncAt))}</span>
-              )}
-            </p>
-          </div>
-          <DetailLink href="/transactions" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-green-50 rounded-lg p-3">
-            <div className="flex items-center gap-1.5">
-              <ArrowUpIcon className="text-green-700" />
-              <p className="text-xs font-medium text-green-700">Entrées d&apos;argent</p>
-            </div>
-            <p className="text-lg font-bold text-green-700 mt-0.5">+{formatCurrency(revenus30j)}</p>
-            <p className="text-xs text-gray-400">30 derniers jours glissants</p>
-          </div>
-          <div className="bg-red-50 rounded-lg p-3">
-            <div className="flex items-center gap-1.5">
-              <ArrowDownIcon className="text-red-700" />
-              <p className="text-xs font-medium text-red-700">Dépenses professionnelles</p>
-            </div>
-            <p className="text-lg font-bold text-red-700 mt-0.5">-{formatCurrency(depenses30j)}</p>
-            <p className="text-xs text-gray-400">30 derniers jours glissants</p>
-          </div>
-        </div>
-      </Card>
-    );
+  const remuneration = encaissement - decaissement;
+  const monthsElapsed = Math.max(1, new Date().getMonth() + 1);
+  const remunerationMensuelle = Math.round(remuneration / monthsElapsed);
+
+  // Évolution trésorerie vs mois dernier
+  let evolTreso: string | null = null;
+  if (solde !== null && soldePrevMonth !== null && soldePrevMonth !== 0) {
+    const pct = Math.round(((solde - soldePrevMonth) / Math.abs(soldePrevMonth)) * 100);
+    evolTreso = pct >= 0 ? `+${pct}% vs mois dernier` : `${pct}% vs mois dernier`;
   }
+
   return (
     <Card className="relative overflow-hidden">
-      <div className="blur-sm select-none pointer-events-none">
-        <div className="mb-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Trésorerie disponible</p>
-          <p className="text-3xl font-bold text-gray-900">1 234,56 €</p>
-          <p className="text-xs text-gray-400 mt-1">Compte pro</p>
+      {!bankConnected && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-[2px] z-10">
+          <Link href="/transactions" className="text-xs font-medium text-gray-500 hover:text-gray-900 border border-gray-200 rounded-md px-2.5 py-1 bg-white transition-colors">
+            Connecter ma banque
+          </Link>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-green-50 rounded-lg p-3">
-            <p className="text-xs font-medium text-green-700">Entrées d&apos;argent</p>
-            <p className="text-lg font-bold text-green-700 mt-0.5">+3 200 €</p>
-          </div>
-          <div className="bg-red-50 rounded-lg p-3">
-            <p className="text-xs font-medium text-red-700">Dépenses professionnelles</p>
-            <p className="text-lg font-bold text-red-700 mt-0.5">-1 850 €</p>
-          </div>
-        </div>
+      )}
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-semibold text-gray-900">Vue financière</h2>
+        <DetailLink href="/transactions" />
       </div>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <Link
-          href="/transactions"
-          className="flex items-center gap-2 px-4 py-2.5 bg-white/80 backdrop-blur-sm border border-gray-200 text-xs font-medium text-gray-700 rounded-lg shadow-md hover:bg-white hover:shadow-lg transition-all"
-        >
-          <CreditCardIcon />
-          {bankConnected ? "Choisir mon compte par défaut" : "Ajouter un compte bancaire"}
-        </Link>
+      <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+        <KpiTile label="Trésorerie" value={solde !== null ? formatCurrencyRounded(solde) : "—"} sub={evolTreso} icon={<KpiWalletIcon />} iconColor="text-blue-400" />
+        <KpiTile label="Chiffre d&apos;affaires" value={formatCurrencyRounded(ca)} sub={`${nbFactures} facture${nbFactures > 1 ? "s" : ""}`} icon={<KpiChartIcon />} iconColor="text-green-400" />
+        <KpiTile label="Dépenses" value={formatCurrencyRounded(decaissement)} sub={`${nbTransactionsDepenses} transaction${nbTransactionsDepenses > 1 ? "s" : ""}`} icon={<KpiExpenseIcon />} iconColor="text-red-400" />
+        <KpiTile label="Rémunération" value={formatCurrencyRounded(remuneration)} sub={`~${formatCurrencyRounded(remunerationMensuelle)}/mois`} icon={<KpiCoinIcon />} iconColor="text-amber-400" />
       </div>
     </Card>
   );
 }
 
+function KpiTile({ label, value, sub, icon, iconColor = "text-gray-300" }: { label: string; value: string; sub?: string | null; icon: React.ReactNode; iconColor?: string }) {
+  return (
+    <div className="flex flex-col items-center py-2 px-1.5">
+      <p className="text-xs font-medium text-gray-400 mb-1 flex items-center gap-1.5">
+        <span className={iconColor}>{icon}</span>
+        {label}
+      </p>
+      <p className="text-lg font-bold text-gray-900">{value}</p>
+      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+/* ─── 0c. Échéances ─── */
+function EcheancesCard({ hp, totalCA }: { hp: ReturnType<typeof usePractitioner>; totalCA: number }) {
+  const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
+
+  useEffect(() => {
+    if (totalCA <= 0) return;
+    getCotisationsEstimate(totalCA).then((res) => {
+      if (res) setEstimate(res);
+    }).catch(() => {});
+  }, [totalCA]);
+
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentDay = now.getDate();
+
+  const prefs: PaymentPreferences = useMemo(() => {
+    if (!hp) return DEFAULT_PREFERENCES;
+    return {
+      urssafFrequency: hp.urssafFrequency,
+      urssafPayDay: hp.urssafPayDay,
+      pasFrequency: hp.pasFrequency,
+      carpimkoFrequency: hp.carpimkoFrequency,
+      carpimkoPayDay: hp.carpimkoPayDay,
+      activityStartDate: hp.activityStartDate,
+    };
+  }, [hp]);
+
+  const calendar = useMemo(() => {
+    const cal = buildCalendar(prefs);
+    if (!estimate) return cal;
+    for (const month of Object.keys(cal)) {
+      const m = Number(month);
+      if (m > currentMonth) continue;
+      for (const evt of cal[m]) {
+        if (evt.type === "urssaf") evt.estimatedAmount = estimate.urssafParEcheance;
+        else if (evt.type === "carpimko") evt.estimatedAmount = estimate.carpimkoParEcheance;
+        else if (evt.type === "ir") evt.estimatedAmount = estimate.pasParEcheance;
+      }
+    }
+    return cal;
+  }, [prefs, estimate, currentMonth]);
+
+  const upcoming = useMemo(() => {
+    return getUpcomingEvents(currentMonth, currentDay, 4, calendar);
+  }, [currentMonth, currentDay, calendar]);
+
+  if (!hp) return null;
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-900">Prochaines échéances</h2>
+        <DetailLink href="/deadlines" />
+      </div>
+      {upcoming.length === 0 ? (
+        <p className="text-xs text-gray-400 text-center py-2">Aucune échéance à venir.</p>
+      ) : (
+        <div className="divide-y divide-gray-100 -mx-5">
+          {upcoming.map((evt, i) => {
+            return (
+              <div key={i} className="flex items-center gap-3 px-5 py-2">
+                <div className="w-10 shrink-0">
+                  <p className="text-[10px] uppercase text-gray-400">{MONTH_NAMES[evt.month]?.slice(0, 3)}</p>
+                  <p className="text-lg font-bold text-gray-900 -mt-0.5">{evt.day}</p>
+                </div>
+                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${EVENT_DOT[evt.type]}`} />
+                <p className="text-sm text-gray-800 truncate flex-1 min-w-0">{evt.label}</p>
+                {evt.estimatedAmount != null && evt.estimatedAmount > 0 && (
+                  <span className="text-sm font-bold text-gray-900 shrink-0">~{formatCurrencyRounded(evt.estimatedAmount)}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function getDaysUntilDashboard(currentMonth: number, currentDay: number, targetMonth: number, targetDay: number): number {
+  const now = new Date();
+  const target = new Date(now.getFullYear(), targetMonth, targetDay);
+  const today = new Date(now.getFullYear(), currentMonth, currentDay);
+  if (target < today) target.setFullYear(target.getFullYear() + 1);
+  return Math.round((target.getTime() - today.getTime()) / 86400000);
+}
+
 /* ─── Shared components ─── */
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`bg-white/70 backdrop-blur-xl border border-white/50 rounded-lg p-5 ${className}`}>{children}</div>;
+  return <div className={`bg-white backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5 ${className}`}>{children}</div>;
 }
 
 function SectionLabel({ children, icon }: { children: React.ReactNode; icon: React.ReactNode }) {
@@ -245,6 +413,10 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(amount);
 }
 
+function formatCurrencyRounded(amount: number) {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Math.round(amount));
+}
+
 function formatDateRelative(date: Date) {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -273,4 +445,22 @@ function ArrowUpIcon({ className = "text-green-700" }: { className?: string }) {
 }
 function ArrowDownIcon({ className = "text-red-700" }: { className?: string }) {
   return <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg>;
+}
+function WarningIcon({ className = "text-amber-500" }: { className?: string }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>;
+}
+function InfoIcon({ className = "text-blue-500" }: { className?: string }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>;
+}
+function KpiWalletIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="14" rx="2.5" fill="currentColor" opacity="0.5" /><rect x="2" y="6" width="20" height="4" rx="2.5" fill="currentColor" opacity="0.7" /><circle cx="17" cy="15" r="1.5" fill="currentColor" opacity="0.3" /></svg>;
+}
+function KpiChartIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="12" width="4" height="9" rx="1" fill="currentColor" opacity="0.4" /><rect x="10" y="7" width="4" height="14" rx="1" fill="currentColor" opacity="0.6" /><rect x="17" y="3" width="4" height="18" rx="1" fill="currentColor" opacity="0.45" /></svg>;
+}
+function KpiExpenseIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.4" /><path d="M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.6" /></svg>;
+}
+function KpiCoinIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.4" /><path d="M12 7v10M9 9.5c0-.8 1.3-1.5 3-1.5s3 .7 3 1.5-1.3 1.5-3 1.5-3 .7-3 1.5 1.3 1.5 3 1.5 3-.7 3-1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.6" /></svg>;
 }

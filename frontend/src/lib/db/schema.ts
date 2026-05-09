@@ -8,6 +8,7 @@ export const taxRegimeEnum = pgEnum("tax_regime", ["bnc", "micro_bnc"]);
 export const paymentFrequencyEnum = pgEnum("payment_frequency", ["monthly", "quarterly"]);
 export const urssafPayDayEnum = pgEnum("urssaf_pay_day", ["5", "20"]);
 export const carpimkoFrequencyEnum = pgEnum("carpimko_frequency", ["monthly", "semi_annual"]);
+export const carpimkoPayDayEnum = pgEnum("carpimko_pay_day", ["5", "10", "15", "20", "25"]);
 export const retrocessionTypeEnum = pgEnum("retrocession_type", ["percentage", "fixed"]);
 
 export const verificationTypeEnum = pgEnum("verification_type", [
@@ -45,9 +46,11 @@ export const practitioners = pgTable("practitioners", {
   urssafPayDay: urssafPayDayEnum("urssaf_pay_day").notNull().default("5"),
   pasFrequency: paymentFrequencyEnum("pas_frequency").notNull().default("monthly"),
   carpimkoFrequency: carpimkoFrequencyEnum("carpimko_frequency").notNull().default("monthly"),
+  carpimkoPayDay: carpimkoPayDayEnum("carpimko_pay_day").notNull().default("10"),
   pasRate: numeric("pas_rate", { precision: 4, scale: 1 }).notNull().default("10"),
   retrocessionType: retrocessionTypeEnum("retrocession_type"),
   retrocessionValue: numeric("retrocession_value", { precision: 10, scale: 2 }),
+  rppsNumber: varchar("rpps_number", { length: 11 }).unique(),
   bridgeUserUuid: varchar("bridge_user_uuid", { length: 255 }),
   defaultBankAccountId: uuid("default_bank_account_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -88,6 +91,7 @@ export const bankTransactions = pgTable("bank_transactions", {
   cleanDescription: varchar("clean_description", { length: 500 }),
   operationType: varchar("operation_type", { length: 100 }),
   categoryId: integer("category_id"),
+  category: varchar("category", { length: 50 }),
   bridgeUpdatedAt: timestamp("bridge_updated_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
@@ -248,3 +252,22 @@ export const verifications = pgTable("verifications", {
   usedAt: timestamp("used_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// ── Fiscal situations (per year) ──
+
+export const maritalStatusEnum = pgEnum("marital_status", ["celibataire", "marie", "pacse"]);
+
+export const practitionerFiscalSituations = pgTable("practitioner_fiscal_situations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  practitionerId: uuid("practitioner_id")
+    .notNull()
+    .references(() => practitioners.id, { onDelete: "cascade" }),
+  year: integer("year").notNull(),
+  maritalStatus: maritalStatusEnum("marital_status").notNull().default("celibataire"),
+  dependentChildren: integer("dependent_children").notNull().default(0),
+  otherIncome: numeric("other_income", { precision: 12, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_fiscal_situations_practitioner_year").on(table.practitionerId, table.year),
+]);

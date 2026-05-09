@@ -1,7 +1,7 @@
 export type CalendarEvent = {
   day: number;
   label: string;
-  type: "urssaf" | "carpimko" | "ir" | "cfe" | "tf" | "declaration";
+  type: "urssaf" | "carpimko" | "ir" | "cfe" | "declaration";
   estimatedAmount?: number;
 };
 
@@ -10,6 +10,8 @@ export type PaymentPreferences = {
   urssafPayDay: "5" | "20";
   pasFrequency: "monthly" | "quarterly";
   carpimkoFrequency: "monthly" | "semi_annual";
+  carpimkoPayDay: "5" | "10" | "15" | "20" | "25";
+  activityStartDate?: string;
 };
 
 export const DEFAULT_PREFERENCES: PaymentPreferences = {
@@ -17,6 +19,7 @@ export const DEFAULT_PREFERENCES: PaymentPreferences = {
   urssafPayDay: "5",
   pasFrequency: "monthly",
   carpimkoFrequency: "monthly",
+  carpimkoPayDay: "10",
 };
 
 export const MONTH_NAMES = [
@@ -29,7 +32,6 @@ export const EVENT_DOT: Record<string, string> = {
   carpimko: "bg-amber-500",
   ir: "bg-violet-500",
   cfe: "bg-emerald-500",
-  tf: "bg-teal-500",
   declaration: "bg-red-500",
 };
 
@@ -38,7 +40,6 @@ export const EVENT_BADGE: Record<string, string> = {
   carpimko: "bg-amber-50 text-amber-700",
   ir: "bg-violet-50 text-violet-700",
   cfe: "bg-emerald-50 text-emerald-700",
-  tf: "bg-teal-50 text-teal-700",
   declaration: "bg-red-50 text-red-700",
 };
 
@@ -47,7 +48,6 @@ export const EVENT_LABEL: Record<string, string> = {
   carpimko: "CARPIMKO",
   ir: "Impôt revenu",
   cfe: "CFE",
-  tf: "T. foncière",
   declaration: "Décla",
 };
 
@@ -70,19 +70,9 @@ const FIXED_EVENTS: Record<number, CalendarEvent[]> = {
   ],
   5: [
     { day: 4, label: "Date limite 2042 C Pro (dept 55-976)", type: "declaration" },
-    { day: 15, label: "Acompte CFE (si > 3 000 EUR)", type: "cfe" },
-    { day: 30, label: "Date limite adhésion mensualisation TF", type: "tf" },
   ],
   8: [
     { day: 30, label: "Date limite option PAS trimestriel pour N+1", type: "declaration" },
-  ],
-  9: [
-    { day: 15, label: "Date limite taxe foncière (non démat.)", type: "tf" },
-    { day: 20, label: "Date limite taxe foncière (en ligne)", type: "tf" },
-  ],
-  11: [
-    { day: 15, label: "Solde CFE — date limite", type: "cfe" },
-    { day: 31, label: "Déclaration initiale CFE (si création)", type: "declaration" },
   ],
 };
 
@@ -128,23 +118,51 @@ export function buildCalendar(prefs: PaymentPreferences = DEFAULT_PREFERENCES): 
     }
 
     // ── CARPIMKO ──
+    const carpimkoDay = parseInt(prefs.carpimkoPayDay);
     if (prefs.carpimkoFrequency === "monthly") {
       if (CARPIMKO_MONTHLY_MONTHS.has(month)) {
         const label = month === 9
           ? "CARPIMKO (dernier prélèvement mensuel)"
           : "CARPIMKO (mensuel)";
-        events.push({ day: 10, label, type: "carpimko" });
+        events.push({ day: carpimkoDay, label, type: "carpimko" });
       }
     } else {
       // semi_annual: March(2) and September(8)
       if (month === 2) {
-        events.push({ day: 25, label: "CARPIMKO (semestriel S1)", type: "carpimko" });
+        events.push({ day: carpimkoDay, label: "CARPIMKO (semestriel S1)", type: "carpimko" });
       } else if (month === 8) {
-        events.push({ day: 25, label: "CARPIMKO (semestriel S2)", type: "carpimko" });
+        events.push({ day: carpimkoDay, label: "CARPIMKO (semestriel S2)", type: "carpimko" });
       }
     }
 
-    // ── Fixed events (CFE, TF, declarations) ──
+    // ── CFE ──
+    const activityYear = prefs.activityStartDate
+      ? new Date(prefs.activityStartDate).getFullYear()
+      : null;
+    const currentYear = new Date().getFullYear();
+    const isFirstYearCFE = activityYear != null && activityYear === currentYear;
+
+    if (month === 5) {
+      // Juin : acompte CFE (si CFE N-1 > 3 000 €)
+      if (isFirstYearCFE) {
+        events.push({ day: 15, label: "Acompte CFE — exonéré (1ère année)", type: "cfe", estimatedAmount: 0 });
+      } else {
+        events.push({ day: 15, label: "Acompte CFE (si CFE N-1 > 3 000 €)", type: "cfe" });
+      }
+    }
+    if (month === 11) {
+      // Décembre : solde CFE
+      if (isFirstYearCFE) {
+        events.push({ day: 15, label: "Solde CFE — exonéré (1ère année)", type: "cfe", estimatedAmount: 0 });
+      } else {
+        events.push({ day: 15, label: "Solde CFE — date limite", type: "cfe" });
+      }
+      if (isFirstYearCFE) {
+        events.push({ day: 31, label: "Déclaration initiale CFE (création d'activité)", type: "declaration" });
+      }
+    }
+
+    // ── Fixed events (declarations) ──
     if (FIXED_EVENTS[month]) {
       events.push(...FIXED_EVENTS[month]);
     }
@@ -185,7 +203,9 @@ export function getUpcomingEvents(
         if (evtDate > limit) continue;
       }
       events.push({ ...evt, month: m });
+      if (events.length >= count) break;
     }
+    if (events.length >= count) break;
   }
-  return events;
+  return events.slice(0, count);
 }

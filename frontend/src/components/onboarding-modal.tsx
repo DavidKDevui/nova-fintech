@@ -4,6 +4,7 @@ import { useState, useEffect, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { completeOnboardingAction } from "@/actions/onboarding";
+import { verifyRppsAction } from "@/actions/verify-rpps";
 
 const FORM_STEPS = [
   { id: "identity", label: "Identité" },
@@ -38,6 +39,9 @@ export function OnboardingModal({ open }: { open: boolean }) {
   const [formStep, setFormStep] = useState(0);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [rppsNumber, setRppsNumber] = useState("");
+  const [rppsVerifying, setRppsVerifying] = useState(false);
+  const [rppsError, setRppsError] = useState("");
   const [profession, setProfession] = useState("");
   const [activityStartDate, setActivityStartDate] = useState("");
   const [taxRegime, setTaxRegime] = useState("");
@@ -57,7 +61,7 @@ export function OnboardingModal({ open }: { open: boolean }) {
   if (!open) return null;
 
   const canGoNext =
-    (formStep === 0 && firstName.trim() !== "" && lastName.trim() !== "") ||
+    (formStep === 0 && firstName.trim() !== "" && lastName.trim() !== "" && /^\d{11}$/.test(rppsNumber)) ||
     (formStep === 1 && profession !== "") ||
     (formStep === 2 && activityStartDate !== "") ||
     (formStep === 3 && taxRegime !== "") ||
@@ -202,6 +206,30 @@ export function OnboardingModal({ open }: { open: boolean }) {
                         className="w-full border-b-2 border-gray-200 bg-transparent pl-8 pr-4 py-4 text-[0.9rem] transition-all placeholder:text-gray-400 placeholder:font-medium hover:border-gray-400 focus:border-brand-500 focus:outline-none"
                       />
                     </div>
+                    <div className="relative group">
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-300 transition-colors group-focus-within:text-brand-600">
+                        <RppsIcon />
+                      </div>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={11}
+                        value={rppsNumber}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, "").slice(0, 11);
+                          setRppsNumber(v);
+                          setRppsError("");
+                        }}
+                        placeholder="Numéro RPPS (11 chiffres)"
+                        className="w-full border-b-2 border-gray-200 bg-transparent pl-8 pr-4 py-4 text-[0.9rem] transition-all placeholder:text-gray-400 placeholder:font-medium hover:border-gray-400 focus:border-brand-500 focus:outline-none"
+                      />
+                    </div>
+                    {rppsError && (
+                      <p className="text-sm text-red-600 mt-1">{rppsError}</p>
+                    )}
+                    {rppsVerifying && (
+                      <p className="text-sm text-gray-500 mt-1">Vérification en cours...</p>
+                    )}
                   </div>
                 )}
 
@@ -386,11 +414,23 @@ export function OnboardingModal({ open }: { open: boolean }) {
 
                 <button
                   type="button"
-                  onClick={() => formStep < FORM_STEPS.length - 1 ? setFormStep(formStep + 1) : setScreen("recap")}
-                  disabled={!canGoNext || undefined}
+                  onClick={async () => {
+                    if (formStep === 0) {
+                      setRppsError("");
+                      setRppsVerifying(true);
+                      const result = await verifyRppsAction(rppsNumber);
+                      setRppsVerifying(false);
+                      if (result.error) {
+                        setRppsError(result.error);
+                        return;
+                      }
+                    }
+                    formStep < FORM_STEPS.length - 1 ? setFormStep(formStep + 1) : setScreen("recap");
+                  }}
+                  disabled={!canGoNext || rppsVerifying || undefined}
                   className="flex items-center gap-2 bg-brand-600 px-5 py-2.5 rounded-lg text-sm font-medium text-white transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-30 disabled:active:scale-100"
                 >
-                  Continuer
+                  {rppsVerifying ? "Vérification..." : "Continuer"}
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 </button>
               </div>
@@ -417,6 +457,7 @@ export function OnboardingModal({ open }: { open: boolean }) {
 
             <div className="space-y-0 border border-gray-200 divide-y divide-gray-200 mb-8">
               <RecapRow label="Nom complet" value={`${firstName} ${lastName}`} />
+              <RecapRow label="Numéro RPPS" value={rppsNumber} />
               <RecapRow label="Profession" value={professionLabel} />
               <RecapRow label="Début d'activité" value={formatDate(activityStartDate)} />
               <RecapRow label="Régime fiscal" value={taxRegimeLabel} />
@@ -441,6 +482,7 @@ export function OnboardingModal({ open }: { open: boolean }) {
               <form action={action}>
                 <input type="hidden" name="firstName" value={firstName} />
                 <input type="hidden" name="lastName" value={lastName} />
+                <input type="hidden" name="rppsNumber" value={rppsNumber} />
                 <input type="hidden" name="profession" value={profession} />
                 <input type="hidden" name="activityStartDate" value={activityStartDate} />
                 <input type="hidden" name="taxRegime" value={taxRegime} />
@@ -518,6 +560,17 @@ function PercentIcon() {
       <line x1="16" y1="8" x2="8" y2="16" stroke="white" strokeWidth="2" strokeLinecap="round" />
       <circle cx="9" cy="9" r="2" fill="#F0FDFA" />
       <circle cx="15" cy="15" r="2" fill="#F0FDFA" />
+    </svg>
+  );
+}
+
+function RppsIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="5" width="18" height="14" rx="2" fill="#EC6C12" />
+      <rect x="3" y="5" width="18" height="5" rx="2" fill="#C2580F" />
+      <rect x="6" y="13" width="8" height="2" rx="1" fill="#FEF3C7" />
+      <rect x="6" y="16" width="5" height="1" rx="0.5" fill="#FDBA74" />
     </svg>
   );
 }

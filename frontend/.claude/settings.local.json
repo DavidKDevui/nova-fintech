@@ -7,7 +7,15 @@
       "Bash(grep -r \"DeadlinesClient\\\\|DeadlinesPage\" 'C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend/src' --include=*.ts --include=*.tsx)",
       "Bash(find \"C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend/src/app/\\(protected\\)/deadlines\" -type f)",
       "Bash(wc:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npx next:*)",
+      "Bash(npx tsc:*)",
+      "Bash(ls -la \"src/app/\\(protected\\)/transactions/\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(npx drizzle-kit:*)",
+      "Bash(cat:*)",
+      "Bash(npm install:*)",
+      "Bash(node -e \":*)"
     ]
   }
 }
