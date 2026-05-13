@@ -775,23 +775,27 @@ function TaxesTab() {
     [situation, enfants, isSingleParent],
   );
 
-  // Revenu BNC annuel (recettes ou bénéfice selon régime) projeté sur l'année entière.
-  // - Année passée : total réel des mois 1-12.
-  // - Année courante : réel des mois écoulés + projection sur les mois restants à partir du taux journalier.
-  // - Année future : projection 12 mois × taux journalier (basé sur l'année courante en référence).
-  const { revenuBNC, isProjected } = useMemo(() => {
-    if (!hp) return { revenuBNC: 0, isProjected: false };
+  const pasRate = hp ? parseFloat(hp.pasRate) / 100 : 0;
+
+  // Revenu BNC annuel + PAS effectif sur le BNC.
+  // BNC :
+  //   - Année passée : total réel des mois 1-12.
+  //   - Année courante : réel YTD + projection sur le reste (taux journalier).
+  //   - Année future : projection 12 mois sur la base de l'année courante.
+  // PAS BNC :
+  //   - Mois passés/écoulés : somme des transactions catégorisées 'taxes' (acomptes réellement prélevés).
+  //   - Mois futurs : projection = bénéfice projeté × taux PAS personnalisé.
+  const { revenuBNC, pasBnc, isProjected, pasYtdReel } = useMemo(() => {
+    if (!hp) return { revenuBNC: 0, pasBnc: 0, isProjected: false, pasYtdReel: 0 };
 
     const computeBNC = (m: MonthlyActivityMonth) => {
       if (hp.taxRegime === "micro_bnc") return m.income * 0.66;
-      // Déclaration contrôlée : bénéfice = recettes - charges déductibles
       const chargesDeductibles = m.urssaf + m.carpimko + m.chargesPro + m.retrocession + m.madelin;
       return Math.max(0, m.income - chargesDeductibles);
     };
 
     const now = new Date();
 
-    // Taux journalier dérivé des mois passés avec CA > 0 (neutralisé des congés saisis).
     const dailyRateFrom = (months: MonthlyActivityMonth[], y: number) => {
       let totalBNC = 0;
       let totalDays = 0;
@@ -810,54 +814,63 @@ function TaxesTab() {
       return totalDays > 0 ? totalBNC / totalDays : 0;
     };
 
-    // Année passée
+    // Année passée — tout est réel
     if (year < currentYear) {
-      if (!monthly) return { revenuBNC: 0, isProjected: false };
-      const total = monthly.reduce((s, m) => s + computeBNC(m), 0);
-      return { revenuBNC: Math.round(total), isProjected: false };
+      if (!monthly) return { revenuBNC: 0, pasBnc: 0, isProjected: false, pasYtdReel: 0 };
+      const totalBnc = monthly.reduce((s, m) => s + computeBNC(m), 0);
+      const totalPas = monthly.reduce((s, m) => s + m.impots, 0);
+      return { revenuBNC: Math.round(totalBnc), pasBnc: Math.round(totalPas), isProjected: false, pasYtdReel: Math.round(totalPas) };
     }
 
-    // Année courante : réel YTD + projection sur le reste
+    // Année courante — réel YTD + projection
     if (year === currentYear) {
-      if (!monthly) return { revenuBNC: 0, isProjected: false };
+      if (!monthly) return { revenuBNC: 0, pasBnc: 0, isProjected: false, pasYtdReel: 0 };
       const currentMonthIdx = now.getMonth();
-      const realYtd = monthly
-        .slice(0, currentMonthIdx + 1)
-        .reduce((s, m) => s + computeBNC(m), 0);
+      const realBncYtd = monthly.slice(0, currentMonthIdx + 1).reduce((s, m) => s + computeBNC(m), 0);
+      const realPasYtd = monthly.slice(0, currentMonthIdx + 1).reduce((s, m) => s + m.impots, 0);
       const daily = dailyRateFrom(monthly, year);
-      let projection = 0;
+      let bncProjection = 0;
       if (daily > 0) {
-        // Mois courant : projection sur les jours ouvrés restants
         const totalWd = countWorkingDays(year, currentMonthIdx + 1);
         const remainingWd = countRemainingWorkingDays(year, currentMonthIdx + 1, now.getDate() + 1);
         const ratio = totalWd > 0 ? remainingWd / totalWd : 0;
         const remainingVac = (vacations[currentMonthIdx] || 0) * ratio;
         const worked = Math.max(0, remainingWd - remainingVac);
-        projection += daily * worked;
-        // Mois futurs
+        bncProjection += daily * worked;
         for (let i = currentMonthIdx + 1; i < 12; i++) {
           const wd = countWorkingDays(year, i + 1);
           const worked2 = Math.max(0, wd - (vacations[i] || 0));
-          projection += daily * worked2;
+          bncProjection += daily * worked2;
         }
       }
+      const pasProjection = bncProjection * pasRate;
       const anyProjection = daily > 0 && currentMonthIdx < 11;
-      return { revenuBNC: Math.round(realYtd + projection), isProjected: anyProjection };
+      return {
+        revenuBNC: Math.round(realBncYtd + bncProjection),
+        pasBnc: Math.round(realPasYtd + pasProjection),
+        isProjected: anyProjection,
+        pasYtdReel: Math.round(realPasYtd),
+      };
     }
 
-    // Année future : projection 12 mois basée sur l'année courante comme référence
+    // Année future — tout projeté
     const reference = pastReference;
-    if (!reference) return { revenuBNC: 0, isProjected: true };
+    if (!reference) return { revenuBNC: 0, pasBnc: 0, isProjected: true, pasYtdReel: 0 };
     const daily = dailyRateFrom(reference, currentYear);
-    if (daily <= 0) return { revenuBNC: 0, isProjected: true };
-    let total = 0;
+    if (daily <= 0) return { revenuBNC: 0, pasBnc: 0, isProjected: true, pasYtdReel: 0 };
+    let totalBnc = 0;
     for (let i = 0; i < 12; i++) {
       const wd = countWorkingDays(year, i + 1);
       const worked = Math.max(0, wd - (vacations[i] || 0));
-      total += daily * worked;
+      totalBnc += daily * worked;
     }
-    return { revenuBNC: Math.round(total), isProjected: true };
-  }, [hp, monthly, vacations, year, currentYear, pastReference]);
+    return {
+      revenuBNC: Math.round(totalBnc),
+      pasBnc: Math.round(totalBnc * pasRate),
+      isProjected: true,
+      pasYtdReel: 0,
+    };
+  }, [hp, monthly, vacations, year, currentYear, pastReference, pasRate]);
 
   const revenuImposable = revenuBNC + autresRevenus;
 
@@ -866,9 +879,10 @@ function TaxesTab() {
     [revenuImposable, parts, partsDeReference, year],
   );
 
-  const pasRate = hp ? parseFloat(hp.pasRate) / 100 : 0;
-  // PAS sur BNC (taux personnalisé du praticien) + PAS sur autres revenus (même taux faute de mieux)
-  const pasAnnuel = Math.round((revenuBNC + autresRevenus) * pasRate);
+  // PAS total estimé sur le foyer = PAS BNC effectif (transactions 'taxes' + projection)
+  // + approximation PAS conjoint salarié (autresRevenus × pasRate, faute de mieux).
+  const pasAutresRevenus = Math.round(autresRevenus * pasRate);
+  const pasAnnuel = pasBnc + pasAutresRevenus;
   const regularisation = ir.impot - pasAnnuel;
 
   const bareme = useMemo(() => getBareme(year), [year]);
@@ -1021,10 +1035,14 @@ function TaxesTab() {
           <div>
             <div className="flex items-center gap-1.5 mb-1">
               <p className="text-xs text-gray-400">Régularisation {year} payée en {year + 1}</p>
-              <InfoTooltip text={`Différence entre l'impôt estimé et les acomptes PAS déjà versés (votre taux ${(pasRate * 100).toFixed(1)} % appliqué à l'ensemble du revenu imposable du foyer). Un montant positif signifie un complément à payer, négatif un remboursement. Le taux PAS de votre conjoint salarié peut différer.`} />
+              <InfoTooltip text={`Différence entre l'impôt estimé et le PAS prélevé. PAS BNC : acomptes réellement prélevés (transactions catégorisées « Impôts » : ${formatCurrency(pasYtdReel)} à date)${year >= currentYear ? ` + projection au taux ${(pasRate * 100).toFixed(1)} % pour les mois restants` : ""}. PAS conjoint : approximation au même taux. Positif = complément à payer (sept-déc ${year + 1}), négatif = remboursement (été ${year + 1}).`} />
             </div>
             <p className={`text-2xl font-bold ${regularisation >= 0 ? "text-red-500" : "text-green-600"}`}>
               {monthlyLoading ? "…" : `${regularisation >= 0 ? "+" : ""}${formatCurrency(regularisation)}`}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              IR estimé {formatCurrency(ir.impot)} − PAS {formatCurrency(pasAnnuel)}
+              {pasYtdReel > 0 && ` (dont ${formatCurrency(pasYtdReel)} déjà prélevés)`}
             </p>
           </div>
 
