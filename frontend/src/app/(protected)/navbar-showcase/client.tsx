@@ -43,7 +43,7 @@ export function NavbarShowcase() {
     <div className="space-y-8 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Navbar — 10 variantes</h1>
-        <p className="text-sm text-gray-500 mt-1">Choisis celle qui te plaît, je l'applique.</p>
+        <p className="text-sm text-gray-500 mt-1">Choisis celle qui te plaît, je l&apos;applique.</p>
       </div>
 
       {/* 1 — Current (dark) */}
