@@ -38,6 +38,7 @@ export async function upsertFiscalSituationAction(_prevState: unknown, formData:
   const maritalStatus = formData.get("maritalStatus") as string;
   const dependentChildren = parseInt(formData.get("dependentChildren") as string) || 0;
   const otherIncome = parseFloat(formData.get("otherIncome") as string) || 0;
+  const isSingleParent = formData.get("isSingleParent") === "on";
 
   if (!year || isNaN(year)) return { error: "Année invalide" };
   if (!VALID_MARITAL_STATUSES.includes(maritalStatus as typeof VALID_MARITAL_STATUSES[number])) {
@@ -58,6 +59,7 @@ export async function upsertFiscalSituationAction(_prevState: unknown, formData:
     const values = {
       maritalStatus: maritalStatus as typeof VALID_MARITAL_STATUSES[number],
       dependentChildren,
+      isSingleParent: isSingleParent && maritalStatus === "celibataire" && dependentChildren >= 1,
       otherIncome: String(otherIncome),
       updatedAt: new Date(),
     };

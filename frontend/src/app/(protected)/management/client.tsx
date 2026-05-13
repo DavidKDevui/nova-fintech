@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useActionState } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { getMonthlyActivityAction, getTransactionKpisAction } from "@/actions/transaction";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, ReferenceLine, LabelList } from "recharts";
+import { getMonthlyActivityAction, getTransactionKpisAction, type MonthlyActivityMonth } from "@/actions/transaction";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
 import { getFiscalSituationAction, upsertFiscalSituationAction } from "@/actions/fiscal-situation";
 import { getVacationsAction, upsertVacationDayAction } from "@/actions/vacations";
 import { useData } from "@/providers/data-provider";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { buildCalendar, type PaymentPreferences, DEFAULT_PREFERENCES } from "@/lib/data/fiscal-calendar";
+import { countWorkingDays, countRemainingWorkingDays } from "@/lib/data/fr-holidays";
+import { computeIR, computeParts, getBareme } from "@/lib/data/fr-tax";
 
 const TABS = [
   { key: "activity", label: "Mon activité" },
@@ -53,9 +55,7 @@ export function ManagementClient() {
 
       {tab === "taxes" && <TaxesTab />}
 
-      {tab === "summary" && (
-        <p className="text-sm text-gray-500">Ma synthèse — en cours de construction.</p>
-      )}
+      {tab === "summary" && <SummaryTab />}
     </div>
   );
 }
@@ -106,6 +106,28 @@ function ActivityTab() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     fetchData(year);
   }, [year, fetchData]);
+
+  // Daily rate computed from past months with CA > 0, neutralized of saved vacation days.
+  // Used to simulate CA for current/future months in the selected year.
+  const dailyRate = useMemo(() => {
+    if (!chartData.length) return 0;
+    const now = new Date();
+    const isPastYear = year < now.getFullYear();
+    const currentMonthIdx = now.getMonth();
+    let totalCA = 0;
+    let totalDays = 0;
+    chartData.forEach((m, i) => {
+      const isPast = isPastYear || (year === now.getFullYear() && i < currentMonthIdx);
+      if (!isPast || m.revenus <= 0) return;
+      const wd = countWorkingDays(year, i + 1);
+      const worked = Math.max(0, wd - (vacations[i] || 0));
+      if (worked > 0) {
+        totalCA += m.revenus;
+        totalDays += worked;
+      }
+    });
+    return totalDays > 0 ? totalCA / totalDays : 0;
+  }, [chartData, vacations, year]);
 
   return (
     <div>
@@ -252,11 +274,63 @@ function ActivityTab() {
               {/* CA */}
               <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
                 <div className="px-3 py-3.5 text-sm font-semibold text-gray-700">Chiffre d&apos;affaires</div>
-                {chartData.map((m) => (
-                  <div key={m.name} className="py-3.5 text-center font-medium text-gray-700">
-                    {m.revenus > 0 ? formatCurrency(m.revenus) : "—"}
-                  </div>
-                ))}
+                {chartData.map((m, i) => {
+                  const now = new Date();
+                  const isPastYear = year < now.getFullYear();
+                  const isFutureYear = year > now.getFullYear();
+                  const isCurrentMonth = year === now.getFullYear() && i === now.getMonth();
+                  const isPastMonth = isPastYear || (year === now.getFullYear() && i < now.getMonth());
+                  const isFutureMonth = isFutureYear || (year === now.getFullYear() && i > now.getMonth());
+
+                  // Past months: real CA from bank_transactions, intact.
+                  if (isPastMonth) {
+                    return (
+                      <div key={m.name} className="py-3.5 text-center font-medium text-gray-700">
+                        {m.revenus > 0 ? formatCurrency(m.revenus) : "—"}
+                      </div>
+                    );
+                  }
+
+                  // No daily rate yet → no simulation possible.
+                  if (dailyRate <= 0) {
+                    return (
+                      <div key={m.name} className="py-3.5 text-center font-medium text-gray-700">
+                        {m.revenus > 0 ? formatCurrency(m.revenus) : "—"}
+                      </div>
+                    );
+                  }
+
+                  // Future month: simulated CA = daily_rate × (working_days − vacances).
+                  if (isFutureMonth) {
+                    const wd = countWorkingDays(year, i + 1);
+                    const worked = Math.max(0, wd - (vacations[i] || 0));
+                    const simulated = Math.round(dailyRate * worked);
+                    return (
+                      <div key={m.name} className="py-3.5 text-center font-medium text-gray-400 italic">
+                        {simulated > 0 ? `~${formatCurrency(simulated)}` : formatCurrency(0)}
+                      </div>
+                    );
+                  }
+
+                  // Current month: real to date + projection on remaining working days,
+                  // minus a pro-rata share of saved vacations (uniform distribution assumption).
+                  if (isCurrentMonth) {
+                    const totalWd = countWorkingDays(year, i + 1);
+                    const remainingWd = countRemainingWorkingDays(year, i + 1, now.getDate() + 1);
+                    const ratioRemaining = totalWd > 0 ? remainingWd / totalWd : 0;
+                    const remainingVac = (vacations[i] || 0) * ratioRemaining;
+                    const workedRemaining = Math.max(0, remainingWd - remainingVac);
+                    const projection = Math.round(dailyRate * workedRemaining);
+                    const total = Math.round(m.revenus) + projection;
+                    return (
+                      <div key={m.name} className="py-3.5 text-center font-medium text-gray-700">
+                        {total > 0 ? <>~{formatCurrency(total)}</> : formatCurrency(0)}
+                      </div>
+                    );
+                  }
+
+                  return <div key={m.name} className="py-3.5 text-center font-medium text-gray-300">—</div>;
+                })}
               </div>
               {/* Dépenses */}
               <div
@@ -362,25 +436,31 @@ function ActivityTab() {
               {/* Vacances */}
               <div className="grid" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
                 <div className="px-3 py-3.5 text-sm font-semibold text-gray-700">Vacances (jours)</div>
-                {chartData.map((m, i) => (
-                  <div key={m.name} className="py-2.5 flex items-center justify-center">
-                    <input
-                      type="number"
-                      min="0"
-                      max="31"
-                      value={vacations[i] || 0}
-                      onChange={(e) => {
-                        const v = Math.max(0, Math.min(31, parseInt(e.target.value) || 0));
-                        setVacations((prev) => { const next = [...prev]; next[i] = v; return next; });
-                      }}
-                      onBlur={(e) => {
-                        const v = Math.max(0, Math.min(31, parseInt(e.target.value) || 0));
-                        void upsertVacationDayAction(year, i + 1, v);
-                      }}
-                      className="w-10 text-center text-xs font-medium text-gray-700 border border-gray-200 rounded hover:border-gray-300 focus:border-brand-500 focus:outline-none bg-transparent transition-colors py-1"
-                    />
-                  </div>
-                ))}
+                {chartData.map((m, i) => {
+                  const now = new Date();
+                  const isPastMonth = year < now.getFullYear() || (year === now.getFullYear() && i < now.getMonth());
+                  const daysInMonth = new Date(year, i + 1, 0).getDate();
+                  return (
+                    <div key={m.name} className="py-2.5 flex items-center justify-center">
+                      <input
+                        type="number"
+                        min="0"
+                        max={daysInMonth}
+                        value={vacations[i] || 0}
+                        disabled={isPastMonth}
+                        onChange={(e) => {
+                          const v = Math.max(0, Math.min(daysInMonth, parseInt(e.target.value) || 0));
+                          setVacations((prev) => { const next = [...prev]; next[i] = v; return next; });
+                        }}
+                        onBlur={(e) => {
+                          const v = Math.max(0, Math.min(daysInMonth, parseInt(e.target.value) || 0));
+                          void upsertVacationDayAction(year, i + 1, v);
+                        }}
+                        className="w-10 text-center text-xs font-medium text-gray-700 border border-gray-200 rounded hover:border-gray-300 focus:border-brand-500 focus:outline-none bg-transparent transition-colors py-1 disabled:bg-gray-50 disabled:text-gray-300 disabled:cursor-not-allowed disabled:hover:border-gray-200"
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
         )}
@@ -625,53 +705,25 @@ function ContributionsTab() {
 
 // ── Taxes Tab ──
 
-const IR_TRANCHES = [
-  { min: 0, max: 11_294, rate: 0 },
-  { min: 11_294, max: 28_797, rate: 11 },
-  { min: 28_797, max: 82_341, rate: 30 },
-  { min: 82_341, max: 177_106, rate: 41 },
-  { min: 177_106, max: Infinity, rate: 45 },
-];
-
-function computeIR(revenuImposable: number, parts: number) {
-  const quotient = revenuImposable / parts;
-  let impot = 0;
-  let currentTrancheIndex = 0;
-  let fillPercent = 0;
-  let distanceToNext = 0;
-
-  for (let i = 0; i < IR_TRANCHES.length; i++) {
-    const t = IR_TRANCHES[i]!;
-    const trancheBase = Math.min(quotient, t.max) - t.min;
-    if (trancheBase > 0) {
-      impot += trancheBase * (t.rate / 100);
-      currentTrancheIndex = i;
-    }
-    if (quotient <= t.max) {
-      const trancheWidth = t.max - t.min;
-      fillPercent = trancheWidth === Infinity ? 0 : Math.round(((quotient - t.min) / trancheWidth) * 100);
-      distanceToNext = t.max === Infinity ? 0 : Math.round((t.max - quotient) * parts);
-      break;
-    }
-  }
-
-  impot = Math.round(impot * parts);
-  const tauxMoyen = revenuImposable > 0 ? Math.round((impot / revenuImposable) * 100) : 0;
-
-  return { impot, tauxMoyen, currentTrancheIndex, fillPercent, distanceToNext };
-}
-
 function TaxesTab() {
   const hp = usePractitioner();
-  const { facturationSummary } = useData();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
 
   const [situation, setSituation] = useState<"celibataire" | "marie" | "pacse">("celibataire");
   const [enfants, setEnfants] = useState(0);
+  const [isSingleParent, setIsSingleParent] = useState(false);
   const [autresRevenus, setAutresRevenus] = useState(0);
   const [dbLoaded, setDbLoaded] = useState(false);
   const [saveState, saveAction, saving] = useActionState(upsertFiscalSituationAction, null);
+
+  // Monthly activity for the selected year (CA + charges)
+  const [monthly, setMonthly] = useState<MonthlyActivityMonth[] | null>(null);
+  const [monthlyLoading, setMonthlyLoading] = useState(true);
+  // Vacations for projection (future months / future years)
+  const [vacations, setVacations] = useState<number[]>(Array(12).fill(0));
+  // Past-year monthly used as a fallback to derive a daily rate for future-year projection
+  const [pastReference, setPastReference] = useState<MonthlyActivityMonth[] | null>(null);
 
   // Load fiscal situation from DB when year changes
   useEffect(() => {
@@ -681,10 +733,12 @@ function TaxesTab() {
       if (res) {
         setSituation(res.maritalStatus as "celibataire" | "marie" | "pacse");
         setEnfants(res.dependentChildren);
+        setIsSingleParent(res.isSingleParent ?? false);
         setAutresRevenus(Number(res.otherIncome));
       } else {
         setSituation("celibataire");
         setEnfants(0);
+        setIsSingleParent(false);
         setAutresRevenus(0);
       }
       setDbLoaded(true);
@@ -693,32 +747,133 @@ function TaxesTab() {
     });
   }, [year]);
 
-  const parts = useMemo(() => {
-    let p = situation === "celibataire" ? 1 : 2;
-    if (enfants >= 1) p += 0.5;
-    if (enfants >= 2) p += 0.5;
-    if (enfants >= 3) p += enfants - 2;
-    return p;
-  }, [situation, enfants]);
+  // Load monthly activity + vacations for the selected year
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
+    setMonthlyLoading(true);
+    Promise.all([getMonthlyActivityAction(year), getVacationsAction(year)])
+      .then(([m, v]) => {
+        setMonthly(m.months);
+        setVacations(v);
+        setMonthlyLoading(false);
+      })
+      .catch(() => setMonthlyLoading(false));
+  }, [year]);
 
-  const revenuBNC = useMemo(() => {
-    if (!facturationSummary) return 0;
-    const ca = facturationSummary.byStatus.paye.total;
-    if (!hp) return 0;
-    return hp.taxRegime === "micro_bnc" ? Math.round(ca * 0.66) : ca;
-  }, [facturationSummary, hp]);
+  // For future years with no data yet, fall back on the current year as reference for daily rate
+  useEffect(() => {
+    if (year <= currentYear) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset when no projection is needed
+      setPastReference(null);
+      return;
+    }
+    getMonthlyActivityAction(currentYear).then((m) => setPastReference(m.months)).catch(() => {});
+  }, [year, currentYear]);
 
-  const monthsElapsed = new Date().getMonth() + 1;
-  const revenuAnnualise = monthsElapsed >= 2 ? Math.round((revenuBNC / monthsElapsed) * 12) : revenuBNC;
-  const revenuImposable = revenuAnnualise + autresRevenus;
+  const { parts, partsDeReference } = useMemo(
+    () => computeParts({ maritalStatus: situation, dependentChildren: enfants, isSingleParent }),
+    [situation, enfants, isSingleParent],
+  );
 
-  const ir = useMemo(() => computeIR(revenuImposable, parts), [revenuImposable, parts]);
+  // Revenu BNC annuel (recettes ou bénéfice selon régime) projeté sur l'année entière.
+  // - Année passée : total réel des mois 1-12.
+  // - Année courante : réel des mois écoulés + projection sur les mois restants à partir du taux journalier.
+  // - Année future : projection 12 mois × taux journalier (basé sur l'année courante en référence).
+  const { revenuBNC, isProjected } = useMemo(() => {
+    if (!hp) return { revenuBNC: 0, isProjected: false };
+
+    const computeBNC = (m: MonthlyActivityMonth) => {
+      if (hp.taxRegime === "micro_bnc") return m.income * 0.66;
+      // Déclaration contrôlée : bénéfice = recettes - charges déductibles
+      const chargesDeductibles = m.urssaf + m.carpimko + m.chargesPro + m.retrocession + m.madelin;
+      return Math.max(0, m.income - chargesDeductibles);
+    };
+
+    const now = new Date();
+
+    // Taux journalier dérivé des mois passés avec CA > 0 (neutralisé des congés saisis).
+    const dailyRateFrom = (months: MonthlyActivityMonth[], y: number) => {
+      let totalBNC = 0;
+      let totalDays = 0;
+      const isPastYear = y < now.getFullYear();
+      const currentMonthIdx = now.getMonth();
+      months.forEach((m, i) => {
+        const isPast = isPastYear || (y === now.getFullYear() && i < currentMonthIdx);
+        if (!isPast || m.income <= 0) return;
+        const wd = countWorkingDays(y, i + 1);
+        const worked = Math.max(0, wd - (vacations[i] || 0));
+        if (worked > 0) {
+          totalBNC += computeBNC(m);
+          totalDays += worked;
+        }
+      });
+      return totalDays > 0 ? totalBNC / totalDays : 0;
+    };
+
+    // Année passée
+    if (year < currentYear) {
+      if (!monthly) return { revenuBNC: 0, isProjected: false };
+      const total = monthly.reduce((s, m) => s + computeBNC(m), 0);
+      return { revenuBNC: Math.round(total), isProjected: false };
+    }
+
+    // Année courante : réel YTD + projection sur le reste
+    if (year === currentYear) {
+      if (!monthly) return { revenuBNC: 0, isProjected: false };
+      const currentMonthIdx = now.getMonth();
+      const realYtd = monthly
+        .slice(0, currentMonthIdx + 1)
+        .reduce((s, m) => s + computeBNC(m), 0);
+      const daily = dailyRateFrom(monthly, year);
+      let projection = 0;
+      if (daily > 0) {
+        // Mois courant : projection sur les jours ouvrés restants
+        const totalWd = countWorkingDays(year, currentMonthIdx + 1);
+        const remainingWd = countRemainingWorkingDays(year, currentMonthIdx + 1, now.getDate() + 1);
+        const ratio = totalWd > 0 ? remainingWd / totalWd : 0;
+        const remainingVac = (vacations[currentMonthIdx] || 0) * ratio;
+        const worked = Math.max(0, remainingWd - remainingVac);
+        projection += daily * worked;
+        // Mois futurs
+        for (let i = currentMonthIdx + 1; i < 12; i++) {
+          const wd = countWorkingDays(year, i + 1);
+          const worked2 = Math.max(0, wd - (vacations[i] || 0));
+          projection += daily * worked2;
+        }
+      }
+      const anyProjection = daily > 0 && currentMonthIdx < 11;
+      return { revenuBNC: Math.round(realYtd + projection), isProjected: anyProjection };
+    }
+
+    // Année future : projection 12 mois basée sur l'année courante comme référence
+    const reference = pastReference;
+    if (!reference) return { revenuBNC: 0, isProjected: true };
+    const daily = dailyRateFrom(reference, currentYear);
+    if (daily <= 0) return { revenuBNC: 0, isProjected: true };
+    let total = 0;
+    for (let i = 0; i < 12; i++) {
+      const wd = countWorkingDays(year, i + 1);
+      const worked = Math.max(0, wd - (vacations[i] || 0));
+      total += daily * worked;
+    }
+    return { revenuBNC: Math.round(total), isProjected: true };
+  }, [hp, monthly, vacations, year, currentYear, pastReference]);
+
+  const revenuImposable = revenuBNC + autresRevenus;
+
+  const ir = useMemo(
+    () => computeIR({ revenuImposable, parts, partsDeReference, incomeYear: year }),
+    [revenuImposable, parts, partsDeReference, year],
+  );
 
   const pasRate = hp ? parseFloat(hp.pasRate) / 100 : 0;
-  const pasAnnuel = Math.round(revenuAnnualise * pasRate);
+  // PAS sur BNC (taux personnalisé du praticien) + PAS sur autres revenus (même taux faute de mieux)
+  const pasAnnuel = Math.round((revenuBNC + autresRevenus) * pasRate);
   const regularisation = ir.impot - pasAnnuel;
 
-  const currentTranche = IR_TRANCHES[ir.currentTrancheIndex]!;
+  const bareme = useMemo(() => getBareme(year), [year]);
+  const currentTranche = bareme[ir.currentTrancheIndex]!;
+  const showSingleParent = situation === "celibataire" && enfants >= 1;
 
   return (
     <div className="grid grid-cols-2 gap-6">
@@ -772,6 +927,24 @@ function TaxesTab() {
               className="w-full border border-gray-200 bg-transparent px-3 py-2 rounded-md text-sm transition-all hover:border-gray-400 focus:border-gray-900 focus:outline-none"
             />
           </div>
+          {showSingleParent && (
+            <div className="flex items-start gap-2">
+              <input
+                id="isSingleParent"
+                type="checkbox"
+                name="isSingleParent"
+                checked={isSingleParent}
+                onChange={(e) => setIsSingleParent(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+              />
+              <label htmlFor="isSingleParent" className="text-sm text-gray-700 leading-tight">
+                Parent isolé (case T)
+                <span className="block text-xs text-gray-400 mt-0.5">
+                  Vous vivez seul(e) et élevez seul(e) votre/vos enfant(s). Donne droit à une demi-part supplémentaire.
+                </span>
+              </label>
+            </div>
+          )}
           <div>
             <label className="block text-sm text-gray-500 mb-1.5">Autres revenus BNC ou salariés du foyer en {year}</label>
             <div className="relative">
@@ -789,14 +962,27 @@ function TaxesTab() {
             </div>
             <p className="mt-1 text-xs text-gray-400">Revenus nets imposables du conjoint ou autres activités.</p>
           </div>
-          <div className="pt-2 border-t border-gray-100">
+          <div className="pt-2 border-t border-gray-100 space-y-1">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">Nombre de parts fiscales</span>
               <span className="font-semibold text-gray-900">{parts}</span>
             </div>
-            <div className="flex items-center justify-between text-sm mt-1">
-              <span className="text-gray-500">Revenu imposable estimé</span>
-              <span className="font-semibold text-gray-900">{formatCurrency(revenuImposable)}</span>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-500">{hp?.taxRegime === "micro_bnc" ? "BNC après abattement 34 %" : "Bénéfice BNC estimé"}</span>
+                <InfoTooltip text={hp?.taxRegime === "micro_bnc"
+                  ? "Régime micro-BNC : les recettes annuelles sont diminuées d'un abattement forfaitaire de 34 %."
+                  : "Régime déclaration contrôlée : bénéfice = recettes encaissées - charges déductibles (URSSAF, CARPIMKO, charges pro, rétrocession, Madelin)."} />
+              </div>
+              <span className={`font-semibold ${isProjected ? "text-gray-500 italic" : "text-gray-900"}`}>
+                {monthlyLoading ? "…" : `${isProjected ? "~" : ""}${formatCurrency(revenuBNC)}`}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-500">Revenu imposable du foyer</span>
+              <span className={`font-semibold ${isProjected ? "text-gray-500 italic" : "text-gray-900"}`}>
+                {monthlyLoading ? "…" : `${isProjected ? "~" : ""}${formatCurrency(revenuImposable)}`}
+              </span>
             </div>
           </div>
 
@@ -825,17 +1011,20 @@ function TaxesTab() {
           <div>
             <div className="flex items-center gap-1.5 mb-1">
               <p className="text-xs text-gray-400">Impôt estimé sur les revenus {year}</p>
-              <InfoTooltip text={`Estimation de l'impôt sur le revenu basée sur votre CA annualisé, votre situation familiale et le barème progressif ${year}.`} />
+              <InfoTooltip text={`Estimation de l'impôt sur le revenu calculée avec le barème progressif applicable aux revenus ${year} (loi de finances ${year + 1}), votre situation familiale et le quotient familial${ir.plafonneQf ? " (plafonné)" : ""}.`} />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{formatCurrency(ir.impot)}</p>
+            <p className="text-2xl font-bold text-gray-900">{monthlyLoading ? "…" : formatCurrency(ir.impot)}</p>
+            {ir.plafonneQf && (
+              <p className="text-xs text-orange-600 mt-1">Quotient familial plafonné — gain limité par demi-part supplémentaire.</p>
+            )}
           </div>
           <div>
             <div className="flex items-center gap-1.5 mb-1">
               <p className="text-xs text-gray-400">Régularisation {year} payée en {year + 1}</p>
-              <InfoTooltip text={`Différence entre l'impôt estimé et les acomptes PAS déjà versés. Un montant positif signifie un complément à payer, négatif un remboursement.`} />
+              <InfoTooltip text={`Différence entre l'impôt estimé et les acomptes PAS déjà versés (votre taux ${(pasRate * 100).toFixed(1)} % appliqué à l'ensemble du revenu imposable du foyer). Un montant positif signifie un complément à payer, négatif un remboursement. Le taux PAS de votre conjoint salarié peut différer.`} />
             </div>
             <p className={`text-2xl font-bold ${regularisation >= 0 ? "text-red-500" : "text-green-600"}`}>
-              {regularisation >= 0 ? "+" : ""}{formatCurrency(regularisation)}
+              {monthlyLoading ? "…" : `${regularisation >= 0 ? "+" : ""}${formatCurrency(regularisation)}`}
             </p>
           </div>
 
@@ -848,7 +1037,7 @@ function TaxesTab() {
 
             {/* Tranche bar */}
             <div className="flex rounded-full overflow-hidden h-3 mb-2">
-              {IR_TRANCHES.map((t, i) => {
+              {bareme.map((t, i) => {
                 const isActive = i === ir.currentTrancheIndex;
                 const isPast = i < ir.currentTrancheIndex;
                 return (
@@ -869,7 +1058,7 @@ function TaxesTab() {
               })}
             </div>
             <div className="flex text-[10px] font-medium text-gray-400">
-              {IR_TRANCHES.map((t, i) => (
+              {bareme.map((t, i) => (
                 <div key={t.rate} className={`flex-1 text-center ${i === ir.currentTrancheIndex ? "text-brand-600 font-bold" : ""}`}>
                   {t.rate} %
                 </div>
@@ -886,6 +1075,247 @@ function TaxesTab() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Summary Tab ──
+
+function SummaryTab() {
+  const hp = usePractitioner();
+  const { facturationSummary, accounts, transactionsLoading } = useData();
+  const currentYear = new Date().getFullYear();
+  const prevYear = currentYear - 1;
+  const irYear = prevYear; // IR de N (déclaré et soldé en N+1)
+  const irPrevYear = irYear - 1;
+
+  const [loading, setLoading] = useState(true);
+  const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
+  const [monthlyData, setMonthlyData] = useState<{
+    urssaf: number; carpimko: number; autresDepenses: number; chargesPro: number;
+    retrocession: number; madelin: number;
+  }[]>([]);
+  const [prevYearCA, setPrevYearCA] = useState(0);
+  const [prevYearFiscal, setPrevYearFiscal] = useState<{
+    maritalStatus: string;
+    dependentChildren: number;
+    isSingleParent?: boolean;
+    otherIncome: string;
+  } | null>(null);
+
+  const totalCA = facturationSummary?.byStatus.paye.total ?? 0;
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      getCotisationsEstimate(totalCA),
+      getMonthlyActivityAction(currentYear),
+      getMonthlyActivityAction(prevYear),
+      getFiscalSituationAction(prevYear),
+    ]).then(([est, currentMonthly, prevMonthly, prevFiscal]) => {
+      setEstimate(est);
+      setMonthlyData(currentMonthly.months.map((m) => ({
+        urssaf: m.urssaf,
+        carpimko: m.carpimko,
+        autresDepenses: m.autresDepenses,
+        chargesPro: m.chargesPro,
+        retrocession: m.retrocession,
+        madelin: m.madelin,
+      })));
+      setPrevYearCA(prevMonthly.months.reduce((s, m) => s + m.income, 0));
+      if (prevFiscal) {
+        setPrevYearFiscal({
+          maritalStatus: prevFiscal.maritalStatus,
+          dependentChildren: prevFiscal.dependentChildren,
+          isSingleParent: (prevFiscal as { isSingleParent?: boolean }).isSingleParent,
+          otherIncome: prevFiscal.otherIncome,
+        });
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [totalCA, currentYear, prevYear]);
+
+  // 1. Trésorerie actuelle = balance du compte par défaut
+  const defaultBalance = useMemo(() => {
+    if (!hp?.defaultBankAccountId) return 0;
+    const acc = accounts.find((a) => a.id === hp.defaultBankAccountId);
+    return acc ? parseFloat(acc.balance) : 0;
+  }, [accounts, hp?.defaultBankAccountId]);
+
+  // 2. Régularisation : (estimé annuel − payé à date) pour URSSAF + CARPIMKO.
+  // Convention : à payer (positif) → impact négatif sur la tréso.
+  const regulImpact = useMemo(() => {
+    if (!estimate) return 0;
+    const paidUrssaf = monthlyData.reduce((s, m) => s + m.urssaf, 0);
+    const paidCarpimko = monthlyData.reduce((s, m) => s + m.carpimko, 0);
+    const due = (estimate.urssafAnnuel - paidUrssaf) + (estimate.carpimkoAnnuel - paidCarpimko);
+    return -due;
+  }, [estimate, monthlyData]);
+
+  // 3. Anticipation 3 mois = moyenne des 3 derniers mois passés de (autresDepenses + chargesPro) × 3.
+  const anticipation = useMemo(() => {
+    if (!monthlyData.length) return 0;
+    const currentMonth = new Date().getMonth();
+    let sum = 0;
+    let count = 0;
+    for (let i = currentMonth - 1; i >= Math.max(0, currentMonth - 3); i--) {
+      const m = monthlyData[i];
+      if (!m) continue;
+      sum += m.autresDepenses + m.chargesPro;
+      count++;
+    }
+    const avg = count > 0 ? sum / count : 0;
+    return -avg * 3;
+  }, [monthlyData]);
+
+  const solde = defaultBalance + regulImpact + anticipation;
+
+  // ── Annual projections (year-end) ──
+  const monthsElapsed = new Date().getMonth() + 1;
+  const annualize = (ytd: number) => monthsElapsed > 0 ? Math.round((ytd / monthsElapsed) * 12) : 0;
+
+  const annualCA = estimate?.revenuAnnualise ?? 0;
+  const ytdChargesPro = monthlyData.reduce((s, m) => s + m.chargesPro, 0);
+  const annualChargesPro = annualize(ytdChargesPro);
+  const annualCotisations = (estimate?.urssafAnnuel ?? 0) + (estimate?.carpimkoAnnuel ?? 0);
+  const ytdRetroMadelin = monthlyData.reduce((s, m) => s + m.retrocession + m.madelin, 0);
+  const annualRetroMadelin = annualize(ytdRetroMadelin);
+  // Même formule que la ligne "Rém. avant impôt" de l'onglet Mon activité :
+  //   CA − (urssaf + carpimko + chargesPro + retrocession + madelin)
+  const annualRemAvantImpot = annualCA - annualCotisations - annualChargesPro - annualRetroMadelin;
+
+  // IR sur revenus N (payé en N+1).
+  const irPrev = useMemo(() => {
+    if (!hp) return 0;
+    const taxRegime = hp.taxRegime;
+    const revenuNet = taxRegime === "micro_bnc" ? prevYearCA * 0.66 : prevYearCA;
+    const otherIncome = prevYearFiscal ? Number(prevYearFiscal.otherIncome) : 0;
+    const revenuImposable = Math.round(revenuNet + otherIncome);
+    if (revenuImposable <= 0) return 0;
+    const { parts, partsDeReference } = computeParts({
+      maritalStatus: (prevYearFiscal?.maritalStatus as "celibataire" | "marie" | "pacse") ?? "celibataire",
+      dependentChildren: prevYearFiscal?.dependentChildren ?? 0,
+      isSingleParent: prevYearFiscal?.isSingleParent ?? false,
+    });
+    return computeIR({ revenuImposable, parts, partsDeReference, incomeYear: irYear }).impot;
+  }, [hp, prevYearCA, prevYearFiscal, irYear]);
+
+  const metrics = [
+    { key: "ca",   title: "Chiffre d'affaires",         year: currentYear, value: annualCA,            prevYear },
+    { key: "ch",   title: "Charges pro.",                year: currentYear, value: annualChargesPro,    prevYear },
+    { key: "cot",  title: "Cotisations sociales",        year: currentYear, value: annualCotisations,   prevYear },
+    { key: "rem",  title: "Rémunération avant impôt",    year: currentYear, value: annualRemAvantImpot, prevYear },
+    { key: "ir",   title: "Impôt sur le revenu",         year: irYear,      value: irPrev,              prevYear: irPrevYear },
+  ];
+
+  const chartData = [
+    { key: "treso", name: "Trésorerie actuelle", value: Math.round(defaultBalance) },
+    { key: "regul", name: `Régularisation ${currentYear}`, value: Math.round(regulImpact) },
+    { key: "antic", name: "Anticipation 3 mois", value: Math.round(anticipation) },
+  ];
+
+  const formatSigned = (v: number) => `${v > 0 ? "+" : ""}${formatCurrency(v)}`;
+  const isLoading = loading || transactionsLoading;
+
+  return (
+    <div className="grid grid-cols-2 gap-6">
+      {/* Trésorerie prévisionnelle */}
+      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+        <h3 className="text-base font-semibold text-gray-900 mb-4">Trésorerie prévisionnelle</h3>
+
+        {isLoading ? (
+          <div className="h-64 bg-gray-100 rounded animate-pulse" />
+        ) : (
+          <>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={chartData} margin={{ top: 24, right: 12, bottom: 8, left: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 11, fill: "#6b7280" }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#9ca3af" }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v: number) => `${v >= 0 ? "+" : ""}${(v / 1000).toFixed(1)}k`}
+                  width={40}
+                />
+                <ReferenceLine y={0} stroke="#1f2937" strokeWidth={1.5} />
+                <Tooltip
+                  cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                  formatter={(value) => {
+                    const num = typeof value === "number" ? value : Number(value ?? 0);
+                    return [formatSigned(num), "Montant"];
+                  }}
+                />
+                <Bar dataKey="value" radius={[4, 4, 4, 4]} maxBarSize={64}>
+                  <LabelList
+                    dataKey="value"
+                    position="top"
+                    formatter={(value: number | string) => {
+                      const num = typeof value === "number" ? value : Number(value ?? 0);
+                      return formatSigned(num);
+                    }}
+                    style={{ fontSize: 11, fontWeight: 600, fill: "#1f2937" }}
+                  />
+                  {chartData.map((d) => (
+                    <Cell key={d.key} fill={d.value >= 0 ? "#22c55e" : "#ef4444"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+
+            <div className="mt-6 pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-1.5 mb-1">
+                <p className="text-xs text-gray-400">Solde de trésorerie prévisionnelle</p>
+                <InfoTooltip text={`Solde hypothétique après avoir anticipé votre régularisation d'Urssaf et de Carpimko ${currentYear} (ajustée en ${currentYear + 1}) ainsi que 3 mois de vos frais professionnels.`} />
+              </div>
+              <p className={`text-3xl font-bold ${solde >= 0 ? "text-gray-900" : "text-red-500"}`}>
+                {formatSigned(solde)}
+              </p>
+            </div>
+
+            <p className="mt-4 text-xs text-gray-500 leading-relaxed">
+              Solde de trésorerie hypothétique après avoir anticipé votre régularisation d&apos;Urssaf et de Carpimko {currentYear} (ajustée en {currentYear + 1}) ainsi que 3 mois de vos frais professionnels.
+            </p>
+            <p className="mt-2 text-xs text-gray-500 leading-relaxed">
+              Un montant positif indique une trésorerie suffisante pour couvrir ces dépenses à venir.
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* Métriques annuelles N vs N-1 */}
+      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+        {isLoading ? (
+          <div className="h-96 bg-gray-100 rounded animate-pulse" />
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {metrics.map((m, idx) => (
+              <div key={m.key} className={`${idx === 0 ? "pb-4" : idx === metrics.length - 1 ? "pt-4" : "py-4"}`}>
+                <p className="text-sm font-semibold text-gray-900 mb-3">{m.title}</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="flex items-baseline gap-1.5">
+                      <p className="text-xs text-gray-400">{m.year}</p>
+                      <p className="text-[10px] text-gray-400 italic">Prévision</p>
+                    </div>
+                    <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(m.value)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400">{m.prevYear}</p>
+                    <p className="text-lg font-bold text-gray-300 mt-0.5">—</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

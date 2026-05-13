@@ -147,7 +147,8 @@
       "WebFetch(domain:docaly.fr)",
       "WebFetch(domain:optibnc.fr)",
       "Bash(pnpm typecheck *)",
-      "Bash(pnpm lint *)"
+      "Bash(pnpm lint *)",
+      "WebFetch(domain:www.economie.gouv.fr)"
     ]
   }
 }

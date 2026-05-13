@@ -265,6 +265,7 @@ export const practitionerFiscalSituations = pgTable("practitioner_fiscal_situati
   year: integer("year").notNull(),
   maritalStatus: maritalStatusEnum("marital_status").notNull().default("celibataire"),
   dependentChildren: integer("dependent_children").notNull().default(0),
+  isSingleParent: boolean("is_single_parent").notNull().default(false),
   otherIncome: numeric("other_income", { precision: 12, scale: 2 }).notNull().default("0"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

@@ -40,7 +40,8 @@ export async function upsertVacationDayAction(year: number, month: number, days:
 
   if (!Number.isInteger(year) || year < 2000 || year > 2100) return { error: "Année invalide" };
   if (!Number.isInteger(month) || month < 1 || month > 12) return { error: "Mois invalide" };
-  if (!Number.isInteger(days) || days < 0 || days > 31) return { error: "Nombre de jours invalide" };
+  const daysInMonth = new Date(year, month, 0).getDate();
+  if (!Number.isInteger(days) || days < 0 || days > daysInMonth) return { error: "Nombre de jours invalide" };
 
   try {
     const [existing] = await db
