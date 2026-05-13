@@ -271,3 +271,19 @@ export const practitionerFiscalSituations = pgTable("practitioner_fiscal_situati
 }, (table) => [
   index("idx_fiscal_situations_practitioner_year").on(table.practitionerId, table.year),
 ]);
+
+// ── Vacations (per practitioner, per month) ──
+
+export const practitionerVacations = pgTable("practitioner_vacations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  practitionerId: uuid("practitioner_id")
+    .notNull()
+    .references(() => practitioners.id, { onDelete: "cascade" }),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(),
+  days: integer("days").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_vacations_practitioner_year").on(table.practitionerId, table.year),
+]);

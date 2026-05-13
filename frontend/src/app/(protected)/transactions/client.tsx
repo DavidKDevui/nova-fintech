@@ -125,7 +125,7 @@ export function TransactionsClient() {
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [alertThreshold, setAlertThreshold] = useState("");
   const [alertEnabled, setAlertEnabled] = useState(false);
-  const [alertLoading, setAlertLoading] = useState(false);
+  const [alertLoading] = useState(false);
   const [alertSaving, setAlertSaving] = useState(false);
   const [alertLoaded, setAlertLoaded] = useState(false);
   const alertConfigured = alertLoaded && alertEnabled && alertThreshold !== "";
@@ -181,7 +181,7 @@ export function TransactionsClient() {
       setPaginatedLoading(false);
     });
     return () => { cancelled = true; };
-  }, [txPage, selectedAccount, txSortBy, txSortDir, txTab, searchDebounced, dateFrom, dateTo, categoryFilter, hp?.bridgeUserUuid]);
+  }, [txPage, selectedAccount, txSortBy, txSortDir, txTab, searchDebounced, dateFrom, dateTo, categoryFilter, hp?.bridgeUserUuid, setUncategorizedCount]);
 
   // Fetch KPIs from server
   useEffect(() => {

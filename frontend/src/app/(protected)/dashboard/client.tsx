@@ -12,7 +12,6 @@ import {
   buildCalendar,
   MONTH_NAMES,
   EVENT_DOT,
-  EVENT_LABEL,
   getUpcomingEvents,
   type PaymentPreferences,
   DEFAULT_PREFERENCES,
@@ -34,7 +33,6 @@ export function DashboardClient() {
     transactions,
     transactionsLoading: bankLoading,
     uncategorizedCount,
-    pendingSuggestionsCount,
   } = useData();
 
   const name = hp?.firstName || user.email.split("@")[0] || "";
@@ -364,26 +362,9 @@ function EcheancesCard({ hp, totalCA }: { hp: ReturnType<typeof usePractitioner>
   );
 }
 
-function getDaysUntilDashboard(currentMonth: number, currentDay: number, targetMonth: number, targetDay: number): number {
-  const now = new Date();
-  const target = new Date(now.getFullYear(), targetMonth, targetDay);
-  const today = new Date(now.getFullYear(), currentMonth, currentDay);
-  if (target < today) target.setFullYear(target.getFullYear() + 1);
-  return Math.round((target.getTime() - today.getTime()) / 86400000);
-}
-
 /* ─── Shared components ─── */
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`bg-white backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5 ${className}`}>{children}</div>;
-}
-
-function SectionLabel({ children, icon }: { children: React.ReactNode; icon: React.ReactNode }) {
-  return (
-    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1 flex items-center gap-1.5">
-      {icon}
-      {children}
-    </p>
-  );
 }
 
 function DetailLink({ href }: { href: string }) {
@@ -418,40 +399,12 @@ function formatCurrencyRounded(amount: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Math.round(amount));
 }
 
-function formatDateRelative(date: Date) {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays === 0) return "aujourd'hui";
-  if (diffDays === 1) return "hier";
-  if (diffDays < 7) return `il y a ${diffDays}j`;
-  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-}
-
 /* ─── Icons ─── */
-function DocIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>;
-}
-function CreditCardIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg>;
-}
 function ClockIcon({ className = "text-gray-400" }: { className?: string }) {
   return <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>;
 }
 function XCircleIcon({ className = "text-gray-400" }: { className?: string }) {
   return <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>;
-}
-function ArrowUpIcon({ className = "text-green-700" }: { className?: string }) {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>;
-}
-function ArrowDownIcon({ className = "text-red-700" }: { className?: string }) {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg>;
-}
-function WarningIcon({ className = "text-amber-500" }: { className?: string }) {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>;
-}
-function InfoIcon({ className = "text-blue-500" }: { className?: string }) {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>;
 }
 function KpiWalletIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="14" rx="2.5" fill="currentColor" opacity="0.5" /><rect x="2" y="6" width="20" height="4" rx="2.5" fill="currentColor" opacity="0.7" /><circle cx="17" cy="15" r="1.5" fill="currentColor" opacity="0.3" /></svg>;

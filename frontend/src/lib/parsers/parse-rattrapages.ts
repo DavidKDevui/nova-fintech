@@ -64,12 +64,6 @@ function extractAmounts(text: string): string[] {
   return matches;
 }
 
-function parseStatus(text: string): "a_securiser" | "a_envoyer" {
-  if (text.includes("à sécuriser")) return "a_securiser";
-  return "a_envoyer";
-}
-
-
 // Known practitioner names from the header to help with parsing
 function parseLine(
   line: string,

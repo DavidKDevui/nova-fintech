@@ -1,6 +1,6 @@
 import { eq, and, inArray, desc, sum, count, gte, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { bankAccounts, bankTransactions, carePassages, carePayments, practitioners, practiceLinks } from "@/lib/db/schema";
+import { bankAccounts, bankTransactions, carePassages, carePayments, practiceLinks } from "@/lib/db/schema";
 import {
   buildCalendar,
   getUpcomingEvents,
@@ -349,8 +349,7 @@ export function createToolExecutors(practitionerId: string, accountIds: string[]
       return lines.join("\n");
     },
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async get_care_summary(args: any): Promise<string> {
+    async get_care_summary(): Promise<string> {
       // Use the facturation action pattern directly
       const { getFacturationData } = await import("@/actions/facturation");
       const result = await getFacturationData();
@@ -667,8 +666,7 @@ export function createToolExecutors(practitionerId: string, accountIds: string[]
       return lines.join("\n");
     },
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async get_uncategorized_summary(args: any): Promise<string> {
+    async get_uncategorized_summary(): Promise<string> {
       if (accountIds.length === 0) return "Aucun compte bancaire connecté.";
 
       const accountFilter = and(inArray(bankTransactions.bankAccountId, accountIds), sql`${bankTransactions.category} IS NULL`);
@@ -749,8 +747,7 @@ export function createToolExecutors(practitionerId: string, accountIds: string[]
       return lines.join("\n");
     },
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async get_expense_anomalies(args: any): Promise<string> {
+    async get_expense_anomalies(): Promise<string> {
       if (accountIds.length === 0) return "Aucun compte bancaire connecté.";
 
       const now = new Date();
@@ -828,8 +825,7 @@ export function createToolExecutors(practitionerId: string, accountIds: string[]
 
       return lines.join("\n");
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async get_account_details(args: any): Promise<string> {
+    async get_account_details(): Promise<string> {
       if (accountIds.length === 0) return "Aucun compte bancaire connecté.";
 
       const accs = await db.select().from(bankAccounts).where(inArray(bankAccounts.id, accountIds));

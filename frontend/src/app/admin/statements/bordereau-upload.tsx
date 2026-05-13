@@ -12,18 +12,10 @@ interface Practice {
   finess: string | null;
 }
 
-interface Practitioner {
-  id: string;
-  firstName: string;
-  lastName: string;
-}
-
 export function BordereauUpload({
   practices,
-  practitioners,
 }: {
   practices: Practice[];
-  practitioners: Practitioner[];
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);

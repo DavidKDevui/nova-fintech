@@ -425,7 +425,11 @@ export function OnboardingModal({ open }: { open: boolean }) {
                         return;
                       }
                     }
-                    formStep < FORM_STEPS.length - 1 ? setFormStep(formStep + 1) : setScreen("recap");
+                    if (formStep < FORM_STEPS.length - 1) {
+                      setFormStep(formStep + 1);
+                    } else {
+                      setScreen("recap");
+                    }
                   }}
                   disabled={!canGoNext || rppsVerifying || undefined}
                   className="flex items-center gap-2 bg-brand-600 px-5 py-2.5 rounded-lg text-sm font-medium text-white transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-30 disabled:active:scale-100"

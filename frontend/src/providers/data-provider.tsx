@@ -100,7 +100,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Transactions
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions] = useState<Transaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [transactionsError, setTransactionsError] = useState("");
   const [uncategorizedCount, setUncategorizedCount] = useState(0);

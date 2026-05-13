@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import jwt from "jsonwebtoken";
 import { refreshSession } from "@/lib/services/auth.service";
-import { JWT_SECRET } from "@/lib/env";
 
 const IS_PROD = process.env.NODE_ENV === "production";
 

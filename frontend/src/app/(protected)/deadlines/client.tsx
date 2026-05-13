@@ -129,13 +129,6 @@ export function DeadlinesClient() {
 
   const selectedDayEvents = selectedDay ? (eventsByDay.get(selectedDay) || []) : [];
 
-  // Summary of active preferences
-  const prefsSummary = [
-    `URSSAF ${prefs.urssafFrequency === "monthly" ? `mensuel (le ${prefs.urssafPayDay})` : "trimestriel"}`,
-    `PAS ${prefs.pasFrequency === "monthly" ? "mensuel" : "trimestriel"}`,
-    `CARPIMKO ${prefs.carpimkoFrequency === "monthly" ? "mensuel" : "semestriel"}`,
-  ].join(" · ");
-
   return (
     <div className="space-y-6">
 
@@ -228,10 +221,13 @@ export function DeadlinesClient() {
                   </div>
                   <div className="w-16 flex items-center justify-center shrink-0">
                     {evt.type === "urssaf" ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- static logo asset
                       <img src="/logo-urssaf.svg" alt="URSSAF" className="h-5 w-full object-contain" />
                     ) : evt.type === "carpimko" ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- static logo asset
                       <img src="/logo-carpimko.png" alt="CARPIMKO" className="h-5 w-full object-contain" />
                     ) : evt.type === "ir" ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- static logo asset
                       <img src="/logo-dgfip.svg" alt="DGFiP" className="h-7 w-full object-contain" />
                     ) : evt.type === "cfe" ? (
                       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01M8 14h.01M16 14h.01M12 14h.01"/></svg>

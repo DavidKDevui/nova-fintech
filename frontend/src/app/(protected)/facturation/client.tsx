@@ -20,6 +20,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   rejete: { label: "Rejeté", color: "text-red-700", bg: "bg-red-50" },
 };
 
+const MONTH_NAMES = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
+
 // Normalise les statuts internes en statuts affichés
 function displayStatus(status: string): string {
   if (status === "a_securiser" || status === "a_envoyer") return "en_attente";
@@ -113,8 +115,6 @@ export function FacturationClient() {
     const start = (page - 1) * PER_PAGE;
     return sortedPassages.slice(start, start + PER_PAGE);
   }, [sortedPassages, page]);
-
-  const MONTH_NAMES = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 
   const chartData = useMemo(() => {
     type MonthBucket = {

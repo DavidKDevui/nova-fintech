@@ -5,6 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { getMonthlyActivityAction, getTransactionKpisAction } from "@/actions/transaction";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
 import { getFiscalSituationAction, upsertFiscalSituationAction } from "@/actions/fiscal-situation";
+import { getVacationsAction, upsertVacationDayAction } from "@/actions/vacations";
 import { useData } from "@/providers/data-provider";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { buildCalendar, type PaymentPreferences, DEFAULT_PREFERENCES } from "@/lib/data/fiscal-calendar";
@@ -76,9 +77,10 @@ function ActivityTab() {
 
   const fetchData = useCallback(async (y: number) => {
     setLoading(true);
-    const [kpiResult, monthlyResult] = await Promise.all([
+    const [kpiResult, monthlyResult, vacationsResult] = await Promise.all([
       getTransactionKpisAction(null, y),
       getMonthlyActivityAction(y),
+      getVacationsAction(y),
     ]);
     setKpis({ encaissement: kpiResult.encaissement, decaissement: kpiResult.decaissement, cotisations: kpiResult.cotisations ?? 0, remuneration: kpiResult.remuneration ?? 0 });
     setChartData(
@@ -96,6 +98,7 @@ function ActivityTab() {
         remuneration: m.remuneration,
       })),
     );
+    setVacations(vacationsResult);
     setLoading(false);
   }, []);
 
@@ -131,8 +134,8 @@ function ActivityTab() {
 
         <div className="pb-2 flex">
           {/* KPI cards stacked vertically */}
-          <div style={{ width: 260, height: 240 }} className="flex flex-col items-center justify-between px-2 py-1 shrink-0">
-            <div className="w-[70%] bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
+          <div style={{ width: 260 }} className="flex flex-col items-center px-2 py-1 shrink-0">
+            <div className="w-[80%] mx-3 my-2 bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
               <div className="flex items-center gap-1.5">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-green-600 shrink-0">
                   <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
@@ -148,39 +151,41 @@ function ActivityTab() {
               )}
             </div>
 
-            <div className="w-[70%] bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
-              <div className="flex items-center gap-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-red-500 shrink-0">
-                  <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
-                  <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-                  <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
-                </svg>
-                <p className="text-xs font-medium text-gray-500 truncate">Dépenses</p>
+            <div className="w-[80%] mx-3 my-2 bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-red-500 shrink-0">
+                    <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
+                    <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+                    <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                  </svg>
+                  <p className="text-xs font-medium text-gray-500 truncate">Dépenses</p>
+                </div>
+                {loading ? (
+                  <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
+                ) : (
+                  <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(kpis.decaissement)}</p>
+                )}
               </div>
-              {loading ? (
-                <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
-              ) : (
-                <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(kpis.decaissement)}</p>
-              )}
+              <div className="border-t border-gray-100 my-2" />
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-orange-500 shrink-0">
+                    <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
+                    <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+                    <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                  </svg>
+                  <p className="text-xs font-medium text-gray-500 truncate">Dont cotisations sociales</p>
+                </div>
+                {loading ? (
+                  <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
+                ) : (
+                  <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(kpis.cotisations)}</p>
+                )}
+              </div>
             </div>
 
-            <div className="w-[70%] bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
-              <div className="flex items-center gap-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-orange-500 shrink-0">
-                  <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
-                  <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-                  <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
-                </svg>
-                <p className="text-xs font-medium text-gray-500 truncate">Dont cotisations sociales</p>
-              </div>
-              {loading ? (
-                <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
-              ) : (
-                <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(kpis.cotisations)}</p>
-              )}
-            </div>
-
-            <div className="w-[70%] bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
+            <div className="w-[80%] mx-3 my-2 bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
               <div className="flex items-center gap-1.5">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-brand-600 shrink-0">
                   <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.3" />
@@ -367,6 +372,10 @@ function ActivityTab() {
                       onChange={(e) => {
                         const v = Math.max(0, Math.min(31, parseInt(e.target.value) || 0));
                         setVacations((prev) => { const next = [...prev]; next[i] = v; return next; });
+                      }}
+                      onBlur={(e) => {
+                        const v = Math.max(0, Math.min(31, parseInt(e.target.value) || 0));
+                        void upsertVacationDayAction(year, i + 1, v);
                       }}
                       className="w-10 text-center text-xs font-medium text-gray-700 border border-gray-200 rounded hover:border-gray-300 focus:border-brand-500 focus:outline-none bg-transparent transition-colors py-1"
                     />

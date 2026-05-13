@@ -5,7 +5,7 @@ import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { practitioners, practiceLinks, carePassages, carePayments, practices } from "@/lib/db/schema";
 import { namesMatch } from "@/lib/name-matching";
-import { decryptNullable, decrypt } from "@/lib/encryption";
+import { decrypt } from "@/lib/encryption";
 
 export interface CarePassageRow {
   id: string;

@@ -8,7 +8,6 @@ import * as schema from "./schema";
 
 const drizzleTables = Object.values(schema).filter(isTable);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const drizzleEnums: { enumName: string; enumValues: readonly string[] }[] = [];
 for (const v of Object.values(schema)) {
   if (v != null && (typeof v === "object" || typeof v === "function") && "enumName" in v && "enumValues" in v && !isTable(v)) {
