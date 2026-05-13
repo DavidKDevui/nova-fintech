@@ -30,6 +30,7 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (pathname !== prevPathname.current) {
       prevPathname.current = pathname;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- trigger transition on route change
       transition();
     } else {
       setDisplayChildren(children);

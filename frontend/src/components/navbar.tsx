@@ -153,6 +153,7 @@ export function Navbar() {
   const items = isAdmin ? adminItems : navItems;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- close drawer on route change
     setMobileOpen(false);
   }, [pathname]);
 

@@ -100,84 +100,15 @@ function ActivityTab() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     fetchData(year);
   }, [year, fetchData]);
 
   return (
     <div>
-      {/* KPI cards */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-green-600 shrink-0">
-              <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
-              <path d="M12 16V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-              <path d="M8 12l4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
-            </svg>
-            <p className="text-xs font-medium text-gray-500">Chiffre d&apos;affaires</p>
-          </div>
-          {loading ? (
-            <div className="h-7 bg-gray-200 rounded w-24 animate-pulse mt-1" />
-          ) : (
-            <p className="text-xl font-bold text-gray-900">{formatCurrency(kpis.encaissement)}</p>
-          )}
-        </div>
-
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-red-500 shrink-0">
-              <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
-              <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-              <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
-            </svg>
-            <p className="text-xs font-medium text-gray-500">Dépenses</p>
-          </div>
-          {loading ? (
-            <div className="h-7 bg-gray-200 rounded w-24 animate-pulse mt-1" />
-          ) : (
-            <p className="text-xl font-bold text-gray-900">{formatCurrency(kpis.decaissement)}</p>
-          )}
-        </div>
-
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-orange-500 shrink-0">
-              <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
-              <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-              <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
-            </svg>
-            <p className="text-xs font-medium text-gray-500">Dont cotisations sociales</p>
-          </div>
-          {loading ? (
-            <div className="h-7 bg-gray-200 rounded w-24 animate-pulse mt-1" />
-          ) : (
-            <p className="text-xl font-bold text-gray-900">{formatCurrency(kpis.cotisations)}</p>
-          )}
-        </div>
-
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-brand-600 shrink-0">
-              <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.3" />
-              <path d="M12 7v4l2.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
-              <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.5" />
-            </svg>
-            <p className="text-xs font-medium text-gray-500">Rém. avant impôt</p>
-          </div>
-          {loading ? (
-            <div className="h-7 bg-gray-200 rounded w-24 animate-pulse mt-1" />
-          ) : (
-            <p className="text-xl font-bold text-gray-900">{formatCurrency(
-              chartData.reduce((s, m) => s + m.revenus - m.urssaf - m.carpimko - m.chargesPro - m.retrocession - m.madelin, 0)
-            )}</p>
-          )}
-        </div>
-      </div>
-
       {/* Chart + monthly breakdown (aligned) */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
-        <div className="flex items-center justify-between px-5 pt-4 pb-3">
-          <h2 className="text-base font-semibold text-gray-900">Revenus et dépenses</h2>
+        <div className="flex items-center justify-end px-5 pt-4 pb-3">
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -198,23 +129,91 @@ function ActivityTab() {
           </div>
         </div>
 
-        {loading ? (
-          <div className="px-5 pb-5">
-            <div className="h-64 bg-gray-100 rounded animate-pulse" />
+        <div className="pb-2 flex">
+          {/* KPI cards stacked vertically */}
+          <div style={{ width: 260, height: 240 }} className="flex flex-col items-center justify-between px-2 py-1 shrink-0">
+            <div className="w-[70%] bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
+              <div className="flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-green-600 shrink-0">
+                  <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
+                  <path d="M12 16V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+                  <path d="M8 12l4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                </svg>
+                <p className="text-xs font-medium text-gray-500 truncate">Chiffre d&apos;affaires</p>
+              </div>
+              {loading ? (
+                <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
+              ) : (
+                <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(kpis.encaissement)}</p>
+              )}
+            </div>
+
+            <div className="w-[70%] bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
+              <div className="flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-red-500 shrink-0">
+                  <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
+                  <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+                  <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                </svg>
+                <p className="text-xs font-medium text-gray-500 truncate">Dépenses</p>
+              </div>
+              {loading ? (
+                <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
+              ) : (
+                <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(kpis.decaissement)}</p>
+              )}
+            </div>
+
+            <div className="w-[70%] bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
+              <div className="flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-orange-500 shrink-0">
+                  <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
+                  <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+                  <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                </svg>
+                <p className="text-xs font-medium text-gray-500 truncate">Dont cotisations sociales</p>
+              </div>
+              {loading ? (
+                <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
+              ) : (
+                <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(kpis.cotisations)}</p>
+              )}
+            </div>
+
+            <div className="w-[70%] bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
+              <div className="flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-brand-600 shrink-0">
+                  <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.3" />
+                  <path d="M12 7v4l2.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                  <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.5" />
+                </svg>
+                <p className="text-xs font-medium text-gray-500 truncate">Rém. avant impôt</p>
+              </div>
+              {loading ? (
+                <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
+              ) : (
+                <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(
+                  chartData.reduce((s, m) => s + m.revenus - m.urssaf - m.carpimko - m.chargesPro - m.retrocession - m.madelin, 0)
+                )}</p>
+              )}
+            </div>
           </div>
-        ) : (
-          <>
-            <div className="pb-2">
+          <div className="flex-1 min-w-0">
+            {loading ? (
+              <div className="h-60 bg-gray-100 rounded animate-pulse" />
+            ) : (
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={chartData} barGap={2} barCategoryGap="20%" margin={{ left: 200, right: 0, top: 5, bottom: 5 }}>
+                <BarChart data={chartData} barGap={2} barCategoryGap="20%" margin={{ left: 0, right: 0, top: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} hide />
                   <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={0} />
                   <Tooltip
                     contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
-                    formatter={(value: number, name: string) => {
+                    formatter={(value, name) => {
                       const labels: Record<string, string> = { revenus: "Revenus", cotisations: "Cotisations sociales", autresDepenses: "Autres dépenses" };
-                      return [formatCurrency(value), labels[name] ?? name];
+                      const num = typeof value === "number" ? value : Number(value ?? 0);
+                      const key = String(name ?? "");
+                      return [formatCurrency(num), labels[key] ?? key];
                     }}
                     labelStyle={{ fontWeight: 600, marginBottom: 4 }}
                   />
@@ -232,19 +231,21 @@ function ActivityTab() {
                   <Bar dataKey="cotisations" stackId="depenses" fill="#f97316" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            )}
+          </div>
+        </div>
 
-            {/* Horizontal monthly breakdown */}
-            <div className="border-t border-gray-100 text-xs">
+        {!loading && (
+          <div className="border-t border-gray-100 text-xs">
               {/* Header */}
-              <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+              <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
                 <div className="px-3 py-3.5" />
                 {chartData.map((m) => (
                   <div key={m.name} className="py-3.5 text-center font-semibold text-gray-500">{m.name}</div>
                 ))}
               </div>
               {/* CA */}
-              <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+              <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
                 <div className="px-3 py-3.5 text-sm font-semibold text-gray-700">Chiffre d&apos;affaires</div>
                 {chartData.map((m) => (
                   <div key={m.name} className="py-3.5 text-center font-medium text-gray-700">
@@ -255,7 +256,7 @@ function ActivityTab() {
               {/* Dépenses */}
               <div
                 className="grid border-b border-gray-50 cursor-pointer hover:bg-gray-50/50 transition-colors"
-                style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}
+                style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}
                 onClick={() => setDepensesOpen((v) => !v)}
               >
                 <div className="px-3 py-3.5 text-sm font-semibold text-gray-700 flex items-center gap-1.5">
@@ -281,7 +282,7 @@ function ActivityTab() {
                     { key: "retrocession", label: "Rétrocession" },
                     { key: "madelin", label: "Madelin" },
                   ] as const).map((sub) => (
-                    <div key={sub.key} className="grid border-b border-gray-50 bg-gray-50/30" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+                    <div key={sub.key} className="grid border-b border-gray-50 bg-gray-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
                       <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-gray-500">{sub.label}</div>
                       {chartData.map((m) => {
                         const val = m[sub.key];
@@ -298,7 +299,7 @@ function ActivityTab() {
               {/* Rém. avant impôt */}
               <div
                 className="grid border-b border-gray-50 cursor-pointer hover:bg-gray-50/50 transition-colors"
-                style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}
+                style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}
                 onClick={() => setRemOpen((v) => !v)}
               >
                 <div className="px-3 py-3.5 text-sm font-semibold text-gray-700 flex items-center gap-1.5">
@@ -319,7 +320,7 @@ function ActivityTab() {
               {/* Sub-rows rém. avant impôt */}
               {remOpen && (
                 <>
-                  <div className="grid border-b border-gray-50 bg-gray-50/30" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+                  <div className="grid border-b border-gray-50 bg-gray-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
                     <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-gray-500">Rémunération versée</div>
                     {chartData.map((m) => (
                       <div key={m.name} className="py-2.5 text-center text-xs font-medium text-gray-500">
@@ -327,7 +328,7 @@ function ActivityTab() {
                       </div>
                     ))}
                   </div>
-                  <div className="grid border-b border-gray-50 bg-gray-50/30" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+                  <div className="grid border-b border-gray-50 bg-gray-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
                     <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-gray-500">Provision d&apos;impôt estimée</div>
                     {chartData.map((m, i) => {
                       const isFuture = year > currentYear || (year === currentYear && i >= currentMonth);
@@ -354,7 +355,7 @@ function ActivityTab() {
                 </>
               )}
               {/* Vacances */}
-              <div className="grid" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+              <div className="grid" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
                 <div className="px-3 py-3.5 text-sm font-semibold text-gray-700">Vacances (jours)</div>
                 {chartData.map((m, i) => (
                   <div key={m.name} className="py-2.5 flex items-center justify-center">
@@ -373,7 +374,6 @@ function ActivityTab() {
                 ))}
               </div>
             </div>
-          </>
         )}
       </div>
     </div>
@@ -415,6 +415,7 @@ function ContributionsTab() {
 
   // Load estimate (only once, independent of year)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     if (totalCA <= 0) { setCardsLoading(false); return; }
     getCotisationsEstimate(totalCA).then((est) => {
       if (est) setEstimate(est);
@@ -424,6 +425,7 @@ function ContributionsTab() {
 
   // Load monthly data (depends on year)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setTableLoading(true);
     getMonthlyActivityAction(year).then((monthly) => {
       if (monthly.months) {
@@ -542,14 +544,14 @@ function ContributionsTab() {
         ) : (
           <div className="border-t border-gray-100 text-xs">
             {/* Header */}
-            <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+            <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
               <div className="px-3 py-3.5" />
               {MONTH_LABELS.map((m) => (
                 <div key={m} className="py-3.5 text-center font-semibold text-gray-500">{m}</div>
               ))}
             </div>
             {/* URSSAF */}
-            <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+            <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
               <div className="px-3 py-3.5 flex items-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo-urssaf.svg" alt="URSSAF" className="h-5" />
@@ -568,7 +570,7 @@ function ContributionsTab() {
               })}
             </div>
             {/* CARPIMKO */}
-            <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+            <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
               <div className="px-3 py-3.5 flex items-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo-carpimko.png" alt="CARPIMKO" className="h-5" />
@@ -587,7 +589,7 @@ function ContributionsTab() {
               })}
             </div>
             {/* Total */}
-            <div className="grid" style={{ gridTemplateColumns: "200px repeat(12, 1fr)" }}>
+            <div className="grid" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
               <div className="px-3 py-3.5 text-sm font-semibold text-gray-900">Total</div>
               {monthlyData.map((m, i) => {
                 const reelTotal = m.urssaf + m.carpimko;
@@ -664,6 +666,7 @@ function TaxesTab() {
 
   // Load fiscal situation from DB when year changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setDbLoaded(false);
     getFiscalSituationAction(year).then((res) => {
       if (res) {

@@ -34,6 +34,7 @@ export function InvitationsSection({
 
   useEffect(() => {
     if (state?.success && state.invitation) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- append on useActionState success
       setInvitations((prev) => [...prev, state.invitation]);
       toast.success(`Invitation envoyée à ${state.invitation.email}`);
       formRef.current?.reset();

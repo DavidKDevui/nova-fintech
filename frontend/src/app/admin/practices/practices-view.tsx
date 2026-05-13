@@ -12,6 +12,7 @@ export function PracticesView({ initialPractices }: { initialPractices: Practice
 
   useEffect(() => {
     if (state?.success && state.practice) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- append on useActionState success
       setPractices((prev) => [...prev, state.practice]);
       toast.success(`Cabinet "${state.practice.name}" créé`);
       formRef.current?.reset();

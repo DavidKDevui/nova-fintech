@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { useData } from "@/providers/data-provider";
 import {
@@ -98,7 +98,10 @@ export function FacturationClient() {
 
   // Reset page when filters change
   const filterKey = `${filterStatus}-${filterPractice}-${dateFrom}-${dateTo}`;
-  useMemo(() => { setPage(1); }, [filterKey]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset pagination on filter change
+    setPage(1);
+  }, [filterKey]);
 
   // Filtered totals
   const filteredTotal = useMemo(() => {

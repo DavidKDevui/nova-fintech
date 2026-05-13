@@ -71,8 +71,8 @@ export function DeadlinesClient() {
   // Determine the last month with facturation data
   const lastMonthWithData = useMemo(() => {
     if (!facturationSummary || facturationSummary.passageCount === 0) return -1;
-    return currentMonth; // on a des données jusqu'au mois en cours
-  }, [facturationSummary, currentMonth]);
+    return new Date().getMonth(); // on a des données jusqu'au mois en cours
+  }, [facturationSummary]);
 
   const calendar = useMemo(() => {
     const cal = buildCalendar(prefs);
@@ -96,10 +96,11 @@ export function DeadlinesClient() {
   }, [prefs, estimate, lastMonthWithData]);
 
   const upcoming = useMemo(() => {
-    const events = getUpcomingEvents(currentMonth, currentDay, 6, calendar, { maxDays: 30 });
+    const now = new Date();
+    const events = getUpcomingEvents(now.getMonth(), now.getDate(), 6, calendar, { maxDays: 30 });
     if (filter === "all") return events;
     return events.filter((e) => e.type === filter);
-  }, [currentMonth, currentDay, filter, calendar]);
+  }, [filter, calendar]);
 
   const calendarEvents = useMemo(() => {
     const events = calendar[calMonth] || [];

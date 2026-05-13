@@ -178,10 +178,24 @@ export async function getTransactionKpisAction(accountId?: string | null, year?:
   }
 }
 
-export async function getMonthlyActivityAction(year: number) {
+export type MonthlyActivityMonth = {
+  month: number;
+  income: number;
+  cotisations: number;
+  autresDepenses: number;
+  urssaf: number;
+  carpimko: number;
+  chargesPro: number;
+  retrocession: number;
+  madelin: number;
+  impots: number;
+  remuneration: number;
+};
+
+export async function getMonthlyActivityAction(year: number): Promise<{ months: MonthlyActivityMonth[] }> {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") {
-    return { months: [] as { month: number; income: number; expenses: number }[] };
+    return { months: [] };
   }
 
   try {

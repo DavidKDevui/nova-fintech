@@ -166,6 +166,7 @@ export function TransactionsClient() {
   useEffect(() => {
     if (!hp?.bridgeUserUuid) return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setPaginatedLoading(true);
     fetchPaginatedTransactionsAction(
       txPage, TX_PER_PAGE, selectedAccount, txSortBy, txSortDir, txTab === "uncategorized",
@@ -185,6 +186,7 @@ export function TransactionsClient() {
   // Fetch KPIs from server
   useEffect(() => {
     if (!hp?.bridgeUserUuid) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setKpiLoading(true);
     getTransactionKpisAction(selectedAccount, kpiYear).then((result) => {
       setKpiEncaissement(result.encaissement);

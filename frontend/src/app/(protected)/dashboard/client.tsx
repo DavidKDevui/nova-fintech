@@ -53,6 +53,7 @@ export function DashboardClient() {
   const [kpiLoading, setKpiLoading] = useState(true);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     if (!hp?.bridgeUserUuid) { setKpiLoading(false); return; }
     getTransactionKpisAction(hp.defaultBankAccountId).then((result) => {
       setKpiEncaissement(result.encaissement);
@@ -91,7 +92,7 @@ export function DashboardClient() {
       if (tx.date.startsWith(thisMonth)) thisMonthBalance += Number(tx.amount);
     }
     return solde - thisMonthBalance;
-  }, [transactions, hp?.defaultBankAccountId, solde]);
+  }, [transactions, hp, solde]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-start">

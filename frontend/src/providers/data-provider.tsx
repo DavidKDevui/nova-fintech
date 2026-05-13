@@ -154,6 +154,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Initial load
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch
     refresh();
     refreshFacturation();
     refreshTransactions();

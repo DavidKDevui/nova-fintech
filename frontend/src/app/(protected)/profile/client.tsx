@@ -527,6 +527,7 @@ function ChangePasswordForm() {
 
   useEffect(() => {
     if (pwState?.success) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear form fields on action success
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
