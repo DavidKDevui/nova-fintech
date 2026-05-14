@@ -1121,10 +1121,12 @@ function SummaryTab() {
     isSingleParent?: boolean;
     otherIncome: string;
   } | null>(null);
+  const [includeRegul, setIncludeRegul] = useState(true);
 
   const totalCA = facturationSummary?.byStatus.paye.total ?? 0;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setLoading(true);
     Promise.all([
       getCotisationsEstimate(totalCA),
@@ -1159,7 +1161,7 @@ function SummaryTab() {
     if (!hp?.defaultBankAccountId) return 0;
     const acc = accounts.find((a) => a.id === hp.defaultBankAccountId);
     return acc ? parseFloat(acc.balance) : 0;
-  }, [accounts, hp?.defaultBankAccountId]);
+  }, [accounts, hp]);
 
   // 2. Régularisation : (estimé annuel − payé à date) pour URSSAF + CARPIMKO.
   // Convention : à payer (positif) → impact négatif sur la tréso.
@@ -1187,7 +1189,7 @@ function SummaryTab() {
     return -avg * 3;
   }, [monthlyData]);
 
-  const solde = defaultBalance + regulImpact + anticipation;
+  const solde = defaultBalance + (includeRegul ? regulImpact : 0) + anticipation;
 
   // ── Annual projections (year-end) ──
   const monthsElapsed = new Date().getMonth() + 1;
@@ -1196,12 +1198,19 @@ function SummaryTab() {
   const annualCA = estimate?.revenuAnnualise ?? 0;
   const ytdChargesPro = monthlyData.reduce((s, m) => s + m.chargesPro, 0);
   const annualChargesPro = annualize(ytdChargesPro);
-  const annualCotisations = (estimate?.urssafAnnuel ?? 0) + (estimate?.carpimkoAnnuel ?? 0);
+  // Cotisations sociales : 2 modes selon le toggle.
+  //   ON  : estimation annuelle ajustée OpenFisca/Carpimko (anticipe la régularisation)
+  //   OFF : extrapolation linéaire des paiements provisionnels YTD (sans anticipation)
+  const annualCotisationsAjustees = (estimate?.urssafAnnuel ?? 0) + (estimate?.carpimkoAnnuel ?? 0);
+  const ytdCotisationsPayees = monthlyData.reduce((s, m) => s + m.urssaf + m.carpimko, 0);
+  const annualCotisationsProvisionnelles = annualize(ytdCotisationsPayees);
+  const annualCotisations = includeRegul ? annualCotisationsAjustees : annualCotisationsProvisionnelles;
   const ytdRetroMadelin = monthlyData.reduce((s, m) => s + m.retrocession + m.madelin, 0);
   const annualRetroMadelin = annualize(ytdRetroMadelin);
   // Même formule que la ligne "Rém. avant impôt" de l'onglet Mon activité :
   //   CA − (urssaf + carpimko + chargesPro + retrocession + madelin)
-  const annualRemAvantImpot = annualCA - annualCotisations - annualChargesPro - annualRetroMadelin;
+  // Clamp à 0 — pas de rémunération négative affichée.
+  const annualRemAvantImpot = Math.max(0, annualCA - annualCotisations - annualChargesPro - annualRetroMadelin);
 
   // IR sur revenus N (payé en N+1).
   const irPrev = useMemo(() => {
@@ -1272,7 +1281,7 @@ function SummaryTab() {
 
   const chartData = [
     { key: "treso", name: "Trésorerie actuelle", value: Math.round(defaultBalance) },
-    { key: "regul", name: `Régularisation ${currentYear}`, value: Math.round(regulImpact) },
+    ...(includeRegul ? [{ key: "regul", name: `Régularisation ${currentYear}`, value: Math.round(regulImpact) }] : []),
     { key: "antic", name: "Anticipation 3 mois", value: Math.round(anticipation) },
   ];
 
@@ -1283,20 +1292,39 @@ function SummaryTab() {
     <div className="grid grid-cols-2 gap-6">
       {/* Trésorerie prévisionnelle */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
-        <h3 className="text-base font-semibold text-gray-900 mb-4">Trésorerie prévisionnelle</h3>
+        <div className="flex items-center justify-between mb-4 gap-3">
+          <h3 className="text-base font-semibold text-gray-900">Trésorerie prévisionnelle</h3>
+          <div className="inline-flex rounded-lg bg-gray-100 p-0.5 text-[11px] font-medium">
+            <button
+              type="button"
+              onClick={() => setIncludeRegul(true)}
+              className={`px-3 py-1.5 rounded-md transition-colors ${includeRegul ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              Prévoir la régularisation
+            </button>
+            <button
+              type="button"
+              onClick={() => setIncludeRegul(false)}
+              className={`px-3 py-1.5 rounded-md transition-colors ${!includeRegul ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              Ne pas prévoir
+            </button>
+          </div>
+        </div>
 
         {isLoading ? (
           <div className="h-64 bg-gray-100 rounded animate-pulse" />
         ) : (
           <>
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={chartData} margin={{ top: 24, right: 12, bottom: 8, left: 4 }}>
+              <BarChart data={chartData} margin={{ top: 24, right: 12, bottom: 40, left: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                 <XAxis
                   dataKey="name"
                   tick={{ fontSize: 11, fill: "#6b7280" }}
                   tickLine={false}
                   axisLine={false}
+                  tickMargin={20}
                 />
                 <YAxis
                   tick={{ fontSize: 11, fill: "#9ca3af" }}
@@ -1334,7 +1362,9 @@ function SummaryTab() {
             <div className="mt-6 pt-4 border-t border-gray-100">
               <div className="flex items-center gap-1.5 mb-1">
                 <p className="text-xs text-gray-400">Solde de trésorerie prévisionnelle</p>
-                <InfoTooltip text={`Solde hypothétique après avoir anticipé votre régularisation d'Urssaf et de Carpimko ${currentYear} (ajustée en ${currentYear + 1}) ainsi que 3 mois de vos frais professionnels.`} />
+                <InfoTooltip text={includeRegul
+                  ? `Solde hypothétique après avoir anticipé votre régularisation d'Urssaf et de Carpimko ${currentYear} (ajustée en ${currentYear + 1}) ainsi que 3 mois de vos frais professionnels.`
+                  : `Solde hypothétique après avoir anticipé 3 mois de vos frais professionnels (sans tenir compte de la régularisation ${currentYear}).`} />
               </div>
               <p className={`text-3xl font-bold ${solde >= 0 ? "text-gray-900" : "text-red-500"}`}>
                 {formatSigned(solde)}
@@ -1342,7 +1372,9 @@ function SummaryTab() {
             </div>
 
             <p className="mt-4 text-xs text-gray-500 leading-relaxed">
-              Solde de trésorerie hypothétique après avoir anticipé votre régularisation d&apos;Urssaf et de Carpimko {currentYear} (ajustée en {currentYear + 1}) ainsi que 3 mois de vos frais professionnels.
+              {includeRegul
+                ? <>Solde de trésorerie hypothétique après avoir anticipé votre régularisation d&apos;Urssaf et de Carpimko {currentYear} (ajustée en {currentYear + 1}) ainsi que 3 mois de vos frais professionnels.</>
+                : <>Solde de trésorerie hypothétique après avoir anticipé 3 mois de vos frais professionnels. La régularisation {currentYear} n&apos;est pas prise en compte.</>}
             </p>
             <p className="mt-2 text-xs text-gray-500 leading-relaxed">
               Un montant positif indique une trésorerie suffisante pour couvrir ces dépenses à venir.
@@ -1370,14 +1402,17 @@ function SummaryTab() {
                   {/* Title */}
                   <p className="text-sm font-medium text-gray-900 flex-1 min-w-0">{m.title}</p>
                   {/* Years + bars stacked */}
-                  <div className="flex flex-col gap-1.5 w-[55%] shrink-0">
+                  <div className="flex flex-col gap-2 w-[55%] shrink-0">
                     {/* Year N */}
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-medium text-gray-500 w-10 shrink-0">{m.year}</span>
                       <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                         <div className="h-full bg-brand-600 rounded-full transition-all" style={{ width: `${pctN}%` }} />
                       </div>
-                      <span className="text-[11px] font-semibold text-gray-900 w-20 text-right shrink-0">{formatCurrency(m.value)}</span>
+                      <div className="w-20 text-right shrink-0 leading-tight">
+                        <p className="text-[10px] text-gray-400 italic">Prévision</p>
+                        <p className="text-[12px] font-semibold text-gray-900">{formatCurrency(m.value)}</p>
+                      </div>
                     </div>
                     {/* Year N-1 */}
                     <div className="flex items-center gap-2">
@@ -1385,7 +1420,10 @@ function SummaryTab() {
                       <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                         <div className="h-full bg-gray-300 rounded-full transition-all" style={{ width: `${pctNm1}%` }} />
                       </div>
-                      <span className="text-[11px] font-semibold text-gray-300 w-20 text-right shrink-0">{m.prevValue != null ? formatCurrency(m.prevValue) : "—"}</span>
+                      <div className="w-20 text-right shrink-0 leading-tight">
+                        <p className="text-[10px] italic">&nbsp;</p>
+                        <p className="text-[12px] font-semibold text-gray-300">{m.prevValue != null ? formatCurrency(m.prevValue) : "—"}</p>
+                      </div>
                     </div>
                   </div>
                 </div>

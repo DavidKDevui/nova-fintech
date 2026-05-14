@@ -148,7 +148,8 @@
       "WebFetch(domain:optibnc.fr)",
       "Bash(pnpm typecheck *)",
       "Bash(pnpm lint *)",
-      "WebFetch(domain:www.economie.gouv.fr)"
+      "WebFetch(domain:www.economie.gouv.fr)",
+      "WebFetch(domain:images.unsplash.com)"
     ]
   }
 }
