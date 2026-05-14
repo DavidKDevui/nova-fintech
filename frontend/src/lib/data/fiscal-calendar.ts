@@ -57,8 +57,8 @@ const URSSAF_QUARTERLY_MONTHS = new Set([1, 4, 7, 10]);
 // PAS quarterly months: Feb(1), May(4), Aug(7), Nov(10)
 const PAS_QUARTERLY_MONTHS = new Set([1, 4, 7, 10]);
 
-// CARPIMKO monthly: Jan(0)→Oct(9), nothing Nov/Dec
-const CARPIMKO_MONTHLY_MONTHS = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+// CARPIMKO monthly: Feb(1)→Nov(10), nothing Jan/Dec
+const CARPIMKO_MONTHLY_MONTHS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
 // Fixed events that don't depend on preferences
 const FIXED_EVENTS: Record<number, CalendarEvent[]> = {
@@ -121,16 +121,16 @@ export function buildCalendar(prefs: PaymentPreferences = DEFAULT_PREFERENCES): 
     const carpimkoDay = parseInt(prefs.carpimkoPayDay);
     if (prefs.carpimkoFrequency === "monthly") {
       if (CARPIMKO_MONTHLY_MONTHS.has(month)) {
-        const label = month === 9
+        const label = month === 10
           ? "CARPIMKO (dernier prélèvement mensuel)"
           : "CARPIMKO (mensuel)";
         events.push({ day: carpimkoDay, label, type: "carpimko" });
       }
     } else {
-      // semi_annual: March(2) and September(8)
-      if (month === 2) {
+      // semi_annual: April(3) and October(9)
+      if (month === 3) {
         events.push({ day: carpimkoDay, label: "CARPIMKO (semestriel S1)", type: "carpimko" });
-      } else if (month === 8) {
+      } else if (month === 9) {
         events.push({ day: carpimkoDay, label: "CARPIMKO (semestriel S2)", type: "carpimko" });
       }
     }

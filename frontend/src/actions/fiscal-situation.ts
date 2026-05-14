@@ -39,6 +39,14 @@ export async function upsertFiscalSituationAction(_prevState: unknown, formData:
   const dependentChildren = parseInt(formData.get("dependentChildren") as string) || 0;
   const otherIncome = parseFloat(formData.get("otherIncome") as string) || 0;
   const isSingleParent = formData.get("isSingleParent") === "on";
+  const declaredIrRaw = formData.get("declaredIr");
+  const declaredIrStr = typeof declaredIrRaw === "string" ? declaredIrRaw.trim() : "";
+  let declaredIr: number | null = null;
+  if (declaredIrStr !== "") {
+    const parsed = parseFloat(declaredIrStr.replace(",", "."));
+    if (isNaN(parsed) || parsed < 0) return { error: "IR déclaré invalide" };
+    declaredIr = parsed;
+  }
 
   if (!year || isNaN(year)) return { error: "Année invalide" };
   if (!VALID_MARITAL_STATUSES.includes(maritalStatus as typeof VALID_MARITAL_STATUSES[number])) {
@@ -61,6 +69,7 @@ export async function upsertFiscalSituationAction(_prevState: unknown, formData:
       dependentChildren,
       isSingleParent: isSingleParent && maritalStatus === "celibataire" && dependentChildren >= 1,
       otherIncome: String(otherIncome),
+      declaredIr: declaredIr === null ? null : String(declaredIr),
       updatedAt: new Date(),
     };
 
@@ -85,3 +94,4 @@ export async function upsertFiscalSituationAction(_prevState: unknown, formData:
     return { error: "Impossible de sauvegarder la situation fiscale" };
   }
 }
+

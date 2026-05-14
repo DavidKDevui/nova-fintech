@@ -2,11 +2,12 @@
 
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { practitioners, practiceLinks, carePassages } from "@/lib/db/schema";
+import { practitioners, practiceLinks, carePassages, practitionerVacations } from "@/lib/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { simulerCotisationsURSSAF, getPlafondSecuriteSociale } from "@/lib/services/openfisca.service";
 import { calculerCotisationsCarpimko } from "@/lib/services/carpimko.service";
 import { namesMatch } from "@/lib/name-matching";
+import { countWorkingDays } from "@/lib/data/fr-holidays";
 
 export type CotisationsEstimate = {
   urssafAnnuel: number;
@@ -81,12 +82,49 @@ export async function getCotisationsEstimate(totalCA: number): Promise<Cotisatio
   const annee = now.getFullYear();
   const regime = hp.taxRegime;
 
-  // ── CA annualisé (année en cours) pour CARPIMKO et PAS ──
+  // ── CA annualisé : daily rate × jours travaillés sur l'année complète ──
+  // On utilise le rythme de travail (daysPerWeekWorked) + les jours de vacances
+  // saisis par le praticien pour obtenir une projection plus juste qu'une
+  // simple extrapolation linéaire mois × 12.
   const monthsElapsed = now.getMonth() + 1;
-  const revenuAnnualise = monthsElapsed >= 2
-    ? Math.round((totalCA / monthsElapsed) * 12)
-    : totalCA;
+  const daysPerWeek = hp.daysPerWeekWorked;
 
+  // Charger les jours de vacances saisis pour l'année en cours.
+  const vacationsRows = await db
+    .select()
+    .from(practitionerVacations)
+    .where(and(
+      eq(practitionerVacations.practitionerId, hp.id),
+      eq(practitionerVacations.year, annee),
+    ));
+  const vacations: number[] = Array(12).fill(0);
+  for (const row of vacationsRows) {
+    if (row.month >= 1 && row.month <= 12) {
+      vacations[row.month - 1] = row.days;
+    }
+  }
+
+  // Jours réellement travaillés YTD (mois écoulés − vacances déjà saisies).
+  let workedYTD = 0;
+  for (let m = 1; m <= monthsElapsed; m++) {
+    const wd = countWorkingDays(annee, m, daysPerWeek);
+    workedYTD += Math.max(0, wd - vacations[m - 1]);
+  }
+  // Jours travaillables sur l'année complète (12 mois − vacances saisies).
+  let workedYear = 0;
+  for (let m = 1; m <= 12; m++) {
+    const wd = countWorkingDays(annee, m, daysPerWeek);
+    workedYear += Math.max(0, wd - vacations[m - 1]);
+  }
+
+  const dailyRate = workedYTD > 0 ? totalCA / workedYTD : 0;
+  // Annualisation principale par daily rate. Fallback linéaire si pas de jours
+  // travaillés (cas dégénéré : praticien tout nouveau ou DB vide).
+  let revenuAnnualise = dailyRate > 0
+    ? Math.round(dailyRate * workedYear)
+    : (monthsElapsed >= 2 ? Math.round((totalCA / monthsElapsed) * 12) : totalCA);
+
+  if (revenuAnnualise <= 0) revenuAnnualise = totalCA;
   if (revenuAnnualise <= 0) return null;
 
   // ── Déterminer si le praticien est dans ses 2 premières années ──
@@ -141,25 +179,42 @@ export async function getCotisationsEstimate(totalCA: number): Promise<Cotisatio
     urssafBase = "annualise";
   }
 
+  // ── URSSAF (PAMC) ──
+  // OpenFisca calcule par défaut le régime "profession_liberale" générique (CIPAV).
+  // Pour les IDEL conventionnés (régime PAMC), deux corrections s'imposent :
+  //   1. La cotisation maladie-maternité (6,5 % en standard) est prise en charge
+  //      à hauteur de 5,9 % par la CPAM sur les actes conventionnés. La part résiduelle
+  //      à la charge de l'IDEL est ~0,6 % (= facteur 0,6 / 6,5 ≈ 9,2 %).
+  //   2. La retraite de base (vieillesse_profession_liberale) est prélevée par la
+  //      CARPIMKO (mandataire CNAVPL), pas par l'URSSAF. On la retranche du total
+  //      URSSAF et on l'ajoute au total CARPIMKO ci-dessous.
+  const PAMC_MALADIE_FACTOR = 0.6 / 6.5;
   let urssafAnnuel = 0;
+  let retraiteBaseCarpimko = 0;
+  let openFiscaOk = false;
   try {
     const result = await simulerCotisationsURSSAF({
       revenuAnnuel: urssafRevenu,
       annee,
       regime,
     });
-    urssafAnnuel = result.totalCotisationsOpenFisca;
+    const maladieCpamCharge = result.maladieMaterniteProfessionLiberale * (1 - PAMC_MALADIE_FACTOR);
+    retraiteBaseCarpimko = result.retraiteBase;
+    urssafAnnuel = Math.max(0, result.totalCotisationsOpenFisca - maladieCpamCharge - retraiteBaseCarpimko);
+    openFiscaOk = urssafAnnuel > 0;
   } catch {
-    urssafAnnuel = urssafRevenuNet * 0.22;
+    // fallback approximé : 26 % sur revenu net (moyenne URSSAF non-PAMC).
+    urssafAnnuel = urssafRevenuNet * 0.26;
   }
 
-  if (urssafAnnuel <= 0) {
-    urssafAnnuel = urssafRevenuNet * 0.22;
+  if (!openFiscaOk && urssafAnnuel <= 0) {
+    urssafAnnuel = urssafRevenuNet * 0.26;
   }
 
-  // ── CARPIMKO : basé sur CA annualisé (estimation prospective) ──
+  // ── CARPIMKO : retraite complémentaire + ASV + invalidité + IJ ──
+  // On ajoute la retraite de base extraite d'OpenFisca (prélevée par la CARPIMKO chez l'IDEL).
   const carpimkoResult = calculerCotisationsCarpimko(revenuNet, annee);
-  const carpimkoAnnuel = carpimkoResult.totalCarpimko;
+  const carpimkoAnnuel = carpimkoResult.totalCarpimko + retraiteBaseCarpimko;
 
   // ── PAS : basé sur CA annualisé ──
   const pasRate = parseFloat(hp.pasRate) / 100;

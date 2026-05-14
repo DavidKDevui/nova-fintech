@@ -7,7 +7,7 @@ import { practitioners, bankAccounts, bankTransactions } from "@/lib/db/schema";
 
 const VALID_CATEGORIES = [
   "income", "professional_reimbursement", "royalty", "urssaf", "carpimko",
-  "professional_expenses", "retrocession", "madelin", "reprocessing", "taxes", "compensation",
+  "professional_expenses", "retrocession", "madelin", "reprocessing", "taxes", "cfe", "compensation",
 ] as const;
 
 export async function updateTransactionCategoryAction(transactionId: string, category: string | null) {
@@ -189,6 +189,7 @@ export type MonthlyActivityMonth = {
   retrocession: number;
   madelin: number;
   impots: number;
+  cfe: number;
   remuneration: number;
 };
 
@@ -224,6 +225,7 @@ export async function getMonthlyActivityAction(year: number): Promise<{ months: 
         retrocession: sql<number>`COALESCE(SUM(CASE WHEN ${bankTransactions.amount} < 0 AND ${bankTransactions.category} = 'retrocession' THEN ABS(${bankTransactions.amount}) ELSE 0 END), 0)`,
         madelin: sql<number>`COALESCE(SUM(CASE WHEN ${bankTransactions.amount} < 0 AND ${bankTransactions.category} = 'madelin' THEN ABS(${bankTransactions.amount}) ELSE 0 END), 0)`,
         impots: sql<number>`COALESCE(SUM(CASE WHEN ${bankTransactions.amount} < 0 AND ${bankTransactions.category} = 'taxes' THEN ABS(${bankTransactions.amount}) ELSE 0 END), 0)`,
+        cfe: sql<number>`COALESCE(SUM(CASE WHEN ${bankTransactions.amount} < 0 AND ${bankTransactions.category} = 'cfe' THEN ABS(${bankTransactions.amount}) ELSE 0 END), 0)`,
         remuneration: sql<number>`COALESCE(SUM(CASE WHEN ${bankTransactions.amount} < 0 AND ${bankTransactions.category} = 'compensation' THEN ABS(${bankTransactions.amount}) ELSE 0 END), 0)`,
       })
       .from(bankTransactions)
@@ -235,9 +237,9 @@ export async function getMonthlyActivityAction(year: number): Promise<{ months: 
     const monthMap = new Map(rows.map((r) => [Number(r.month), {
       income: Number(r.income), cotisations: Number(r.cotisations), autresDepenses: Number(r.autresDepenses),
       urssaf: Number(r.urssaf), carpimko: Number(r.carpimko), chargesPro: Number(r.chargesPro),
-      retrocession: Number(r.retrocession), madelin: Number(r.madelin), impots: Number(r.impots), remuneration: Number(r.remuneration),
+      retrocession: Number(r.retrocession), madelin: Number(r.madelin), impots: Number(r.impots), cfe: Number(r.cfe), remuneration: Number(r.remuneration),
     }]));
-    const zero = { income: 0, cotisations: 0, autresDepenses: 0, urssaf: 0, carpimko: 0, chargesPro: 0, retrocession: 0, madelin: 0, impots: 0, remuneration: 0 };
+    const zero = { income: 0, cotisations: 0, autresDepenses: 0, urssaf: 0, carpimko: 0, chargesPro: 0, retrocession: 0, madelin: 0, impots: 0, cfe: 0, remuneration: 0 };
     const months = Array.from({ length: 12 }, (_, i) => ({
       month: i + 1,
       ...(monthMap.get(i + 1) ?? zero),
@@ -246,6 +248,70 @@ export async function getMonthlyActivityAction(year: number): Promise<{ months: 
     return { months };
   } catch {
     return { months: [] };
+  }
+}
+
+export type CategoryTransaction = {
+  id: string;
+  date: string;
+  description: string;
+  cleanDescription: string | null;
+  amount: number;
+  category: string;
+};
+
+/**
+ * Liste les transactions du praticien pour une année donnée, filtrées par catégorie.
+ * Utilisé pour afficher l'historique granulaire dans Mes impôts (taxes + cfe)
+ * et Mes cotisations (urssaf + carpimko).
+ */
+export async function getCategoryTransactionsAction(
+  year: number,
+  categories: string[],
+): Promise<CategoryTransaction[]> {
+  const session = await getSession();
+  if (!session || session.accountType !== "practitioner") return [];
+
+  if (categories.length === 0) return [];
+
+  try {
+    const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
+    if (!hp) return [];
+
+    const accounts = await db.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.practitionerId, hp.id));
+    if (accounts.length === 0) return [];
+    const accountIds = accounts.map((a) => a.id);
+
+    const rows = await db
+      .select({
+        id: bankTransactions.id,
+        date: bankTransactions.date,
+        description: bankTransactions.description,
+        cleanDescription: bankTransactions.cleanDescription,
+        amount: bankTransactions.amount,
+        category: bankTransactions.category,
+      })
+      .from(bankTransactions)
+      .where(and(
+        inArray(bankTransactions.bankAccountId, accountIds),
+        gte(bankTransactions.date, `${year}-01-01`),
+        lte(bankTransactions.date, `${year}-12-31`),
+        inArray(bankTransactions.category, categories),
+      ))
+      .orderBy(desc(bankTransactions.date));
+
+    return rows.map((r) => ({
+      id: r.id,
+      date: r.date,
+      description: r.description,
+      cleanDescription: r.cleanDescription,
+      amount: Number(r.amount),
+      category: r.category ?? "",
+    }));
+  } catch (err) {
+    const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    console.error(`[CATEGORY_TRANSACTIONS] ${detail}`, err);
+    return [];
   }
 }
 

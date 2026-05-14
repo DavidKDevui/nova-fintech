@@ -1,6 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useData } from "@/providers/data-provider";
+import { usePractitioner } from "@/providers/practitioner-provider";
+import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
+import { getFiscalSituationAction } from "@/actions/fiscal-situation";
+import { computeIR, computeParts } from "@/lib/data/fr-tax";
+
+const formatEur = (n: number) =>
+  new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(n);
+
+type FiscalSituation = Awaited<ReturnType<typeof getFiscalSituationAction>>;
 
 type OptimCard = {
   title: string;
@@ -66,7 +80,44 @@ const cards: OptimCard[] = [
 ];
 
 export function OptimizationClient() {
+  const hp = usePractitioner();
+  const { facturationSummary } = useData();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
+  const [fiscal, setFiscal] = useState<FiscalSituation>(null);
+
+  const currentYear = new Date().getFullYear();
+  const totalCA = facturationSummary?.byStatus.paye.total ?? 0;
+
+  useEffect(() => {
+    if (totalCA <= 0) return;
+    getCotisationsEstimate(totalCA)
+      .then((res) => { if (res) setEstimate(res); })
+      .catch(() => {});
+  }, [totalCA]);
+
+  useEffect(() => {
+    getFiscalSituationAction(currentYear)
+      .then((res) => setFiscal(res))
+      .catch(() => {});
+  }, [currentYear]);
+
+  const fiscalImpact = useMemo(() => {
+    if (!estimate || !hp) return { impot: 0, trancheIndex: 0 };
+    const revenuNet = hp.taxRegime === "micro_bnc"
+      ? estimate.revenuAnnualise * 0.66
+      : estimate.revenuAnnualise - estimate.urssafAnnuel - estimate.carpimkoAnnuel;
+    const otherIncome = fiscal ? Number(fiscal.otherIncome) : 0;
+    const revenuImposable = Math.max(0, Math.round(revenuNet + otherIncome));
+    if (revenuImposable <= 0) return { impot: 0, trancheIndex: 0 };
+    const { parts, partsDeReference } = computeParts({
+      maritalStatus: (fiscal?.maritalStatus as "celibataire" | "marie" | "pacse") ?? "celibataire",
+      dependentChildren: fiscal?.dependentChildren ?? 0,
+      isSingleParent: fiscal?.isSingleParent ?? false,
+    });
+    const r = computeIR({ revenuImposable, parts, partsDeReference, incomeYear: currentYear });
+    return { impot: r.impot, trancheIndex: r.currentTrancheIndex };
+  }, [estimate, hp, fiscal, currentYear]);
 
   function toggle(title: string) {
     setSelected((prev) => {
@@ -80,17 +131,11 @@ export function OptimizationClient() {
   return (
     <div className="max-w-6xl space-y-8">
       <div>
-        <h1 className="text-xl md:text-2xl font-bold mb-2">Optimisation</h1>
-        <p className="text-sm text-gray-500 leading-relaxed">
-          Pistes d&apos;optimisation fiscale et sociale pour votre activité.
-        </p>
+        <h1 className="text-xl md:text-2xl font-bold">Mes moyens d&apos;optimisation</h1>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section>
-          <h2 className="text-sm font-bold text-gray-900 mb-4">
-            Mes moyens d&apos;optimisation
-          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {cards.filter((c) => c.available).map((card) => {
               const isChecked = selected.has(card.title);
@@ -140,7 +185,7 @@ export function OptimizationClient() {
                     {card.tag}
                   </span>
                   <h3 className="text-base font-bold">{card.title}</h3>
-                  <p className="text-sm text-white/80 leading-tight max-h-0 opacity-0 overflow-hidden group-hover:max-h-24 group-hover:opacity-100 group-hover:mt-1 transition-all duration-300">
+                  <p className="text-xs text-white/80 leading-tight max-h-0 opacity-0 overflow-hidden group-hover:max-h-24 group-hover:opacity-100 group-hover:mt-1 transition-all duration-300">
                     {card.description}
                   </p>
                 </label>
@@ -150,13 +195,22 @@ export function OptimizationClient() {
         </section>
 
         <aside className="space-y-4">
-          <ImpactSection title="Impact sur mes cotisations sociales 2026">
-            <ImpactRow label="Montant d'Urssaf" before="-268 €" after="0 €" />
-            <ImpactRow label="Montant de Carpimko" before="3 774 €" after="0 €" />
+          <ImpactSection title={`Impact sur mes cotisations sociales ${currentYear}`}>
+            <ImpactRow
+              label="Montant d'Urssaf"
+              value={estimate ? formatEur(estimate.urssafAnnuel) : "—"}
+            />
+            <ImpactRow
+              label="Montant de Carpimko"
+              value={estimate ? formatEur(estimate.carpimkoAnnuel) : "—"}
+            />
           </ImpactSection>
 
-          <ImpactSection title="Impact sur ma fiscalité 2026">
-            <ImpactRow label="Montant de l'imposition" before="0 €" after="0 €" />
+          <ImpactSection title={`Impact sur ma fiscalité ${currentYear}`}>
+            <ImpactRow
+              label="Montant de l'imposition"
+              value={estimate ? formatEur(fiscalImpact.impot) : "—"}
+            />
             <div className="pt-2">
               <div className="text-xs text-gray-500 mb-2">Tranche marginale d&apos;imposition</div>
               <div className="flex gap-1">
@@ -164,7 +218,7 @@ export function OptimizationClient() {
                   <span
                     key={t}
                     className={`flex-1 text-center text-[10px] font-bold py-1 rounded ${
-                      i === 0
+                      i === fiscalImpact.trancheIndex
                         ? "bg-brand-500 text-white"
                         : "bg-gray-100 text-gray-500"
                     }`}
@@ -177,14 +231,8 @@ export function OptimizationClient() {
           </ImpactSection>
 
           <ImpactSection title="Impact sur ma rémunération">
-            <div className="flex items-center justify-between py-1.5">
-              <span className="text-xs text-gray-500">Décaissement en 2026</span>
-              <span className="text-sm font-semibold text-gray-900">0 €</span>
-            </div>
-            <div className="flex items-center justify-between py-1.5">
-              <span className="text-xs text-gray-500">Gain en 2027</span>
-              <span className="text-sm font-semibold text-gray-400">—</span>
-            </div>
+            <ImpactRow label={`Décaissement en ${currentYear}`} value={formatEur(0)} />
+            <ImpactRow label={`Gain en ${currentYear + 1}`} value="—" />
           </ImpactSection>
         </aside>
       </div>
@@ -195,7 +243,7 @@ export function OptimizationClient() {
 function ImpactSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-4">
-      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3">
+      <h3 className="text-base font-semibold text-gray-900 mb-4">
         {title}
       </h3>
       <div className="space-y-1">{children}</div>
@@ -203,20 +251,11 @@ function ImpactSection({ title, children }: { title: string; children: React.Rea
   );
 }
 
-function ImpactRow({ label, before, after }: { label: string; before: string; after: string }) {
+function ImpactRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between py-1.5">
       <span className="text-xs text-gray-500">{label}</span>
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold text-gray-900 line-through opacity-50">
-          {before}
-        </span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
-          <line x1="5" y1="12" x2="19" y2="12" />
-          <polyline points="12 5 19 12 12 19" />
-        </svg>
-        <span className="text-sm font-bold text-brand-600">{after}</span>
-      </div>
+      <span className="text-sm font-semibold text-gray-900">{value}</span>
     </div>
   );
 }

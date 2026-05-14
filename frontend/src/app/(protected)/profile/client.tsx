@@ -65,6 +65,7 @@ export function ProfileClient() {
   const [pasRate, setPasRate] = useState<string>(hp?.pasRate ?? "0");
   const [carpimkoFrequency, setCarpimkoFrequency] = useState<string>(hp?.carpimkoFrequency ?? "monthly");
   const [carpimkoPayDay, setCarpimkoPayDay] = useState<string>(hp?.carpimkoPayDay ?? "10");
+  const [daysPerWeekWorked, setDaysPerWeekWorked] = useState<number>(hp?.daysPerWeekWorked ?? 5);
 
   const [tab, setTab] = useState<"profile" | "payments" | "account">("profile");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -86,7 +87,8 @@ export function ProfileClient() {
     pasFrequency !== (hp.pasFrequency ?? "monthly") ||
     pasRate !== (hp.pasRate ?? "0") ||
     carpimkoFrequency !== (hp.carpimkoFrequency ?? "monthly") ||
-    carpimkoPayDay !== (hp.carpimkoPayDay ?? "10")
+    carpimkoPayDay !== (hp.carpimkoPayDay ?? "10") ||
+    daysPerWeekWorked !== (hp.daysPerWeekWorked ?? 5)
   ) : false;
 
   const retrocessionInvalid = hasRetrocession && (
@@ -148,6 +150,7 @@ export function ProfileClient() {
             <input type="hidden" name="taxRegime" value={taxRegime} />
             <input type="hidden" name="retrocessionType" value={hasRetrocession ? retrocessionType : ""} />
             <input type="hidden" name="retrocessionValue" value={hasRetrocession ? retrocessionValue : ""} />
+            <input type="hidden" name="daysPerWeekWorked" value={daysPerWeekWorked} />
           </>
         )}
         {tab !== "payments" && hp && (
@@ -278,6 +281,22 @@ export function ProfileClient() {
                   <input type="hidden" name="retrocessionValue" value="" />
                 </>
               )}
+            </div>
+            <div>
+              <label className="block text-sm text-gray-500 mb-1.5">Jours travaillés par semaine</label>
+              <select
+                name="daysPerWeekWorked"
+                value={daysPerWeekWorked}
+                onChange={(e) => setDaysPerWeekWorked(parseInt(e.target.value, 10))}
+                className={SELECT_CLASS}
+              >
+                {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                  <option key={n} value={n}>{n} jour{n > 1 ? "s" : ""} / semaine</option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-gray-400">
+                Sert au calcul du taux journalier et des projections de chiffre d&apos;affaires sur la page Gestion.
+              </p>
             </div>
           </div>
         )}

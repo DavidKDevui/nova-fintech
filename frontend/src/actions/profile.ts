@@ -26,6 +26,8 @@ export async function updateProfileAction(_prevState: unknown, formData: FormDat
     const pasRate = (formData.get("pasRate") as string)?.trim() || "10";
     const carpimkoFrequency = formData.get("carpimkoFrequency") as string;
     const carpimkoPayDay = formData.get("carpimkoPayDay") as string;
+    const daysPerWeekWorkedRaw = formData.get("daysPerWeekWorked") as string;
+    const daysPerWeekWorked = Math.max(1, Math.min(7, parseInt(daysPerWeekWorkedRaw, 10) || 5));
 
     if (!firstName || !lastName || !profession || !activityStartDate || !taxRegime) {
       return { error: "Tous les champs sont requis" };
@@ -48,6 +50,7 @@ export async function updateProfileAction(_prevState: unknown, formData: FormDat
         pasRate,
         carpimkoFrequency: (carpimkoFrequency as "monthly" | "semi_annual") || "monthly",
         carpimkoPayDay: (carpimkoPayDay as "5" | "10" | "15" | "20" | "25") || "10",
+        daysPerWeekWorked,
         updatedAt: new Date(),
       })
       .where(eq(practitioners.userId, session.id));

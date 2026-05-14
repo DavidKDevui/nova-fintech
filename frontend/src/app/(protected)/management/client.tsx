@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useActionState, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, ReferenceLine, LabelList } from "recharts";
-import { getMonthlyActivityAction, getTransactionKpisAction, type MonthlyActivityMonth } from "@/actions/transaction";
+import { getMonthlyActivityAction, getTransactionKpisAction, getCategoryTransactionsAction, type MonthlyActivityMonth, type CategoryTransaction } from "@/actions/transaction";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
 import { getFiscalSituationAction, upsertFiscalSituationAction } from "@/actions/fiscal-situation";
 import { getVacationsAction, upsertVacationDayAction } from "@/actions/vacations";
@@ -107,6 +107,8 @@ function ActivityTab() {
     fetchData(year);
   }, [year, fetchData]);
 
+  const daysPerWeek = hp?.daysPerWeekWorked ?? 5;
+
   // Daily rate computed from past months with CA > 0, neutralized of saved vacation days.
   // Used to simulate CA for current/future months in the selected year.
   const dailyRate = useMemo(() => {
@@ -119,7 +121,7 @@ function ActivityTab() {
     chartData.forEach((m, i) => {
       const isPast = isPastYear || (year === now.getFullYear() && i < currentMonthIdx);
       if (!isPast || m.revenus <= 0) return;
-      const wd = countWorkingDays(year, i + 1);
+      const wd = countWorkingDays(year, i + 1, daysPerWeek);
       const worked = Math.max(0, wd - (vacations[i] || 0));
       if (worked > 0) {
         totalCA += m.revenus;
@@ -127,7 +129,7 @@ function ActivityTab() {
       }
     });
     return totalDays > 0 ? totalCA / totalDays : 0;
-  }, [chartData, vacations, year]);
+  }, [chartData, vacations, year, daysPerWeek]);
 
   return (
     <div>
@@ -302,7 +304,7 @@ function ActivityTab() {
 
                   // Future month: simulated CA = daily_rate × (working_days − vacances).
                   if (isFutureMonth) {
-                    const wd = countWorkingDays(year, i + 1);
+                    const wd = countWorkingDays(year, i + 1, daysPerWeek);
                     const worked = Math.max(0, wd - (vacations[i] || 0));
                     const simulated = Math.round(dailyRate * worked);
                     return (
@@ -315,8 +317,8 @@ function ActivityTab() {
                   // Current month: real to date + projection on remaining working days,
                   // minus a pro-rata share of saved vacations (uniform distribution assumption).
                   if (isCurrentMonth) {
-                    const totalWd = countWorkingDays(year, i + 1);
-                    const remainingWd = countRemainingWorkingDays(year, i + 1, now.getDate() + 1);
+                    const totalWd = countWorkingDays(year, i + 1, daysPerWeek);
+                    const remainingWd = countRemainingWorkingDays(year, i + 1, now.getDate() + 1, daysPerWeek);
                     const ratioRemaining = totalWd > 0 ? remainingWd / totalWd : 0;
                     const remainingVac = (vacations[i] || 0) * ratioRemaining;
                     const workedRemaining = Math.max(0, remainingWd - remainingVac);
@@ -699,6 +701,225 @@ function ContributionsTab() {
           </div>
         )}
       </div>
+
+      {/* Historique des prélèvements URSSAF + CARPIMKO sur l'année sélectionnée */}
+      <TransactionsList
+        title="Historique des cotisations"
+        description={`Prélèvements URSSAF et CARPIMKO réellement débités en ${year}.`}
+        year={year}
+        categories={CONTRIBUTIONS_CATEGORIES}
+      />
+    </div>
+  );
+}
+
+// ── Transactions History (réutilisée par Mes impôts et Mes cotisations) ──
+
+const CONTRIBUTIONS_CATEGORIES: string[] = ["urssaf", "carpimko"];
+const TAXES_CATEGORIES: string[] = ["taxes", "cfe"];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  urssaf: "URSSAF",
+  carpimko: "CARPIMKO",
+  taxes: "Impôts (PAS / régul.)",
+  cfe: "CFE",
+};
+
+function formatTransactionDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function TransactionsList({
+  title,
+  description,
+  year,
+  categories,
+}: {
+  title: string;
+  description: string;
+  year: number;
+  categories: string[];
+}) {
+  const [transactions, setTransactions] = useState<CategoryTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
+    setLoading(true);
+    getCategoryTransactionsAction(year, categories)
+      .then((rows) => {
+        setTransactions(rows);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+    // categories is a stable list of strings; serialize to avoid extra renders if parent re-creates the array
+  }, [year, categories]);
+
+  const total = useMemo(
+    () => transactions.reduce((s, t) => s + Math.abs(t.amount), 0),
+    [transactions],
+  );
+
+  return (
+    <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
+      <div className="flex items-center justify-between px-6 pt-5 pb-3">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+          <p className="text-xs text-gray-400 mt-0.5">{description}</p>
+        </div>
+        {!loading && transactions.length > 0 && (
+          <div className="text-right">
+            <p className="text-xs text-gray-400">Total {year}</p>
+            <p className="text-base font-bold text-gray-900">{formatCurrency(total)}</p>
+          </div>
+        )}
+      </div>
+      {loading ? (
+        <div className="px-6 pb-6">
+          <div className="h-32 bg-gray-100 rounded animate-pulse" />
+        </div>
+      ) : transactions.length === 0 ? (
+        <div className="px-6 pb-6 text-sm text-gray-400">
+          Aucune transaction enregistrée en {year} pour les catégories concernées.
+        </div>
+      ) : (
+        <div className="border-t border-gray-100 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-xs font-semibold text-gray-500">
+                <th className="text-left px-6 py-3">Date</th>
+                <th className="text-left px-3 py-3">Libellé</th>
+                <th className="text-left px-3 py-3">Catégorie</th>
+                <th className="text-right px-6 py-3">Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((t) => (
+                <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatTransactionDate(t.date)}</td>
+                  <td className="px-3 py-3 text-gray-900 truncate max-w-[420px]" title={t.cleanDescription ?? t.description}>
+                    {t.cleanDescription ?? t.description}
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                      {CATEGORY_LABELS[t.category] ?? t.category}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3 text-right font-medium text-gray-900 whitespace-nowrap">
+                    {formatCurrency(Math.abs(t.amount))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+  const [range, setRange] = useState<number>(5);
+  const [history, setHistory] = useState<FiscalHistoryYear[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const yearFrom = range === 0 ? activityStartYear : Math.max(activityStartYear, currentYear - range + 1);
+  const yearTo = currentYear;
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
+    setLoading(true);
+    getFiscalHistoryAction(yearFrom, yearTo)
+      .then((h) => {
+        setHistory(h);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [yearFrom, yearTo]);
+
+  const rows = useMemo(() => history.map((h) => {
+    const total = h.urssaf + h.carpimko;
+    const tauxEffectif = h.income > 0 ? (total / h.income) * 100 : 0;
+    return { ...h, total, tauxEffectif, isCurrentYear: h.year === currentYear };
+  }), [history, currentYear]);
+
+  return (
+    <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
+      <div className="flex items-center justify-between px-6 pt-5 pb-3">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">Mon historique cotisations</h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Évolution de vos cotisations sociales par année.
+          </p>
+        </div>
+        <select
+          value={range}
+          onChange={(e) => setRange(parseInt(e.target.value))}
+          className="border border-gray-200 bg-transparent px-3 py-1.5 rounded-md text-sm transition-all hover:border-gray-400 focus:border-gray-900 focus:outline-none appearance-none cursor-pointer"
+        >
+          {RANGE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="px-6 pb-6">
+          <div className="h-32 bg-gray-100 rounded animate-pulse" />
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="px-6 pb-6 text-sm text-gray-400">Aucune donnée pour la période sélectionnée.</div>
+      ) : (
+        <div className="border-t border-gray-100 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-xs font-semibold text-gray-500">
+                <th className="text-left px-6 py-3">Année</th>
+                <th className="text-right px-3 py-3">CA encaissé</th>
+                <th className="text-right px-3 py-3">URSSAF</th>
+                <th className="text-right px-3 py-3">CARPIMKO</th>
+                <th className="text-right px-3 py-3">Total cotisations</th>
+                <th className="text-right px-6 py-3">
+                  <span className="inline-flex items-center gap-1">
+                    Taux effectif
+                    <InfoTooltip text="Total des cotisations versées rapporté au CA encaissé sur l'année. Donne une vision globale de votre charge sociale." />
+                  </span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.year} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-3">
+                    <button
+                      type="button"
+                      onClick={() => onYearSelect(r.year)}
+                      className={`font-medium hover:text-brand-600 transition-colors ${r.isCurrentYear ? "text-gray-500 italic" : "text-gray-900"}`}
+                      title="Voir le détail de cette année"
+                    >
+                      {r.year}{r.isCurrentYear && " (en cours)"}
+                    </button>
+                  </td>
+                  <td className={`px-3 py-3 text-right ${r.income > 0 ? "text-gray-900" : "text-gray-300"}`}>
+                    {r.income > 0 ? formatCurrency(r.income) : "—"}
+                  </td>
+                  <td className={`px-3 py-3 text-right ${r.urssaf > 0 ? "text-gray-700" : "text-gray-300"}`}>
+                    {r.urssaf > 0 ? formatCurrency(r.urssaf) : "—"}
+                  </td>
+                  <td className={`px-3 py-3 text-right ${r.carpimko > 0 ? "text-gray-700" : "text-gray-300"}`}>
+                    {r.carpimko > 0 ? formatCurrency(r.carpimko) : "—"}
+                  </td>
+                  <td className={`px-3 py-3 text-right font-semibold ${r.total > 0 ? "text-gray-900" : "text-gray-300"}`}>
+                    {r.total > 0 ? formatCurrency(r.total) : "—"}
+                  </td>
+                  <td className={`px-6 py-3 text-right ${r.tauxEffectif > 0 ? "text-gray-700" : "text-gray-300"}`}>
+                    {r.tauxEffectif > 0 ? `${r.tauxEffectif.toFixed(1)} %` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -776,6 +997,7 @@ function TaxesTab() {
   );
 
   const pasRate = hp ? parseFloat(hp.pasRate) / 100 : 0;
+  const daysPerWeek = hp?.daysPerWeekWorked ?? 5;
 
   // Revenu BNC annuel + PAS effectif sur le BNC.
   // BNC :
@@ -804,7 +1026,7 @@ function TaxesTab() {
       months.forEach((m, i) => {
         const isPast = isPastYear || (y === now.getFullYear() && i < currentMonthIdx);
         if (!isPast || m.income <= 0) return;
-        const wd = countWorkingDays(y, i + 1);
+        const wd = countWorkingDays(y, i + 1, daysPerWeek);
         const worked = Math.max(0, wd - (vacations[i] || 0));
         if (worked > 0) {
           totalBNC += computeBNC(m);
@@ -831,14 +1053,14 @@ function TaxesTab() {
       const daily = dailyRateFrom(monthly, year);
       let bncProjection = 0;
       if (daily > 0) {
-        const totalWd = countWorkingDays(year, currentMonthIdx + 1);
-        const remainingWd = countRemainingWorkingDays(year, currentMonthIdx + 1, now.getDate() + 1);
+        const totalWd = countWorkingDays(year, currentMonthIdx + 1, daysPerWeek);
+        const remainingWd = countRemainingWorkingDays(year, currentMonthIdx + 1, now.getDate() + 1, daysPerWeek);
         const ratio = totalWd > 0 ? remainingWd / totalWd : 0;
         const remainingVac = (vacations[currentMonthIdx] || 0) * ratio;
         const worked = Math.max(0, remainingWd - remainingVac);
         bncProjection += daily * worked;
         for (let i = currentMonthIdx + 1; i < 12; i++) {
-          const wd = countWorkingDays(year, i + 1);
+          const wd = countWorkingDays(year, i + 1, daysPerWeek);
           const worked2 = Math.max(0, wd - (vacations[i] || 0));
           bncProjection += daily * worked2;
         }
@@ -860,7 +1082,7 @@ function TaxesTab() {
     if (daily <= 0) return { revenuBNC: 0, pasBnc: 0, isProjected: true, pasYtdReel: 0 };
     let totalBnc = 0;
     for (let i = 0; i < 12; i++) {
-      const wd = countWorkingDays(year, i + 1);
+      const wd = countWorkingDays(year, i + 1, daysPerWeek);
       const worked = Math.max(0, wd - (vacations[i] || 0));
       totalBnc += daily * worked;
     }
@@ -870,7 +1092,7 @@ function TaxesTab() {
       isProjected: true,
       pasYtdReel: 0,
     };
-  }, [hp, monthly, vacations, year, currentYear, pastReference, pasRate]);
+  }, [hp, monthly, vacations, year, currentYear, pastReference, pasRate, daysPerWeek]);
 
   const revenuImposable = revenuBNC + autresRevenus;
 
@@ -888,8 +1110,10 @@ function TaxesTab() {
   const bareme = useMemo(() => getBareme(year), [year]);
   const currentTranche = bareme[ir.currentTrancheIndex]!;
   const showSingleParent = situation === "celibataire" && enfants >= 1;
+  const activityStartYear = hp?.activityStartDate ? new Date(hp.activityStartDate).getFullYear() : currentYear - 5;
 
   return (
+    <div className="space-y-6">
     <div className="grid grid-cols-2 gap-6">
       {/* Ma situation fiscale */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
@@ -1094,6 +1318,14 @@ function TaxesTab() {
           </div>
         </div>
       </div>
+    </div>
+    {/* Historique des prélèvements PAS + CFE sur l'année sélectionnée */}
+    <TransactionsList
+      title="Historique des impôts"
+      description={`Prélèvements à la source, régularisations et CFE débités en ${year}.`}
+      year={year}
+      categories={TAXES_CATEGORIES}
+    />
     </div>
   );
 }

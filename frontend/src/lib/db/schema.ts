@@ -53,6 +53,7 @@ export const practitioners = pgTable("practitioners", {
   rppsNumber: varchar("rpps_number", { length: 11 }).unique(),
   bridgeUserUuid: varchar("bridge_user_uuid", { length: 255 }),
   defaultBankAccountId: uuid("default_bank_account_id"),
+  daysPerWeekWorked: integer("days_per_week_worked").notNull().default(5),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -267,6 +268,7 @@ export const practitionerFiscalSituations = pgTable("practitioner_fiscal_situati
   dependentChildren: integer("dependent_children").notNull().default(0),
   isSingleParent: boolean("is_single_parent").notNull().default(false),
   otherIncome: numeric("other_income", { precision: 12, scale: 2 }).notNull().default("0"),
+  declaredIr: numeric("declared_ir", { precision: 12, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [

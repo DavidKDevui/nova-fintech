@@ -50,31 +50,18 @@ export function getFrenchHolidays(year: number): Set<string> {
   return set;
 }
 
-// Count working days in a given month (1-12): excludes Saturdays, Sundays,
-// and French public holidays.
-export function countWorkingDays(year: number, month: number): number {
-  const holidays = getFrenchHolidays(year);
+// Number of working days in a given month, prorated on the praticien's weekly rhythm.
+// `daysPerWeek` is between 1 and 7. Example : 5 j/sem en juin (30 j) → round(30 × 5/7) ≈ 21.
+export function countWorkingDays(year: number, month: number, daysPerWeek: number = 5): number {
+  const dpw = Math.max(1, Math.min(7, daysPerWeek));
   const daysInMonth = new Date(year, month, 0).getDate();
-  let count = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dow = new Date(year, month - 1, d).getDay();
-    if (dow === 0 || dow === 6) continue;
-    if (holidays.has(`${month}-${d}`)) continue;
-    count++;
-  }
-  return count;
+  return Math.round(daysInMonth * dpw / 7);
 }
 
-// Count working days from `fromDay` (inclusive) to end of month.
-export function countRemainingWorkingDays(year: number, month: number, fromDay: number): number {
-  const holidays = getFrenchHolidays(year);
+// Same prorata applied to the remaining days from `fromDay` (inclusive) to end of month.
+export function countRemainingWorkingDays(year: number, month: number, fromDay: number, daysPerWeek: number = 5): number {
+  const dpw = Math.max(1, Math.min(7, daysPerWeek));
   const daysInMonth = new Date(year, month, 0).getDate();
-  let count = 0;
-  for (let d = Math.max(1, fromDay); d <= daysInMonth; d++) {
-    const dow = new Date(year, month - 1, d).getDay();
-    if (dow === 0 || dow === 6) continue;
-    if (holidays.has(`${month}-${d}`)) continue;
-    count++;
-  }
-  return count;
+  const remaining = Math.max(0, daysInMonth - Math.max(1, fromDay) + 1);
+  return Math.round(remaining * dpw / 7);
 }

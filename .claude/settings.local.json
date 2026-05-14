@@ -149,7 +149,12 @@
       "Bash(pnpm typecheck *)",
       "Bash(pnpm lint *)",
       "WebFetch(domain:www.economie.gouv.fr)",
-      "WebFetch(domain:images.unsplash.com)"
+      "WebFetch(domain:images.unsplash.com)",
+      "Bash(git mv *)",
+      "Bash(PGPASSWORD=\"2lfcor2PA0dP51DcKu9COkRoQksrtghv\" psql *)",
+      "Bash(awk '/^\\\\/\\\\/ ── Fiscal History \\\\\\(sous-section de Mes impôts\\\\\\) ──$/{flag=1; next} /^\\\\/\\\\/ ── Summary Tab ──$/{flag=0} !flag' \"src/app/\\(protected\\)/management/client.tsx\")",
+      "Bash(mv \"src/app/\\(protected\\)/management/client.tsx.tmp\" \"src/app/\\(protected\\)/management/client.tsx\")",
+      "PowerShell(psql *)"
     ]
   }
 }
