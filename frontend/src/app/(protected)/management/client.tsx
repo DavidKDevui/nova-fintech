@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useActionState } from "react";
+import { useState, useEffect, useCallback, useMemo, useActionState, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, ReferenceLine, LabelList } from "recharts";
 import { getMonthlyActivityAction, getTransactionKpisAction, type MonthlyActivityMonth } from "@/actions/transaction";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
@@ -1219,12 +1219,55 @@ function SummaryTab() {
     return computeIR({ revenuImposable, parts, partsDeReference, incomeYear: irYear }).impot;
   }, [hp, prevYearCA, prevYearFiscal, irYear]);
 
-  const metrics = [
-    { key: "ca",   title: "Chiffre d'affaires",         year: currentYear, value: annualCA,            prevYear },
-    { key: "ch",   title: "Charges pro.",                year: currentYear, value: annualChargesPro,    prevYear },
-    { key: "cot",  title: "Cotisations sociales",        year: currentYear, value: annualCotisations,   prevYear },
-    { key: "rem",  title: "Rémunération avant impôt",    year: currentYear, value: annualRemAvantImpot, prevYear },
-    { key: "ir",   title: "Impôt sur le revenu",         year: irYear,      value: irPrev,              prevYear: irPrevYear },
+  const metrics: {
+    key: string;
+    title: string;
+    icon: ReactNode;
+    year: number;
+    value: number;
+    prevYear: number;
+    prevValue: number | null;
+  }[] = [
+    {
+      key: "ca", title: "Chiffre d'affaires", year: currentYear, value: annualCA, prevYear, prevValue: null,
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+        </svg>
+      ),
+    },
+    {
+      key: "ch", title: "Charges pro.", year: currentYear, value: annualChargesPro, prevYear, prevValue: null,
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>
+        </svg>
+      ),
+    },
+    {
+      key: "cot", title: "Cotisations sociales", year: currentYear, value: annualCotisations, prevYear, prevValue: null,
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      ),
+    },
+    {
+      key: "rem", title: "Rémunération avant impôt", year: currentYear, value: annualRemAvantImpot, prevYear, prevValue: null,
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4z"/>
+        </svg>
+      ),
+    },
+    {
+      key: "ir", title: "Impôt sur le revenu", year: irYear, value: irPrev, prevYear: irPrevYear, prevValue: null,
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>
+        </svg>
+      ),
+    },
   ];
 
   const chartData = [
@@ -1275,7 +1318,7 @@ function SummaryTab() {
                   <LabelList
                     dataKey="value"
                     position="top"
-                    formatter={(value: number | string) => {
+                    formatter={(value) => {
                       const num = typeof value === "number" ? value : Number(value ?? 0);
                       return formatSigned(num);
                     }}
@@ -1314,24 +1357,40 @@ function SummaryTab() {
           <div className="h-96 bg-gray-100 rounded animate-pulse" />
         ) : (
           <div className="divide-y divide-gray-100">
-            {metrics.map((m, idx) => (
-              <div key={m.key} className={`${idx === 0 ? "pb-4" : idx === metrics.length - 1 ? "pt-4" : "py-4"}`}>
-                <p className="text-sm font-semibold text-gray-900 mb-3">{m.title}</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="flex items-baseline gap-1.5">
-                      <p className="text-xs text-gray-400">{m.year}</p>
-                      <p className="text-[10px] text-gray-400 italic">Prévision</p>
-                    </div>
-                    <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(m.value)}</p>
+            {metrics.map((m, idx) => {
+              const scale = Math.max(m.value, m.prevValue ?? 0);
+              const pctN = scale > 0 ? Math.min(100, (m.value / scale) * 100) : 0;
+              const pctNm1 = scale > 0 && m.prevValue != null ? Math.min(100, (m.prevValue / scale) * 100) : 0;
+              return (
+                <div key={m.key} className={`flex items-center gap-4 ${idx === 0 ? "pb-4" : idx === metrics.length - 1 ? "pt-4" : "py-4"}`}>
+                  {/* Icon */}
+                  <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+                    {m.icon}
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-400">{m.prevYear}</p>
-                    <p className="text-lg font-bold text-gray-300 mt-0.5">—</p>
+                  {/* Title */}
+                  <p className="text-sm font-medium text-gray-900 flex-1 min-w-0">{m.title}</p>
+                  {/* Years + bars stacked */}
+                  <div className="flex flex-col gap-1.5 w-[55%] shrink-0">
+                    {/* Year N */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-medium text-gray-500 w-10 shrink-0">{m.year}</span>
+                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-brand-600 rounded-full transition-all" style={{ width: `${pctN}%` }} />
+                      </div>
+                      <span className="text-[11px] font-semibold text-gray-900 w-20 text-right shrink-0">{formatCurrency(m.value)}</span>
+                    </div>
+                    {/* Year N-1 */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-medium text-gray-400 w-10 shrink-0">{m.prevYear}</span>
+                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-gray-300 rounded-full transition-all" style={{ width: `${pctNm1}%` }} />
+                      </div>
+                      <span className="text-[11px] font-semibold text-gray-300 w-20 text-right shrink-0">{m.prevValue != null ? formatCurrency(m.prevValue) : "—"}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
