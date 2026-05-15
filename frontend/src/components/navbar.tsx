@@ -86,15 +86,6 @@ const navItems = [
       <circle cx="15" cy="10" r="1.2" fill="currentColor" opacity="0.5" />
     </svg>,
   },
-  {
-    href: "/help",
-    label: "Aide",
-    icon: <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.4" />
-      <path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.2" />
-      <circle cx="12" cy="16" r="1" fill="currentColor" opacity="0.2" />
-    </svg>,
-  },
 ];
 
 const adminItems = [
@@ -267,6 +258,16 @@ export function Navbar() {
                   Mon profil
                 </Link>
               )}
+              {!isAdmin && (
+                <Link
+                  href="/help"
+                  onClick={() => setShowMenu(false)}
+                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2.5"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/><circle cx="12" cy="16" r="0.5" fill="currentColor"/></svg>
+                  Aide
+                </Link>
+              )}
               <button
                 onClick={() => { setShowMenu(false); setShowLogout(true); }}
                 className="w-full px-4 py-2.5 text-left text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2.5"
@@ -322,6 +323,16 @@ export function Navbar() {
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 Mon profil
+              </Link>
+            )}
+            {!isAdmin && (
+              <Link
+                href="/help"
+                onClick={() => setMobileOpen(false)}
+                className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/><circle cx="12" cy="16" r="0.5" fill="currentColor"/></svg>
+                Aide
               </Link>
             )}
             <button

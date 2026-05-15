@@ -154,7 +154,13 @@
       "Bash(PGPASSWORD=\"2lfcor2PA0dP51DcKu9COkRoQksrtghv\" psql *)",
       "Bash(awk '/^\\\\/\\\\/ ── Fiscal History \\\\\\(sous-section de Mes impôts\\\\\\) ──$/{flag=1; next} /^\\\\/\\\\/ ── Summary Tab ──$/{flag=0} !flag' \"src/app/\\(protected\\)/management/client.tsx\")",
       "Bash(mv \"src/app/\\(protected\\)/management/client.tsx.tmp\" \"src/app/\\(protected\\)/management/client.tsx\")",
-      "PowerShell(psql *)"
+      "PowerShell(psql *)",
+      "Bash(awk 'NR==820 {print; in_dead=1; next} NR<925 && in_dead {next} NR==925 && in_dead {in_dead=0; next} {print}' \"src/app/\\(protected\\)/management/client.tsx\")",
+      "Bash(sed -n '815,835p' \"src/app/\\(protected\\)/management/client.tsx\")",
+      "Bash(node query-cossou.mjs)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 100)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(node -e \"const c=require\\('crypto'\\);const pw=\\(\\)=>{const a='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';let s='';const b=c.randomBytes\\(32\\);for\\(let i=0;i<32;i++\\)s+=a[b[i]%a.length];return s};const un=\\(\\)=>{const a='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';let s='';const b=c.randomBytes\\(32\\);for\\(let i=0;i<32;i++\\)s+=a[b[i]%a.length];return s};console.log\\('STAGING_USER='+un\\(\\)\\);console.log\\('STAGING_PASS='+pw\\(\\)\\);console.log\\('PROD_USER='+un\\(\\)\\);console.log\\('PROD_PASS='+pw\\(\\)\\)\")"
     ]
   }
 }

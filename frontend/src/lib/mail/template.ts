@@ -43,6 +43,18 @@ interface SpacerBlock {
   size?: "sm" | "md" | "lg";
 }
 
+interface StatBlock {
+  type: "stat";
+  label: string;
+  value: string;
+  sublabel?: string;
+}
+
+interface SectionTitleBlock {
+  type: "sectionTitle";
+  content: string;
+}
+
 export type Block =
   | TitleBlock
   | SubtitleBlock
@@ -51,7 +63,9 @@ export type Block =
   | DividerBlock
   | InfoBlock
   | ListBlock
-  | SpacerBlock;
+  | SpacerBlock
+  | StatBlock
+  | SectionTitleBlock;
 
 // ── Design tokens ──
 
@@ -136,6 +150,18 @@ function renderBlock(block: Block): string {
 
     case "spacer":
       return `<div style="height:${SPACER_PX[block.size ?? "md"]}px"></div>`;
+
+    case "stat":
+      return `<table cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 12px"><tr>
+        <td style="background:${BRAND.orange50};border-radius:8px;padding:14px 16px">
+          <p style="color:${BRAND.slate500};font-family:${BRAND.font};font-size:12px;font-weight:500;margin:0 0 4px;text-transform:uppercase;letter-spacing:0.04em">${block.label}</p>
+          <p style="color:${BRAND.slate900};font-family:${BRAND.font};font-size:22px;font-weight:700;margin:0;letter-spacing:-0.02em">${block.value}</p>
+          ${block.sublabel ? `<p style="color:${BRAND.slate500};font-family:${BRAND.font};font-size:12px;margin:4px 0 0">${block.sublabel}</p>` : ""}
+        </td>
+      </tr></table>`;
+
+    case "sectionTitle":
+      return `<h2 style="color:${BRAND.slate900};font-family:${BRAND.font};font-size:13px;font-weight:600;margin:24px 0 12px;text-transform:uppercase;letter-spacing:0.06em">${block.content}</h2>`;
   }
 }
 

@@ -63,9 +63,6 @@ export async function sendTreasuryAlert(to: string, data: {
   currentBalance: string;
   threshold: string;
 }) {
-  const fmtCurrency = (v: string) =>
-    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number(v));
-
   await sendMail(to, "Actidec - Alerte trésorerie", [
     { type: "title", content: "Alerte trésorerie" },
     { type: "text", content: `Le solde de votre compte « ${data.accountName} » est passé sous votre seuil d'alerte.` },
@@ -77,4 +74,159 @@ export async function sendTreasuryAlert(to: string, data: {
     { type: "divider" },
     { type: "text", content: "Vous recevez cet email car vous avez configuré une alerte de trésorerie sur Actidec. Vous ne serez pas notifié à nouveau avant 7 jours.", muted: true },
   ]);
+}
+
+function fmtCurrency(v: number | string): string {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(v));
+}
+
+function fmtVariation(current: number, previous: number): string | undefined {
+  if (previous === 0) return undefined;
+  const pct = ((current - previous) / previous) * 100;
+  if (!Number.isFinite(pct)) return undefined;
+  const sign = pct >= 0 ? "+" : "";
+  const arrow = pct >= 0 ? "↑" : "↓";
+  return `${arrow} ${sign}${pct.toFixed(0)}% vs période précédente`;
+}
+
+export type MonthlyRecapData = {
+  firstName: string;
+  periodLabel: string;
+  isQuarterly: boolean;
+  ca?: number;
+  caPrev?: number;
+  totalBalance?: number;
+  cotisationsPaid?: number;
+  professionalExpenses?: number;
+  bordereaux?: { count: number; rejectedCount: number; totalAmount: number };
+  underThresholdAccounts?: string[];
+  staleAccountsCount?: number;
+};
+
+export async function sendMonthlyRecap(to: string, data: MonthlyRecapData) {
+  const kind = data.isQuarterly ? "trimestriel" : "mensuel";
+  const blocks: Block[] = [
+    { type: "title", content: `Récap ${kind} — ${data.periodLabel}` },
+    { type: "subtitle", content: `Bonjour ${data.firstName}` },
+    { type: "text", content: `Voici la synthèse de votre activité ${data.isQuarterly ? "trimestrielle" : "mensuelle"}.` },
+  ];
+
+  // ── Bloc activité ──
+  const activityStats: Block[] = [];
+  if (data.ca !== undefined) {
+    const variation = data.caPrev !== undefined ? fmtVariation(data.ca, data.caPrev) : undefined;
+    activityStats.push({
+      type: "stat",
+      label: "Chiffre d'affaires",
+      value: fmtCurrency(data.ca),
+      sublabel: variation,
+    });
+  }
+  if (data.totalBalance !== undefined) {
+    activityStats.push({
+      type: "stat",
+      label: "Solde des comptes",
+      value: fmtCurrency(data.totalBalance),
+    });
+  }
+  if (activityStats.length > 0) {
+    blocks.push({ type: "sectionTitle", content: "Activité" }, ...activityStats);
+  }
+
+  // ── Bloc charges ──
+  const chargeStats: Block[] = [];
+  if (data.cotisationsPaid !== undefined && data.cotisationsPaid > 0) {
+    chargeStats.push({
+      type: "stat",
+      label: "Cotisations payées",
+      value: fmtCurrency(data.cotisationsPaid),
+      sublabel: "URSSAF + CARPIMKO",
+    });
+  }
+  if (data.professionalExpenses !== undefined && data.professionalExpenses > 0) {
+    chargeStats.push({
+      type: "stat",
+      label: "Frais professionnels",
+      value: fmtCurrency(data.professionalExpenses),
+    });
+  }
+  if (chargeStats.length > 0) {
+    blocks.push({ type: "sectionTitle", content: "Charges" }, ...chargeStats);
+  }
+
+  // ── Bordereaux ──
+  if (data.bordereaux && data.bordereaux.count > 0) {
+    blocks.push({ type: "sectionTitle", content: "Bordereaux" });
+    const items = [
+      `${data.bordereaux.count} passage${data.bordereaux.count > 1 ? "s" : ""} encaissé${data.bordereaux.count > 1 ? "s" : ""} — ${fmtCurrency(data.bordereaux.totalAmount)}`,
+    ];
+    if (data.bordereaux.rejectedCount > 0) {
+      items.push(`${data.bordereaux.rejectedCount} passage${data.bordereaux.rejectedCount > 1 ? "s" : ""} rejeté${data.bordereaux.rejectedCount > 1 ? "s" : ""} à traiter`);
+    }
+    blocks.push({ type: "list", items });
+  }
+
+  // ── Alertes ──
+  if (data.underThresholdAccounts && data.underThresholdAccounts.length > 0) {
+    blocks.push(
+      { type: "sectionTitle", content: "À surveiller" },
+      {
+        type: "info",
+        content: `Compte${data.underThresholdAccounts.length > 1 ? "s" : ""} sous seuil d'alerte : ${data.underThresholdAccounts.join(", ")}.`,
+      },
+    );
+  }
+
+  // ── Comptes pas à jour ──
+  if (data.staleAccountsCount && data.staleAccountsCount > 0) {
+    blocks.push({
+      type: "info",
+      content: `${data.staleAccountsCount} compte${data.staleAccountsCount > 1 ? "s" : ""} bancaire${data.staleAccountsCount > 1 ? "s" : ""} non synchronisé${data.staleAccountsCount > 1 ? "s" : ""} depuis plus de 15 jours. Pensez à reconnecter votre banque.`,
+    });
+  }
+
+  blocks.push(
+    { type: "divider" },
+    { type: "button", label: "Voir le détail", url: `${APP_URL}/dashboard`, icon: "arrow-right" },
+    { type: "text", content: "Vous pouvez modifier la fréquence ou désactiver ces récapitulatifs depuis votre profil.", muted: true },
+  );
+
+  await sendMail(to, `Actidec — Récap ${kind} ${data.periodLabel}`, blocks);
+}
+
+export type DeadlineEvent = {
+  dayLabel: string; // "Mardi 19 mai"
+  label: string;    // "URSSAF", "CARPIMKO", "Date limite déclaration 2035", …
+};
+
+export type DeadlinesReminderData = {
+  firstName: string;
+  periodLabel: string; // "Du 18 mai au 1er juin 2026"
+  weekGroups: Array<{
+    weekLabel: string; // "Semaine du 18 mai"
+    events: DeadlineEvent[];
+  }>;
+};
+
+export async function sendDeadlinesReminder(to: string, data: DeadlinesReminderData) {
+  const blocks: Block[] = [
+    { type: "title", content: "Vos échéances à venir" },
+    { type: "subtitle", content: data.periodLabel },
+    { type: "text", content: `Bonjour ${data.firstName}, voici les échéances prévues sur les 2 prochaines semaines.` },
+  ];
+
+  for (const group of data.weekGroups) {
+    blocks.push(
+      { type: "sectionTitle", content: group.weekLabel },
+      { type: "list", items: group.events.map((e) => `${e.dayLabel} — ${e.label}`) },
+    );
+  }
+
+  blocks.push(
+    { type: "divider" },
+    { type: "button", label: "Voir mon calendrier", url: `${APP_URL}/deadlines`, icon: "arrow-right" },
+    { type: "text", content: "Vous pouvez désactiver ces rappels depuis votre profil.", muted: true },
+  );
+
+  await sendMail(to, "Actidec — Vos échéances à venir", blocks);
 }

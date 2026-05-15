@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { useData } from "@/providers/data-provider";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
@@ -15,6 +15,8 @@ import {
   type PaymentPreferences,
   DEFAULT_PREFERENCES,
 } from "@/lib/data/fiscal-calendar";
+import { downloadCSV, downloadPDF } from "@/lib/export";
+import { ExportButtons } from "@/components/export-buttons";
 
 const DAY_NAMES = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -129,6 +131,43 @@ export function DeadlinesClient() {
 
   const selectedDayEvents = selectedDay ? (eventsByDay.get(selectedDay) || []) : [];
 
+  // Construit la liste plate des échéances à exporter (filtre actif appliqué).
+  const exportRows = useMemo(() => {
+    const yearNow = new Date().getFullYear();
+    const headers = ["Date", "Type", "Libellé", "Montant estimé"];
+    const rows = upcoming.map((evt) => {
+      const dateStr = `${String(evt.day).padStart(2, "0")}/${String(evt.month + 1).padStart(2, "0")}/${yearNow}`;
+      return [
+        dateStr,
+        EVENT_LABEL[evt.type] ?? evt.type,
+        evt.label,
+        evt.estimatedAmount && evt.estimatedAmount > 0 ? Math.round(evt.estimatedAmount) : "",
+      ];
+    });
+    return { headers, rows };
+  }, [upcoming]);
+
+  const handleExportCsv = useCallback(() => {
+    const filterSuffix = filter !== "all" ? `_${filter}` : "";
+    downloadCSV(`echeances${filterSuffix}`, exportRows.headers, exportRows.rows);
+  }, [exportRows, filter]);
+
+  const handleExportPdf = useCallback(() => {
+    const rowsFormatted = exportRows.rows.map((r) =>
+      r.map((cell, i) => (i === 3 && typeof cell === "number" ? formatCurrency(cell) : cell)),
+    );
+    const filterLabel = FILTERS.find((f) => f.key === filter)?.label ?? "Tout";
+    const totalEstime = upcoming.reduce((s, e) => s + (e.estimatedAmount ?? 0), 0);
+    const filterSuffix = filter !== "all" ? `_${filter}` : "";
+    downloadPDF(`echeances${filterSuffix}`, "Mes prochaines échéances fiscales", exportRows.headers, rowsFormatted, {
+      subtitle: `Filtre : ${filterLabel} — 30 prochains jours`,
+      summary: [
+        { label: "Nombre d'échéances", value: String(upcoming.length) },
+        { label: "Total estimé", value: totalEstime > 0 ? `~${formatCurrency(Math.round(totalEstime))}` : "—" },
+      ],
+    });
+  }, [exportRows, filter, upcoming]);
+
   return (
     <div className="space-y-6">
 
@@ -203,9 +242,16 @@ export function DeadlinesClient() {
 
       {/* Upcoming list */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden flex flex-col lg:max-h-[540px]">
-        <div className="px-5 py-4 border-b border-gray-100 shrink-0">
-          <h2 className="text-sm font-bold text-gray-900">Prochaines échéances</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{upcoming.length} échéance{upcoming.length > 1 ? "s" : ""} dans les 30 prochains jours</p>
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="text-sm font-bold text-gray-900">Prochaines échéances</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{upcoming.length} échéance{upcoming.length > 1 ? "s" : ""} dans les 30 prochains jours</p>
+          </div>
+          <ExportButtons
+            onCsv={handleExportCsv}
+            onPdf={handleExportPdf}
+            disabled={upcoming.length === 0}
+          />
         </div>
         {upcoming.length === 0 ? (
           <p className="px-5 py-8 text-sm text-gray-400 text-center">Aucune échéance à venir pour ce filtre.</p>

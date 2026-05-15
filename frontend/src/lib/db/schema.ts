@@ -11,6 +11,8 @@ export const carpimkoFrequencyEnum = pgEnum("carpimko_frequency", ["monthly", "s
 export const carpimkoPayDayEnum = pgEnum("carpimko_pay_day", ["5", "10", "15", "20", "25"]);
 export const retrocessionTypeEnum = pgEnum("retrocession_type", ["percentage", "fixed"]);
 
+export const recapFrequencyEnum = pgEnum("recap_frequency", ["none", "monthly", "quarterly"]);
+
 export const verificationTypeEnum = pgEnum("verification_type", [
   "email_verification",
   "password_reset",
@@ -54,6 +56,8 @@ export const practitioners = pgTable("practitioners", {
   bridgeUserUuid: varchar("bridge_user_uuid", { length: 255 }),
   defaultBankAccountId: uuid("default_bank_account_id"),
   daysPerWeekWorked: integer("days_per_week_worked").notNull().default(5),
+  recapFrequency: recapFrequencyEnum("recap_frequency").notNull().default("monthly"),
+  deadlinesReminderEnabled: boolean("deadlines_reminder_enabled").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

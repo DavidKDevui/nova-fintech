@@ -61,3 +61,27 @@ export async function updateProfileAction(_prevState: unknown, formData: FormDat
     return { error: message };
   }
 }
+
+export async function updateNotificationsAction(_prevState: unknown, formData: FormData) {
+  const session = await getSession();
+  if (!session || session.accountType !== "practitioner") {
+    return { error: "Non autorisé" };
+  }
+
+  const raw = formData.get("recapFrequency") as string | null;
+  const recapFrequency: "none" | "monthly" | "quarterly" =
+    raw === "none" || raw === "quarterly" || raw === "monthly" ? raw : "monthly";
+
+  const deadlinesReminderEnabled = formData.get("deadlinesReminderEnabled") === "on";
+
+  try {
+    await db
+      .update(practitioners)
+      .set({ recapFrequency, deadlinesReminderEnabled, updatedAt: new Date() })
+      .where(eq(practitioners.userId, session.id));
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Erreur lors de la mise à jour";
+    return { error: message };
+  }
+}

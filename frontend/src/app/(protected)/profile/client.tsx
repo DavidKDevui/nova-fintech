@@ -3,7 +3,7 @@
 import { useState, useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePractitioner } from "@/providers/practitioner-provider";
-import { updateProfileAction } from "@/actions/profile";
+import { updateProfileAction, updateNotificationsAction } from "@/actions/profile";
 import { changePasswordAction, deleteAccountAction, logoutAction } from "@/actions/auth";
 import { Modal } from "@/components/modal";
 
@@ -439,7 +439,11 @@ export function ProfileClient() {
       {/* Tab: Compte */}
       {tab === "account" && (
         <div className="space-y-6">
-          <ChangePasswordForm />
+          <NotificationsForm />
+
+          <div className="border-t border-gray-200 pt-6">
+            <ChangePasswordForm />
+          </div>
 
           <div className="border-t border-gray-200 pt-6">
             <h3 className="text-sm font-medium text-gray-900 mb-1">Déconnexion</h3>
@@ -526,6 +530,89 @@ export function ProfileClient() {
 }
 
 // ── Sub-components ──
+
+const RECAP_FREQUENCIES = [
+  { value: "monthly", label: "Mensuel" },
+  { value: "quarterly", label: "Trimestriel" },
+  { value: "none", label: "Désactivé" },
+] as const;
+
+function NotificationsForm() {
+  const hp = usePractitioner();
+  const router = useRouter();
+  const [recapFrequency, setRecapFrequency] = useState<string>(hp?.recapFrequency ?? "monthly");
+  const [deadlinesReminderEnabled, setDeadlinesReminderEnabled] = useState<boolean>(hp?.deadlinesReminderEnabled ?? true);
+  const [state, action, pending] = useActionState(updateNotificationsAction, null);
+
+  const hasChanges =
+    (hp?.recapFrequency ?? "monthly") !== recapFrequency ||
+    (hp?.deadlinesReminderEnabled ?? true) !== deadlinesReminderEnabled;
+
+  useEffect(() => {
+    if (state?.success) {
+      router.refresh();
+    }
+  }, [state?.success, router]);
+
+  return (
+    <div>
+      <h3 className="text-sm font-medium text-gray-900 mb-1">Notifications</h3>
+      <p className="text-sm text-gray-500 mb-4">
+        Choisissez les emails que vous souhaitez recevoir.
+      </p>
+      <form action={action} className="space-y-4 max-w-sm">
+        <div>
+          <label className="block text-sm text-gray-500 mb-1.5">Récapitulatif d&apos;activité</label>
+          <select
+            name="recapFrequency"
+            value={recapFrequency}
+            onChange={(e) => setRecapFrequency(e.target.value)}
+            className={INPUT_CLASS + " appearance-none cursor-pointer"}
+          >
+            {RECAP_FREQUENCIES.map((f) => (
+              <option key={f.value} value={f.value}>{f.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={deadlinesReminderEnabled}
+              onClick={() => setDeadlinesReminderEnabled((v) => !v)}
+              className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${deadlinesReminderEnabled ? "bg-brand-600" : "bg-gray-200"}`}
+            >
+              <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${deadlinesReminderEnabled ? "translate-x-4" : "translate-x-0"}`} />
+            </button>
+            <span className="text-sm text-gray-500">Rappel hebdomadaire des échéances à venir</span>
+          </label>
+          <input type="hidden" name="deadlinesReminderEnabled" value={deadlinesReminderEnabled ? "on" : "off"} />
+          <p className="mt-1.5 text-xs text-gray-400">
+            Email envoyé chaque lundi listant les échéances des 2 prochaines semaines.
+          </p>
+        </div>
+
+        {state?.error && (
+          <p className="bg-red-50 p-3 rounded-md text-sm text-red-600">{state.error}</p>
+        )}
+        {state?.success && (
+          <p className="bg-green-50 p-3 rounded-md text-sm text-green-600">Préférences mises à jour.</p>
+        )}
+
+        <button
+          type="submit"
+          disabled={pending || !hasChanges}
+          className="flex items-center gap-2 bg-gray-900 px-5 py-3 rounded-md text-sm font-medium text-white transition-all hover:bg-black active:scale-[0.98] disabled:bg-gray-300 disabled:opacity-60 disabled:hover:bg-gray-300 disabled:active:scale-100 disabled:cursor-not-allowed"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          {pending ? "Enregistrement..." : "Enregistrer"}
+        </button>
+      </form>
+    </div>
+  );
+}
 
 const PASSWORD_INPUT_CLASS = "w-full border border-gray-200 bg-transparent px-3 py-2 rounded-md text-[0.9rem] transition-all placeholder:text-gray-400 hover:border-gray-400 focus:border-gray-900 focus:outline-none";
 

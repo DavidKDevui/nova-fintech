@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useActionState, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useActionState, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, ReferenceLine, LabelList } from "recharts";
 import { getMonthlyActivityAction, getTransactionKpisAction, getCategoryTransactionsAction, type MonthlyActivityMonth, type CategoryTransaction } from "@/actions/transaction";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
@@ -11,6 +11,8 @@ import { usePractitioner } from "@/providers/practitioner-provider";
 import { buildCalendar, type PaymentPreferences, DEFAULT_PREFERENCES } from "@/lib/data/fiscal-calendar";
 import { countWorkingDays, countRemainingWorkingDays } from "@/lib/data/fr-holidays";
 import { computeIR, computeParts, getBareme } from "@/lib/data/fr-tax";
+import { downloadCSV, downloadPDF, getChartSvg } from "@/lib/export";
+import { ExportButtons } from "@/components/export-buttons";
 
 const TABS = [
   { key: "activity", label: "Mon activité" },
@@ -108,6 +110,54 @@ function ActivityTab() {
   }, [year, fetchData]);
 
   const daysPerWeek = hp?.daysPerWeekWorked ?? 5;
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  // Tableau des en-têtes et lignes pour l'export du détail mensuel.
+  const exportData = useMemo(() => {
+    const headers = ["Mois", "CA encaissé", "Total dépenses", "URSSAF", "CARPIMKO", "Charges pro", "Rétrocession", "Madelin", "Impôts versés", "Rémunération versée", "Rém. avant impôt", "Vacances (jours)"];
+    const rows = chartData.map((m, i) => {
+      const totalDepenses = m.cotisations + m.autresDepenses;
+      const remAvantImpot = m.revenus - m.urssaf - m.carpimko - m.chargesPro - m.retrocession - m.madelin;
+      return [
+        m.name,
+        Math.round(m.revenus),
+        Math.round(totalDepenses),
+        Math.round(m.urssaf),
+        Math.round(m.carpimko),
+        Math.round(m.chargesPro),
+        Math.round(m.retrocession),
+        Math.round(m.madelin),
+        Math.round(m.impots),
+        Math.round(m.remuneration),
+        Math.round(remAvantImpot),
+        vacations[i] ?? 0,
+      ];
+    });
+    return { headers, rows };
+  }, [chartData, vacations]);
+
+  const handleExportCsv = useCallback(() => {
+    downloadCSV(`activite_${year}`, exportData.headers, exportData.rows);
+  }, [exportData, year]);
+
+  const handleExportPdf = useCallback(() => {
+    const totalCA = chartData.reduce((s, m) => s + m.revenus, 0);
+    const totalDepenses = chartData.reduce((s, m) => s + m.cotisations + m.autresDepenses, 0);
+    const totalRem = chartData.reduce((s, m) => s + (m.revenus - m.urssaf - m.carpimko - m.chargesPro - m.retrocession - m.madelin), 0);
+    // Formate les colonnes monétaires en € pour le PDF (le CSV garde des nombres bruts).
+    const rowsForPdf = exportData.rows.map((r) =>
+      r.map((cell, i) => (i > 0 && i < r.length - 1 && typeof cell === "number" ? formatCurrency(cell) : cell)),
+    );
+    downloadPDF(`activite_${year}`, `Mon activité ${year}`, exportData.headers, rowsForPdf, {
+      subtitle: `Détail mensuel ${year}`,
+      chartSvg: getChartSvg(chartRef.current) ?? undefined,
+      summary: [
+        { label: "Chiffre d'affaires", value: formatCurrency(Math.round(totalCA)) },
+        { label: "Dépenses", value: formatCurrency(Math.round(totalDepenses)) },
+        { label: "Rém. avant impôt", value: formatCurrency(Math.round(totalRem)) },
+      ],
+    });
+  }, [exportData, chartData, year]);
 
   // Daily rate computed from past months with CA > 0, neutralized of saved vacation days.
   // Used to simulate CA for current/future months in the selected year.
@@ -135,7 +185,12 @@ function ActivityTab() {
     <div>
       {/* Chart + monthly breakdown (aligned) */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
-        <div className="flex items-center justify-end px-5 pt-4 pb-3">
+        <div className="flex items-center justify-end gap-2 px-5 pt-4 pb-3">
+          <ExportButtons
+            onCsv={handleExportCsv}
+            onPdf={handleExportPdf}
+            disabled={loading || chartData.length === 0}
+          />
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -227,7 +282,7 @@ function ActivityTab() {
               )}
             </div>
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0" ref={chartRef}>
             {loading ? (
               <div className="h-60 bg-gray-100 rounded animate-pulse" />
             ) : (
@@ -526,6 +581,15 @@ function ContributionsTab() {
     }).catch(() => setTableLoading(false));
   }, [year]);
 
+  // Totals réels (déjà versés) pour l'année sélectionnée
+  const { totalUrssafReel, totalCarpimkoReel } = useMemo(() => {
+    const u = monthlyData.reduce((s, m) => s + m.urssaf, 0);
+    const c = monthlyData.reduce((s, m) => s + m.carpimko, 0);
+    return { totalUrssafReel: u, totalCarpimkoReel: c };
+  }, [monthlyData]);
+
+  const isPastYear = year < currentYear;
+
   // Estimated amounts per month based on calendar events
   const estimatedMonths = useMemo(() => {
     if (!estimate) return Array(12).fill({ urssaf: 0, carpimko: 0 });
@@ -540,8 +604,64 @@ function ContributionsTab() {
     });
   }, [estimate, calendar]);
 
+  const handleExportCotisationsCsv = useCallback(() => {
+    const headers = ["Mois", "URSSAF", "CARPIMKO", "Total", "Type"];
+    const rows = MONTH_LABELS.map((m, i) => {
+      const reelUrssaf = monthlyData[i]?.urssaf ?? 0;
+      const reelCarpimko = monthlyData[i]?.carpimko ?? 0;
+      const canEstimate = year > currentYear || (year === currentYear && i >= new Date().getMonth());
+      const estUrssaf = canEstimate ? (estimatedMonths[i]?.urssaf ?? 0) : 0;
+      const estCarpimko = canEstimate ? (estimatedMonths[i]?.carpimko ?? 0) : 0;
+      const urssaf = reelUrssaf > 0 ? reelUrssaf : estUrssaf;
+      const carpimko = reelCarpimko > 0 ? reelCarpimko : estCarpimko;
+      const isReel = reelUrssaf > 0 || reelCarpimko > 0;
+      return [m, Math.round(urssaf), Math.round(carpimko), Math.round(urssaf + carpimko), isReel ? "Réel" : (urssaf + carpimko > 0 ? "Estimé" : "—")];
+    });
+    downloadCSV(`cotisations_${year}`, headers, rows);
+  }, [monthlyData, estimatedMonths, year, currentYear]);
+
+  const handleExportCotisationsPdf = useCallback(() => {
+    const headers = ["Mois", "URSSAF", "CARPIMKO", "Total", "Type"];
+    const rows = MONTH_LABELS.map((m, i) => {
+      const reelUrssaf = monthlyData[i]?.urssaf ?? 0;
+      const reelCarpimko = monthlyData[i]?.carpimko ?? 0;
+      const canEstimate = year > currentYear || (year === currentYear && i >= new Date().getMonth());
+      const estUrssaf = canEstimate ? (estimatedMonths[i]?.urssaf ?? 0) : 0;
+      const estCarpimko = canEstimate ? (estimatedMonths[i]?.carpimko ?? 0) : 0;
+      const urssaf = reelUrssaf > 0 ? reelUrssaf : estUrssaf;
+      const carpimko = reelCarpimko > 0 ? reelCarpimko : estCarpimko;
+      const isReel = reelUrssaf > 0 || reelCarpimko > 0;
+      return [
+        m,
+        urssaf > 0 ? formatCurrency(Math.round(urssaf)) : "—",
+        carpimko > 0 ? formatCurrency(Math.round(carpimko)) : "—",
+        urssaf + carpimko > 0 ? formatCurrency(Math.round(urssaf + carpimko)) : "—",
+        isReel ? "Réel" : (urssaf + carpimko > 0 ? "Estimé" : "—"),
+      ];
+    });
+    const totalUrssaf = totalUrssafReel || (estimate?.urssafAnnuel ?? 0);
+    const totalCarpimko = totalCarpimkoReel || (estimate?.carpimkoAnnuel ?? 0);
+    downloadPDF(`cotisations_${year}`, `Mes cotisations sociales ${year}`, headers, rows, {
+      subtitle: isPastYear ? `Cotisations versées en ${year}` : `Estimation des cotisations ${year}`,
+      summary: [
+        { label: "URSSAF", value: `${isPastYear ? "" : "~"}${formatCurrency(Math.round(totalUrssaf))}` },
+        { label: "CARPIMKO", value: `${isPastYear ? "" : "~"}${formatCurrency(Math.round(totalCarpimko))}` },
+        { label: "Total", value: `${isPastYear ? "" : "~"}${formatCurrency(Math.round(totalUrssaf + totalCarpimko))}` },
+      ],
+    });
+  }, [monthlyData, estimatedMonths, year, currentYear, isPastYear, totalUrssafReel, totalCarpimkoReel, estimate]);
+
   return (
     <div className="space-y-6">
+      {/* Sélecteur d'année global du tab — pilote les cartes, le détail mensuel et l'historique */}
+      <div className="flex items-center justify-end gap-2">
+        <ExportButtons
+          onCsv={handleExportCotisationsCsv}
+          onPdf={handleExportCotisationsPdf}
+          disabled={tableLoading || cardsLoading}
+        />
+        <YearSelector year={year} setYear={setYear} maxYear={currentYear} />
+      </div>
       {/* Cards */}
       <div className="grid grid-cols-2 gap-6">
         {/* URSSAF */}
@@ -551,25 +671,39 @@ function ContributionsTab() {
             <img src="/logo-urssaf.svg" alt="URSSAF" className="h-8" />
           </div>
           <div className="flex items-center gap-1.5 mb-1">
-            <p className="text-xs text-gray-400">Montant total estimé des cotisations {currentYear}</p>
-            <InfoTooltip text={`Montant total estimé de vos cotisations Urssaf à payer en ${currentYear}, réduit du remboursement estimé (régularisation négative) au titre de ${currentYear - 1}.`} />
+            <p className="text-xs text-gray-400">
+              {isPastYear ? `Cotisations versées en ${year}` : `Montant total estimé des cotisations ${year}`}
+            </p>
+            <InfoTooltip text={isPastYear
+              ? `Somme des prélèvements Urssaf effectivement débités sur vos comptes en ${year}.`
+              : `Montant total estimé de vos cotisations Urssaf à payer en ${year}, réduit du remboursement estimé (régularisation négative) au titre de ${year - 1}.`}
+            />
           </div>
-          {cardsLoading ? (
+          {(isPastYear ? tableLoading : cardsLoading) ? (
             <div className="h-8 bg-gray-200 rounded w-28 animate-pulse mb-4" />
           ) : (
             <p className="text-2xl font-bold text-gray-900 mb-4">
-              {estimate ? `~${formatCurrency(estimate.urssafAnnuel)}` : "—"}
+              {isPastYear
+                ? (totalUrssafReel > 0 ? formatCurrency(totalUrssafReel) : "—")
+                : (estimate ? `~${formatCurrency(estimate.urssafAnnuel)}` : "—")}
             </p>
           )}
           <div className="flex items-center gap-1.5 mb-1">
-            <p className="text-xs text-gray-400">Montant par échéance</p>
-            <InfoTooltip text={`Estimation d'un excédent de cotisations Urssaf versé en ${currentYear - 1}, qui vous sera remboursé en ${currentYear - 1}.`} />
+            <p className="text-xs text-gray-400">{isPastYear ? "Nombre de prélèvements" : "Montant par échéance"}</p>
+            <InfoTooltip text={isPastYear
+              ? `Nombre de prélèvements Urssaf passés sur vos comptes en ${year}.`
+              : `Estimation du montant prélevé à chaque échéance Urssaf en ${year}.`}
+            />
           </div>
-          {cardsLoading ? (
+          {(isPastYear ? tableLoading : cardsLoading) ? (
             <div className="h-8 bg-gray-200 rounded w-28 animate-pulse" />
           ) : (
             <p className="text-2xl font-bold text-gray-900">
-              {estimate ? `~${formatCurrency(estimate.urssafParEcheance)}` : "—"}
+              {isPastYear
+                ? (monthlyData.filter((m) => m.urssaf > 0).length > 0
+                    ? `${monthlyData.filter((m) => m.urssaf > 0).length} prélèvements`
+                    : "—")
+                : (estimate ? `~${formatCurrency(estimate.urssafParEcheance)}` : "—")}
             </p>
           )}
         </div>
@@ -581,25 +715,39 @@ function ContributionsTab() {
             <img src="/logo-carpimko.png" alt="CARPIMKO" className="h-8" />
           </div>
           <div className="flex items-center gap-1.5 mb-1">
-            <p className="text-xs text-gray-400">Montant total estimé des cotisations {currentYear}</p>
-            <InfoTooltip text={`Montant total estimé de vos cotisations Carpimko à payer en ${currentYear}, intégrant la régularisation estimée au titre de ${currentYear - 1}.`} />
+            <p className="text-xs text-gray-400">
+              {isPastYear ? `Cotisations versées en ${year}` : `Montant total estimé des cotisations ${year}`}
+            </p>
+            <InfoTooltip text={isPastYear
+              ? `Somme des prélèvements Carpimko effectivement débités sur vos comptes en ${year}.`
+              : `Montant total estimé de vos cotisations Carpimko à payer en ${year}, intégrant la régularisation estimée au titre de ${year - 1}.`}
+            />
           </div>
-          {cardsLoading ? (
+          {(isPastYear ? tableLoading : cardsLoading) ? (
             <div className="h-8 bg-gray-200 rounded w-28 animate-pulse mb-4" />
           ) : (
             <p className="text-2xl font-bold text-gray-900 mb-4">
-              {estimate ? `~${formatCurrency(estimate.carpimkoAnnuel)}` : "—"}
+              {isPastYear
+                ? (totalCarpimkoReel > 0 ? formatCurrency(totalCarpimkoReel) : "—")
+                : (estimate ? `~${formatCurrency(estimate.carpimkoAnnuel)}` : "—")}
             </p>
           )}
           <div className="flex items-center gap-1.5 mb-1">
-            <p className="text-xs text-gray-400">Montant par échéance</p>
-            <InfoTooltip text={`Estimation d'un ajustement des cotisations Carpimko de ${currentYear - 1} à payer en ${currentYear}.`} />
+            <p className="text-xs text-gray-400">{isPastYear ? "Nombre de prélèvements" : "Montant par échéance"}</p>
+            <InfoTooltip text={isPastYear
+              ? `Nombre de prélèvements Carpimko passés sur vos comptes en ${year}.`
+              : `Estimation du montant prélevé à chaque échéance Carpimko en ${year}.`}
+            />
           </div>
-          {cardsLoading ? (
+          {(isPastYear ? tableLoading : cardsLoading) ? (
             <div className="h-8 bg-gray-200 rounded w-28 animate-pulse" />
           ) : (
             <p className="text-2xl font-bold text-gray-900">
-              {estimate ? `~${formatCurrency(estimate.carpimkoParEcheance)}` : "—"}
+              {isPastYear
+                ? (monthlyData.filter((m) => m.carpimko > 0).length > 0
+                    ? `${monthlyData.filter((m) => m.carpimko > 0).length} prélèvements`
+                    : "—")
+                : (estimate ? `~${formatCurrency(estimate.carpimkoParEcheance)}` : "—")}
             </p>
           )}
         </div>
@@ -607,26 +755,8 @@ function ContributionsTab() {
 
       {/* Monthly table */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
-        <div className="flex items-center justify-between px-5 pt-4 pb-3">
+        <div className="px-5 pt-4 pb-3">
           <h2 className="text-base font-semibold text-gray-900">Détail mensuel</h2>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setYear((y) => y - 1)}
-              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <span className="text-sm font-semibold text-gray-900 w-12 text-center">{year}</span>
-            <button
-              type="button"
-              onClick={() => setYear((y) => y + 1)}
-              disabled={year >= currentYear}
-              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
         </div>
         {tableLoading ? (
           <div className="px-5 pb-5">
@@ -708,6 +838,7 @@ function ContributionsTab() {
         description={`Prélèvements URSSAF et CARPIMKO réellement débités en ${year}.`}
         year={year}
         categories={CONTRIBUTIONS_CATEGORIES}
+        exportFilename="historique_cotisations"
       />
     </div>
   );
@@ -735,11 +866,14 @@ function TransactionsList({
   description,
   year,
   categories,
+  exportFilename,
 }: {
   title: string;
   description: string;
   year: number;
   categories: string[];
+  /** Préfixe du fichier CSV (ex: "impots", "cotisations"). */
+  exportFilename: string;
 }) {
   const [transactions, setTransactions] = useState<CategoryTransaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -761,6 +895,17 @@ function TransactionsList({
     [transactions],
   );
 
+  const handleExportCsv = useCallback(() => {
+    const headers = ["Date", "Libellé", "Catégorie", "Montant"];
+    const rows = transactions.map((t) => [
+      t.date,
+      t.cleanDescription ?? t.description,
+      CATEGORY_LABELS[t.category] ?? t.category,
+      Math.abs(t.amount),
+    ]);
+    downloadCSV(`${exportFilename}_${year}`, headers, rows);
+  }, [transactions, year, exportFilename]);
+
   return (
     <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
       <div className="flex items-center justify-between px-6 pt-5 pb-3">
@@ -768,12 +913,18 @@ function TransactionsList({
           <h3 className="text-base font-semibold text-gray-900">{title}</h3>
           <p className="text-xs text-gray-400 mt-0.5">{description}</p>
         </div>
-        {!loading && transactions.length > 0 && (
-          <div className="text-right">
-            <p className="text-xs text-gray-400">Total {year}</p>
-            <p className="text-base font-bold text-gray-900">{formatCurrency(total)}</p>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {!loading && transactions.length > 0 && (
+            <div className="text-right">
+              <p className="text-xs text-gray-400">Total {year}</p>
+              <p className="text-base font-bold text-gray-900">{formatCurrency(total)}</p>
+            </div>
+          )}
+          <ExportButtons
+            onCsv={handleExportCsv}
+            disabled={loading || transactions.length === 0}
+          />
+        </div>
       </div>
       {loading ? (
         <div className="px-6 pb-6">
@@ -818,111 +969,6 @@ function TransactionsList({
     </div>
   );
 }
-  const [range, setRange] = useState<number>(5);
-  const [history, setHistory] = useState<FiscalHistoryYear[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const yearFrom = range === 0 ? activityStartYear : Math.max(activityStartYear, currentYear - range + 1);
-  const yearTo = currentYear;
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
-    setLoading(true);
-    getFiscalHistoryAction(yearFrom, yearTo)
-      .then((h) => {
-        setHistory(h);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [yearFrom, yearTo]);
-
-  const rows = useMemo(() => history.map((h) => {
-    const total = h.urssaf + h.carpimko;
-    const tauxEffectif = h.income > 0 ? (total / h.income) * 100 : 0;
-    return { ...h, total, tauxEffectif, isCurrentYear: h.year === currentYear };
-  }), [history, currentYear]);
-
-  return (
-    <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
-      <div className="flex items-center justify-between px-6 pt-5 pb-3">
-        <div>
-          <h3 className="text-base font-semibold text-gray-900">Mon historique cotisations</h3>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Évolution de vos cotisations sociales par année.
-          </p>
-        </div>
-        <select
-          value={range}
-          onChange={(e) => setRange(parseInt(e.target.value))}
-          className="border border-gray-200 bg-transparent px-3 py-1.5 rounded-md text-sm transition-all hover:border-gray-400 focus:border-gray-900 focus:outline-none appearance-none cursor-pointer"
-        >
-          {RANGE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </div>
-
-      {loading ? (
-        <div className="px-6 pb-6">
-          <div className="h-32 bg-gray-100 rounded animate-pulse" />
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="px-6 pb-6 text-sm text-gray-400">Aucune donnée pour la période sélectionnée.</div>
-      ) : (
-        <div className="border-t border-gray-100 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 text-xs font-semibold text-gray-500">
-                <th className="text-left px-6 py-3">Année</th>
-                <th className="text-right px-3 py-3">CA encaissé</th>
-                <th className="text-right px-3 py-3">URSSAF</th>
-                <th className="text-right px-3 py-3">CARPIMKO</th>
-                <th className="text-right px-3 py-3">Total cotisations</th>
-                <th className="text-right px-6 py-3">
-                  <span className="inline-flex items-center gap-1">
-                    Taux effectif
-                    <InfoTooltip text="Total des cotisations versées rapporté au CA encaissé sur l'année. Donne une vision globale de votre charge sociale." />
-                  </span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.year} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-3">
-                    <button
-                      type="button"
-                      onClick={() => onYearSelect(r.year)}
-                      className={`font-medium hover:text-brand-600 transition-colors ${r.isCurrentYear ? "text-gray-500 italic" : "text-gray-900"}`}
-                      title="Voir le détail de cette année"
-                    >
-                      {r.year}{r.isCurrentYear && " (en cours)"}
-                    </button>
-                  </td>
-                  <td className={`px-3 py-3 text-right ${r.income > 0 ? "text-gray-900" : "text-gray-300"}`}>
-                    {r.income > 0 ? formatCurrency(r.income) : "—"}
-                  </td>
-                  <td className={`px-3 py-3 text-right ${r.urssaf > 0 ? "text-gray-700" : "text-gray-300"}`}>
-                    {r.urssaf > 0 ? formatCurrency(r.urssaf) : "—"}
-                  </td>
-                  <td className={`px-3 py-3 text-right ${r.carpimko > 0 ? "text-gray-700" : "text-gray-300"}`}>
-                    {r.carpimko > 0 ? formatCurrency(r.carpimko) : "—"}
-                  </td>
-                  <td className={`px-3 py-3 text-right font-semibold ${r.total > 0 ? "text-gray-900" : "text-gray-300"}`}>
-                    {r.total > 0 ? formatCurrency(r.total) : "—"}
-                  </td>
-                  <td className={`px-6 py-3 text-right ${r.tauxEffectif > 0 ? "text-gray-700" : "text-gray-300"}`}>
-                    {r.tauxEffectif > 0 ? `${r.tauxEffectif.toFixed(1)} %` : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Taxes Tab ──
 
@@ -935,6 +981,7 @@ function TaxesTab() {
   const [enfants, setEnfants] = useState(0);
   const [isSingleParent, setIsSingleParent] = useState(false);
   const [autresRevenus, setAutresRevenus] = useState(0);
+  const [declaredIr, setDeclaredIr] = useState<string>("");
   const [dbLoaded, setDbLoaded] = useState(false);
   const [saveState, saveAction, saving] = useActionState(upsertFiscalSituationAction, null);
 
@@ -956,11 +1003,13 @@ function TaxesTab() {
         setEnfants(res.dependentChildren);
         setIsSingleParent(res.isSingleParent ?? false);
         setAutresRevenus(Number(res.otherIncome));
+        setDeclaredIr(res.declaredIr !== null && res.declaredIr !== undefined ? String(res.declaredIr) : "");
       } else {
         setSituation("celibataire");
         setEnfants(0);
         setIsSingleParent(false);
         setAutresRevenus(0);
+        setDeclaredIr("");
       }
       setDbLoaded(true);
     }).catch(() => {
@@ -1110,33 +1159,50 @@ function TaxesTab() {
   const bareme = useMemo(() => getBareme(year), [year]);
   const currentTranche = bareme[ir.currentTrancheIndex]!;
   const showSingleParent = situation === "celibataire" && enfants >= 1;
-  const activityStartYear = hp?.activityStartDate ? new Date(hp.activityStartDate).getFullYear() : currentYear - 5;
+
+  const handleExportTaxesPdf = useCallback(() => {
+    const situationLabels: Record<string, string> = { celibataire: "Célibataire", marie: "Marié(e)", pacse: "Pacsé(e)" };
+    const headers = ["Caractéristique", "Valeur"];
+    const rows: (string | number)[][] = [
+      ["Situation conjugale", situationLabels[situation] ?? situation],
+      ["Enfants à charge", enfants],
+      ...(isSingleParent ? [["Parent isolé (case T)", "Oui"] as (string | number)[]] : []),
+      ["Autres revenus du foyer", formatCurrency(autresRevenus)],
+      ["Nombre de parts fiscales", parts],
+      [`${hp?.taxRegime === "micro_bnc" ? "BNC après abattement 34 %" : "Bénéfice BNC estimé"}`, `${isProjected ? "~" : ""}${formatCurrency(revenuBNC)}`],
+      ["Revenu imposable du foyer", `${isProjected ? "~" : ""}${formatCurrency(revenuImposable)}`],
+      ["Tranche marginale d'imposition", `${currentTranche.rate} %`],
+      ["Taux moyen d'imposition", `${ir.tauxMoyen} %`],
+      ...(ir.plafonneQf ? [["Quotient familial", "Plafonné"] as (string | number)[]] : []),
+    ];
+    const declaredParsed = declaredIr.trim() !== "" ? parseFloat(declaredIr.replace(",", ".")) : NaN;
+    const summary = [
+      { label: `IR estimé sur ${year}`, value: formatCurrency(ir.impot) },
+      { label: `Régularisation ${year}`, value: `${regularisation >= 0 ? "+" : ""}${formatCurrency(regularisation)}` },
+      { label: "PAS estimé sur l'année", value: formatCurrency(pasAnnuel) },
+      ...(!isNaN(declaredParsed) ? [{ label: "IR réellement déclaré", value: formatCurrency(declaredParsed) }] : []),
+    ];
+    downloadPDF(`imposition_${year}`, `Mon imposition estimée ${year}`, headers, rows, {
+      subtitle: `Estimation basée sur le barème ${year} (loi de finances ${year + 1})`,
+      summary,
+    });
+  }, [situation, enfants, isSingleParent, autresRevenus, parts, hp, isProjected, revenuBNC, revenuImposable, currentTranche, ir, pasAnnuel, regularisation, year, declaredIr]);
 
   return (
     <div className="space-y-6">
+    {/* Sélecteur d'année global du tab — pilote situation, imposition, transactions */}
+    <div className="flex items-center justify-end gap-2">
+      <ExportButtons
+        onPdf={handleExportTaxesPdf}
+        disabled={monthlyLoading || !dbLoaded}
+      />
+      <YearSelector year={year} setYear={setYear} maxYear={currentYear} />
+    </div>
     <div className="grid grid-cols-2 gap-6">
       {/* Ma situation fiscale */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
-        <div className="flex items-center justify-between mb-5">
+        <div className="mb-5">
           <h3 className="text-base font-semibold text-gray-900">Ma situation fiscale</h3>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setYear((y) => y - 1)}
-              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <span className="text-sm font-semibold text-gray-900 w-12 text-center">{year}</span>
-            <button
-              type="button"
-              onClick={() => setYear((y) => y + 1)}
-              disabled={year >= currentYear}
-              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
         </div>
         <form action={saveAction} className="space-y-4">
           <input type="hidden" name="year" value={year} />
@@ -1200,6 +1266,27 @@ function TaxesTab() {
             </div>
             <p className="mt-1 text-xs text-gray-400">Revenus nets imposables du conjoint ou autres activités.</p>
           </div>
+          {year < currentYear && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <label className="block text-sm text-gray-500">IR réel de mon avis d&apos;imposition {year}</label>
+                <InfoTooltip text={`Montant exact de l'impôt sur le revenu figurant sur votre avis d'imposition ${year + 1} (revenus ${year}). Optionnel : permet de comparer à l'estimation de l'app et de détecter d'éventuels crédits/réductions non pris en compte.`} />
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  name="declaredIr"
+                  value={declaredIr}
+                  onChange={(e) => setDeclaredIr(e.target.value)}
+                  placeholder="Optionnel"
+                  className="w-full border border-gray-200 bg-transparent px-3 py-2 pr-8 rounded-md text-sm transition-all hover:border-gray-400 focus:border-gray-900 focus:outline-none"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">€</span>
+              </div>
+              <p className="mt-1 text-xs text-gray-400">À renseigner après réception de votre avis (août {year + 1}).</p>
+            </div>
+          )}
           <div className="pt-2 border-t border-gray-100 space-y-1">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">Nombre de parts fiscales</span>
@@ -1316,6 +1403,31 @@ function TaxesTab() {
               <span className="text-sm font-bold text-gray-900">{currentTranche.rate} %</span>
             </div>
           </div>
+
+          {/* Comparaison estimé vs avis d'imposition réel (uniquement si saisi pour une année passée) */}
+          {year < currentYear && declaredIr.trim() !== "" && (() => {
+            const declared = parseFloat(declaredIr.replace(",", "."));
+            if (isNaN(declared)) return null;
+            const ecart = declared - ir.impot;
+            return (
+              <div className="pt-4 border-t border-gray-100">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <p className="text-sm font-medium text-gray-900">IR réel vs estimation</p>
+                  <InfoTooltip text="Un écart négatif signifie que votre avis d'imposition est inférieur à l'estimation de l'app — probablement à cause de crédits ou réductions (dons, garde d'enfant, etc.) non pris en compte." />
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">IR déclaré</span>
+                  <span className="font-semibold text-gray-900">{formatCurrency(declared)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm mt-1">
+                  <span className="text-gray-500">Écart estimé / réel</span>
+                  <span className={`font-semibold ${ecart >= 0 ? "text-red-500" : "text-green-600"}`}>
+                    {ecart >= 0 ? "+" : ""}{formatCurrency(ecart)}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
@@ -1325,6 +1437,7 @@ function TaxesTab() {
       description={`Prélèvements à la source, régularisations et CFE débités en ${year}.`}
       year={year}
       categories={TAXES_CATEGORIES}
+      exportFilename="historique_impots"
     />
     </div>
   );
@@ -1669,6 +1782,39 @@ function SummaryTab() {
 }
 
 // ── Shared components ──
+
+function YearSelector({
+  year,
+  setYear,
+  maxYear,
+}: {
+  year: number;
+  setYear: (y: number | ((prev: number) => number)) => void;
+  maxYear: number;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => setYear((y) => y - 1)}
+        className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+        aria-label="Année précédente"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span className="text-sm font-semibold text-gray-900 w-12 text-center">{year}</span>
+      <button
+        type="button"
+        onClick={() => setYear((y) => y + 1)}
+        disabled={year >= maxYear}
+        className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Année suivante"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  );
+}
 
 function InfoTooltip({ text }: { text: string }) {
   const [show, setShow] = useState(false);

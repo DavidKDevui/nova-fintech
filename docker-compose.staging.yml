@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: actidec-database-staging
+    restart: unless-stopped
+    networks:
+      - actidec-network-staging
+    environment:
+      POSTGRES_USER: VMC6XF78MCW23L6UNQUGDVBI2M12479E
+      POSTGRES_PASSWORD: lDLfvQnsiCRFrkO90c3qNMxLbxjhtp2e
+      POSTGRES_DB: actidec_staging
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - db_data_staging:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U VMC6XF78MCW23L6UNQUGDVBI2M12479E -d actidec_staging"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  app:
+    image: your-dockerhub-user/nova-fintech-frontend:staging
+    container_name: actidec-app-staging
+    restart: unless-stopped
+    networks:
+      - actidec-network-staging
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://VMC6XF78MCW23L6UNQUGDVBI2M12479E:lDLfvQnsiCRFrkO90c3qNMxLbxjhtp2e@actidec-database-staging:5432/actidec_staging
+      NEXT_PUBLIC_APP_URL: https://staging.actidec.example.com
+      NODE_ENV: production
+    env_file:
+      - ./frontend/.env.staging
+    ports:
+      - "3001:3000"
+
+networks:
+  actidec-network-staging:
+    name: actidec-network-staging
+    driver: bridge
+
+volumes:
+  db_data_staging:
