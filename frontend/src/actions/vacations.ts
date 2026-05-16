@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { practitioners, practitionerVacations } from "@/lib/db/schema";
 
+
 export async function getVacationsAction(year: number): Promise<number[]> {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return Array(12).fill(0);
