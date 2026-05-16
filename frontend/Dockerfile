@@ -55,6 +55,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
+# src/ requis par les scripts admin/cron qui importent depuis @/lib/, @/actions/, etc.
+COPY --from=builder --chown=nextjs:nodejs /app/src ./src
 
 USER nextjs
 
