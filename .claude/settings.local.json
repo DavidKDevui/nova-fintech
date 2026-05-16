@@ -160,7 +160,32 @@
       "Bash(node query-cossou.mjs)",
       "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 100)",
       "Bash(echo \"EXIT=$?\")",
-      "Bash(node -e \"const c=require\\('crypto'\\);const pw=\\(\\)=>{const a='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';let s='';const b=c.randomBytes\\(32\\);for\\(let i=0;i<32;i++\\)s+=a[b[i]%a.length];return s};const un=\\(\\)=>{const a='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';let s='';const b=c.randomBytes\\(32\\);for\\(let i=0;i<32;i++\\)s+=a[b[i]%a.length];return s};console.log\\('STAGING_USER='+un\\(\\)\\);console.log\\('STAGING_PASS='+pw\\(\\)\\);console.log\\('PROD_USER='+un\\(\\)\\);console.log\\('PROD_PASS='+pw\\(\\)\\)\")"
+      "Bash(node -e \"const c=require\\('crypto'\\);const pw=\\(\\)=>{const a='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';let s='';const b=c.randomBytes\\(32\\);for\\(let i=0;i<32;i++\\)s+=a[b[i]%a.length];return s};const un=\\(\\)=>{const a='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';let s='';const b=c.randomBytes\\(32\\);for\\(let i=0;i<32;i++\\)s+=a[b[i]%a.length];return s};console.log\\('STAGING_USER='+un\\(\\)\\);console.log\\('STAGING_PASS='+pw\\(\\)\\);console.log\\('PROD_USER='+un\\(\\)\\);console.log\\('PROD_PASS='+pw\\(\\)\\)\")",
+      "Bash(node -e \"const c=require\\('crypto'\\);const g=\\(\\)=>{const a='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';let s='';const b=c.randomBytes\\(48\\);for\\(let i=0;i<48;i++\\)s+=a[b[i]%a.length];return s};console.log\\('STAGING_JWT='+g\\(\\).slice\\(0,40\\)\\);console.log\\('STAGING_ENC='+g\\(\\).slice\\(0,40\\)\\);console.log\\('PROD_JWT='+g\\(\\).slice\\(0,40\\)\\);console.log\\('PROD_ENC='+g\\(\\).slice\\(0,40\\)\\)\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend\\\\src\" -Directory -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object Name)",
+      "Bash(sed -n '95,100p' .next/dev/types/routes.d.ts)",
+      "Bash(sed -n '285,292p' .next/dev/types/validator.ts)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend\\\\src\\\\app\\\\\\(protected\\)\" -Recurse -Filter \"*.tsx\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "WebFetch(domain:www.service-public.fr)",
+      "WebFetch(domain:www.service-public.gouv.fr)",
+      "Bash(rm -f \"src/app/api/me/export/route.ts\")",
+      "Bash(rmdir \"src/app/api/me/export\")",
+      "Bash(rmdir \"src/app/api/me\")",
+      "Bash(psql --version)",
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(cd C:\\\\Users\\\\utils\\\\Documents\\\\IT Projects\\\\nova-fintech\\\\frontend *)",
+      "Bash(python -c \"import json, sys; data=json.load\\(sys.stdin\\); r = [r for r in data.get\\('rest', [{}]\\)[0].get\\('resource', []\\) if r.get\\('type'\\) == 'Practitioner']; print\\(json.dumps\\(r[0].get\\('searchParam', []\\) if r else [], indent=2\\)\\)\")",
+      "Bash(python -c \"import json, sys; data=json.load\\(sys.stdin\\); r = [r for r in data.get\\('rest', [{}]\\)[0].get\\('resource', []\\) if r.get\\('type'\\) == 'Practitioner']; print\\('\\\\n'.join\\(p.get\\('name'\\) for p in \\(r[0].get\\('searchParam', []\\) if r else []\\)\\)\\)\")",
+      "Bash(python -c \"import json, sys; data=json.load\\(sys.stdin\\); r = [r for r in data.get\\('rest', [{}]\\)[0].get\\('resource', []\\) if r.get\\('type'\\) == 'Practitioner']; print\\(json.dumps\\([p for p in \\(r[0].get\\('searchParam', []\\) if r else []\\) if p.get\\('name'\\) == 'name'], indent=2\\)\\)\")",
+      "Bash(python -m json.tool)",
+      "Bash(python -c \"import json, sys; data=json.load\\(sys.stdin\\); print\\(json.dumps\\(data.get\\('identifier', []\\), indent=2\\)\\)\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('total:', d.get\\('total'\\)\\); print\\(json.dumps\\(d.get\\('entry', [{}]\\)[0].get\\('resource', {}\\), indent=2\\)[:3000] if d.get\\('total'\\) else ''\\)\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('total:', d.get\\('total'\\)\\)\")",
+      "Read(//tmp/**)",
+      "Bash(chmod +x *)",
+      "Bash(node *)"
     ]
   }
 }

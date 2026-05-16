@@ -3,26 +3,33 @@ services:
     image: postgres:16-alpine
     container_name: actidec-database-staging
     restart: unless-stopped
+    shm_size: 256mb
     networks:
       - actidec-network-staging
     environment:
-      POSTGRES_USER: VMC6XF78MCW23L6UNQUGDVBI2M12479E
-      POSTGRES_PASSWORD: lDLfvQnsiCRFrkO90c3qNMxLbxjhtp2e
+      TZ: Europe/Paris
+      PGTZ: Europe/Paris
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: actidec_staging
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - db_data_staging:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U VMC6XF78MCW23L6UNQUGDVBI2M12479E -d actidec_staging"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d actidec_staging"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
 
   app:
-    image: your-dockerhub-user/nova-fintech-frontend:staging
+    image: ghcr.io/davidkdevui/actidec-app:${IMAGE_TAG}
     container_name: actidec-app-staging
     restart: unless-stopped
     networks:
@@ -31,13 +38,78 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://VMC6XF78MCW23L6UNQUGDVBI2M12479E:lDLfvQnsiCRFrkO90c3qNMxLbxjhtp2e@actidec-database-staging:5432/actidec_staging
-      NEXT_PUBLIC_APP_URL: https://staging.actidec.example.com
+      TZ: Europe/Paris
       NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@actidec-database-staging:5432/actidec_staging
+      NEXT_PUBLIC_APP_URL: https://staging.supadmin.dev
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      # Bridge (sandbox)
+      BRIDGE_CLIENT_ID: ${BRIDGE_CLIENT_ID}
+      BRIDGE_CLIENT_SECRET: ${BRIDGE_CLIENT_SECRET}
+      BRIDGE_API_URL: https://api.bridgeapi.io/v3
+      # SMTP
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      # External APIs
+      FHIR_API_KEY: ${FHIR_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     env_file:
-      - ./frontend/.env.staging
+      - ./.env.staging
     ports:
       - "3001:3000"
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.5"
+    labels:
+      ofelia.enabled: "true"
+
+      # Sync bancaire — toutes les heures, à la minute 0
+      ofelia.job-exec.sync-bank.schedule: "0 0 * * * *"
+      ofelia.job-exec.sync-bank.command: "pnpm cron:sync-bank"
+      ofelia.job-exec.sync-bank.no-overlap: "true"
+
+      # Check alertes tréso — toutes les 15 minutes
+      ofelia.job-exec.check-alerts.schedule: "0 */15 * * * *"
+      ofelia.job-exec.check-alerts.command: "pnpm cron:check-alerts"
+      ofelia.job-exec.check-alerts.no-overlap: "true"
+
+      # Rappels échéances — chaque jour à 8h
+      ofelia.job-exec.deadlines-reminder.schedule: "0 0 8 * * *"
+      ofelia.job-exec.deadlines-reminder.command: "pnpm cron:deadlines-reminder"
+
+      # Check alertes taux de rejet — chaque jour à 8h30 (cooldown 14 jours côté job)
+      ofelia.job-exec.check-rejection-alerts.schedule: "0 30 8 * * *"
+      ofelia.job-exec.check-rejection-alerts.command: "pnpm cron:check-rejection-alerts"
+      ofelia.job-exec.check-rejection-alerts.no-overlap: "true"
+
+      # Récap mensuel — le 1er du mois à 9h
+      ofelia.job-exec.monthly-recap.schedule: "0 0 9 1 * *"
+      ofelia.job-exec.monthly-recap.command: "pnpm cron:monthly-recap"
+
+  ofelia:
+    image: mcuadros/ofelia:latest
+    container_name: actidec-ofelia-staging
+    restart: unless-stopped
+    networks:
+      - actidec-network-staging
+    environment:
+      TZ: Europe/Paris
+    command: daemon --docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - app
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: "0.25"
 
 networks:
   actidec-network-staging:

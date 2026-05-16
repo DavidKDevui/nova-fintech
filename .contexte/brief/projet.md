@@ -53,7 +53,7 @@ Professionnels de sante liberaux en exercice individuel (V1), puis cabinets de g
 - [x] Bandeau suggestion de lien cabinet
 - [ ] Vue globale CA declare vs CA paye
 - [ ] Solde estime disponible (apres charges)
-- [ ] Taux de rejet de factures + alerte seuil + detail
+- [x] Taux de rejet de factures + alerte seuil + detail (cf. /facturation > Taux de rejet, modal de config seuil)
 - [ ] Evolution mensuelle en graphique (CA/depenses/solde 12 mois)
 - [ ] Comparaison N vs N-1
 
@@ -105,10 +105,11 @@ Professionnels de sante liberaux en exercice individuel (V1), puis cabinets de g
 - [ ] Score de sante financiere globale
 
 ### Notifications & Alertes
-- [ ] Alerte solde sous seuil
+- [x] Alerte solde sous seuil (config dans /transactions, cooldown 7j, job check-alerts toutes les 15min)
 - [ ] Notification sync Ozzen disponible
-- [ ] Alerte taux de rejet eleve
-- [ ] Rapport mensuel/trimestriel automatique par email
+- [x] Alerte taux de rejet eleve (config dans /facturation > Taux de rejet, cooldown 14j, job quotidien à 8h30, échantillon min 10 bordereaux)
+- [x] Rapport mensuel/trimestriel automatique par email (recapFrequency config dans /profile > Notifications)
+- [x] Rappel hebdomadaire des échéances (deadlinesReminderEnabled config dans /profile > Notifications)
 
 ### Rapports & Export
 - [ ] Export PDF du dashboard
