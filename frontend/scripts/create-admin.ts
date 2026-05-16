@@ -10,7 +10,6 @@
  * Si l'email existe déjà, le script affiche un message et sort sans rien modifier.
  */
 
-import "dotenv/config";
 import bcrypt from "bcrypt";
 import pg from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";

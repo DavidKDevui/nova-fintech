@@ -1,4 +1,3 @@
-import "dotenv/config";
 import bcrypt from "bcrypt";
 import pg from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
