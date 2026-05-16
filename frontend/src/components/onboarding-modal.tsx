@@ -11,8 +11,6 @@ const FORM_STEPS = [
   { id: "profession", label: "Profession" },
   { id: "activity", label: "Activité" },
   { id: "tax", label: "Régime fiscal" },
-  { id: "retrocession", label: "Rétrocession" },
-  { id: "pas", label: "Impôt sur le revenu" },
 ] as const;
 
 const PROFESSIONS = [
@@ -45,9 +43,6 @@ export function OnboardingModal({ open }: { open: boolean }) {
   const [profession, setProfession] = useState("");
   const [activityStartDate, setActivityStartDate] = useState("");
   const [taxRegime, setTaxRegime] = useState("");
-  const [retrocessionType, setRetrocessionType] = useState<"percentage" | "fixed">("percentage");
-  const [retrocessionValue, setRetrocessionValue] = useState("");
-  const [pasFrequency, setPasFrequency] = useState("");
   const [state, action, pending] = useActionState(completeOnboardingAction, null);
   const router = useRouter();
 
@@ -64,18 +59,12 @@ export function OnboardingModal({ open }: { open: boolean }) {
     (formStep === 0 && firstName.trim() !== "" && lastName.trim() !== "" && /^\d{11}$/.test(rppsNumber)) ||
     (formStep === 1 && profession !== "") ||
     (formStep === 2 && activityStartDate !== "") ||
-    (formStep === 3 && taxRegime !== "") ||
-    (formStep === 4) || // retrocession is optional
-    (formStep === 5 && pasFrequency !== "");
+    (formStep === 3 && taxRegime !== "");
 
   const progress = ((formStep + 1) / FORM_STEPS.length) * 100;
 
   const professionLabel = PROFESSIONS.find((p) => p.value === profession)?.label ?? "";
   const taxRegimeLabel = TAX_REGIMES.find((r) => r.value === taxRegime)?.label ?? "";
-  const retrocessionLabel = retrocessionValue
-    ? `${retrocessionValue} ${retrocessionType === "percentage" ? "%" : "€"}`
-    : "Aucune";
-  const pasFrequencyLabel = pasFrequency === "monthly" ? "Mensuel" : pasFrequency === "quarterly" ? "Trimestriel" : "";
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
@@ -165,16 +154,12 @@ export function OnboardingModal({ open }: { open: boolean }) {
                   {formStep === 1 && "Quelle est votre profession ?"}
                   {formStep === 2 && "Quand avez-vous débuté ?"}
                   {formStep === 3 && "Quel est votre régime fiscal ?"}
-                  {formStep === 4 && "Rétrocession mensuelle"}
-                  {formStep === 5 && "Prélèvement de l'impôt sur le revenu"}
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
                   {formStep === 0 && "Renseignez votre nom et prénom pour personnaliser votre espace."}
                   {formStep === 1 && "Sélectionnez votre métier pour personnaliser votre expérience."}
                   {formStep === 2 && "Indiquez la date de début de votre activité libérale."}
                   {formStep === 3 && "Choisissez le régime fiscal qui correspond à votre situation."}
-                  {formStep === 4 && "Si vous exercez en collaboration ou remplacement, indiquez le pourcentage rétrocédé au titulaire."}
-                  {formStep === 5 && "Indiquez la fréquence de vos acomptes d'impôt sur le revenu (prélèvement à la source)."}
                 </p>
               </div>
 
@@ -314,91 +299,6 @@ export function OnboardingModal({ open }: { open: boolean }) {
                   </div>
                 )}
 
-                {formStep === 4 && (
-                  <div>
-                    <div className="flex gap-2 mb-5">
-                      <button
-                        type="button"
-                        onClick={() => setRetrocessionType("percentage")}
-                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                          retrocessionType === "percentage"
-                            ? "border-brand-500 bg-brand-50 text-brand-700"
-                            : "border-gray-200 text-gray-500 hover:border-gray-300"
-                        }`}
-                      >
-                        <PercentIcon />
-                        Pourcentage
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRetrocessionType("fixed")}
-                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                          retrocessionType === "fixed"
-                            ? "border-brand-500 bg-brand-50 text-brand-700"
-                            : "border-gray-200 text-gray-500 hover:border-gray-300"
-                        }`}
-                      >
-                        <EuroIcon />
-                        Montant fixe
-                      </button>
-                    </div>
-                    <div className="relative group">
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-300 transition-colors group-focus-within:text-brand-600">
-                        {retrocessionType === "percentage" ? <PercentIcon /> : <EuroIcon />}
-                      </div>
-                      <input
-                        type="number"
-                        min="0"
-                        max={retrocessionType === "percentage" ? "100" : undefined}
-                        step="0.5"
-                        value={retrocessionValue}
-                        onChange={(e) => setRetrocessionValue(e.target.value)}
-                        placeholder={retrocessionType === "percentage" ? "Ex : 12.5" : "Ex : 800"}
-                        className="w-full border-b-2 border-gray-200 bg-transparent pl-8 pr-12 py-4 text-[0.9rem] transition-all placeholder:text-gray-400 placeholder:font-medium hover:border-gray-400 focus:border-brand-500 focus:outline-none"
-                      />
-                      <span className="absolute right-0 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-400">
-                        {retrocessionType === "percentage" ? "%" : "€"}
-                      </span>
-                    </div>
-                    <p className="mt-3 text-xs text-gray-400">
-                      Laissez vide si vous êtes titulaire et ne rétrocédez à personne.
-                    </p>
-                  </div>
-                )}
-
-                {formStep === 5 && (
-                  <div className="grid gap-3">
-                    {([
-                      { value: "monthly", label: "Mensuel", description: "Acompte prélevé chaque mois" },
-                      { value: "quarterly", label: "Trimestriel", description: "Acompte prélevé chaque trimestre" },
-                    ] as const).map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setPasFrequency(opt.value)}
-                        className={`flex items-start gap-4 w-full p-4 border-2 text-left transition-all hover:border-gray-400 ${
-                          pasFrequency === opt.value
-                            ? "border-brand-500 bg-brand-50"
-                            : "border-gray-200"
-                        }`}
-                      >
-                        <div className={`flex items-center justify-center w-5 h-5 mt-0.5 border-2 shrink-0 transition-all ${
-                          pasFrequency === opt.value
-                            ? "border-brand-600 bg-brand-600"
-                            : "border-gray-300"
-                        }`}>
-                          {pasFrequency === opt.value && (
-                            <CheckIcon size={12} stroke="white" />
-                          )}
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-900">{opt.label}</span>
-                          <p className="text-xs text-gray-400 mt-0.5">{opt.description}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Navigation */}
@@ -465,8 +365,6 @@ export function OnboardingModal({ open }: { open: boolean }) {
               <RecapRow label="Profession" value={professionLabel} />
               <RecapRow label="Début d'activité" value={formatDate(activityStartDate)} />
               <RecapRow label="Régime fiscal" value={taxRegimeLabel} />
-              <RecapRow label="Rétrocession" value={retrocessionLabel} />
-              <RecapRow label="Prélèvement impôt" value={pasFrequencyLabel} />
             </div>
 
             {state?.error && (
@@ -490,9 +388,6 @@ export function OnboardingModal({ open }: { open: boolean }) {
                 <input type="hidden" name="profession" value={profession} />
                 <input type="hidden" name="activityStartDate" value={activityStartDate} />
                 <input type="hidden" name="taxRegime" value={taxRegime} />
-                <input type="hidden" name="retrocessionType" value={retrocessionType} />
-                <input type="hidden" name="retrocessionValue" value={retrocessionValue} />
-                <input type="hidden" name="pasFrequency" value={pasFrequency} />
                 <button
                   type="submit"
                   disabled={pending}
@@ -544,26 +439,6 @@ function CalendarIcon() {
       <rect x="15" y="2" width="2" height="4" rx="1" fill="#92400E" />
       <rect x="7" y="13" width="3" height="2" rx="0.5" fill="#FEF3C7" />
       <rect x="12" y="13" width="3" height="2" rx="0.5" fill="#FEF3C7" />
-    </svg>
-  );
-}
-
-function EuroIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="10" fill="#F59E0B" />
-      <path d="M15 7.5a5 5 0 0 0-4.5 0A4.5 4.5 0 0 0 8 11.5h5M8 12.5a4.5 4.5 0 0 0 2.5 4 5 5 0 0 0 4.5 0M7 11h6M7 13h6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function PercentIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="10" fill="#14B8A6" />
-      <line x1="16" y1="8" x2="8" y2="16" stroke="white" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="9" cy="9" r="2" fill="#F0FDFA" />
-      <circle cx="15" cy="15" r="2" fill="#F0FDFA" />
     </svg>
   );
 }

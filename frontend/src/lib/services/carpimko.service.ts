@@ -6,11 +6,23 @@ import taxesData from "@/lib/constants/taxes.json";
 
 const BAREME = taxesData.carpimko as Record<string, Bareme>;
 
+// Deux modes pour la retraite complémentaire :
+//   - "tranches"      → ancien format (jusqu'à 2025) : forfait T1 + proportionnel T2
+//   - "proportionnel" → format réforme 2026 : taux unique sur assiette [min, max]
+type RetraiteTranches = {
+  mode?: "tranches";
+  tranche1: { plafond: number; montant: number };
+  tranche2: { plafond: number; taux: number };
+};
+type RetraiteProportionnel = {
+  mode: "proportionnel";
+  taux: number;
+  assietteMin: number;
+  assietteMax: number;
+};
+
 type Bareme = {
-  retraiteComplementaire: {
-    tranche1: { plafond: number; montant: number };
-    tranche2: { plafond: number; taux: number };
-  };
+  retraiteComplementaire: RetraiteTranches | RetraiteProportionnel;
   asv: {
     forfaitaire: number;
     proportionnel: { plafond: number; taux: number };
@@ -47,17 +59,18 @@ function getBareme(annee: number): Bareme {
 // ── Calculs ──
 
 function calculerRetraiteComplementaire(revenu: number, bareme: Bareme): number {
-  const { tranche1, tranche2 } = bareme.retraiteComplementaire;
-
-  // Tranche 1 : montant forfaitaire
-  let montant = tranche1.montant;
-
-  // Tranche 2 : proportionnel sur revenus au-delà du plafond T1
-  if (revenu > tranche1.plafond) {
-    const assiette = Math.min(revenu, tranche2.plafond) - tranche1.plafond;
-    montant += assiette * tranche2.taux;
+  const r = bareme.retraiteComplementaire;
+  if (r.mode === "proportionnel") {
+    // Réforme 2026 : taux unique sur assiette bornée [min, max].
+    const assiette = Math.max(r.assietteMin, Math.min(revenu, r.assietteMax));
+    return assiette * r.taux;
   }
-
+  // Format historique (jusqu'à 2025) : forfait T1 + proportionnel T2.
+  let montant = r.tranche1.montant;
+  if (revenu > r.tranche1.plafond) {
+    const assiette = Math.min(revenu, r.tranche2.plafond) - r.tranche1.plafond;
+    montant += assiette * r.tranche2.taux;
+  }
   return montant;
 }
 

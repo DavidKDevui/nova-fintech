@@ -10,7 +10,7 @@ export default async function AdminPractitionersPage() {
 
   return (
     <div>
-      <InvitationsSection initialInvitations={pendingInvitations} />
+      <InvitationsSection initialInvitations={pendingInvitations} accountType="practitioner" />
       <PractitionerTable practitioners={practitioners} />
     </div>
   );

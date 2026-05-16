@@ -10,6 +10,7 @@ import { connectBankAction } from "@/actions/bridge";
 import { fetchPaginatedTransactionsAction, updateTransactionCategoryAction, getTransactionKpisAction } from "@/actions/transaction";
 import { setDefaultBankAccountAction, deleteBankAccountAction } from "@/actions/bank-account";
 import { getBankAlertAction, upsertBankAlertAction } from "@/actions/bank-alert";
+import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
 import { downloadCSV, downloadPDF } from "@/lib/export";
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -83,6 +84,7 @@ type Transaction = {
   operationType: string | null;
   categoryId: number | null;
   category: string | null;
+  categorizationSource: "manual" | "auto_similarity" | null;
 };
 
 export function TransactionsClient() {
@@ -112,11 +114,16 @@ export function TransactionsClient() {
   const [kpiLoading, setKpiLoading] = useState(true);
   const [kpiYear, setKpiYear] = useState(new Date().getFullYear());
 
+  // Données année courante (toujours, indépendamment de kpiYear) pour la carte "Solde estimé dispo"
+  const [currentYearEncaissement, setCurrentYearEncaissement] = useState(0);
+  const [currentYearUrssafPaid, setCurrentYearUrssafPaid] = useState(0);
+  const [currentYearCarpimkoPaid, setCurrentYearCarpimkoPaid] = useState(0);
+  const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
+  const [dispoLoading, setDispoLoading] = useState(true);
+
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [searchDebounced, setSearchDebounced] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
 
   const accountDropdownRef = useRef<HTMLDivElement>(null);
@@ -162,6 +169,9 @@ export function TransactionsClient() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [accountDropdownOpen]);
 
+  const effectiveDateFrom = `${kpiYear}-01-01`;
+  const effectiveDateTo = `${kpiYear}-12-31`;
+
   // Fetch paginated transactions from server
   useEffect(() => {
     if (!hp?.bridgeUserUuid) return;
@@ -170,7 +180,7 @@ export function TransactionsClient() {
     setPaginatedLoading(true);
     fetchPaginatedTransactionsAction(
       txPage, TX_PER_PAGE, selectedAccount, txSortBy, txSortDir, txTab === "uncategorized",
-      searchDebounced || null, dateFrom || null, dateTo || null, categoryFilter || null,
+      searchDebounced || null, effectiveDateFrom, effectiveDateTo, categoryFilter || null,
     ).then((result) => {
       if (cancelled) return;
       if (result.transactions) {
@@ -181,7 +191,7 @@ export function TransactionsClient() {
       setPaginatedLoading(false);
     });
     return () => { cancelled = true; };
-  }, [txPage, selectedAccount, txSortBy, txSortDir, txTab, searchDebounced, dateFrom, dateTo, categoryFilter, hp?.bridgeUserUuid, setUncategorizedCount]);
+  }, [txPage, selectedAccount, txSortBy, txSortDir, txTab, searchDebounced, effectiveDateFrom, effectiveDateTo, categoryFilter, hp?.bridgeUserUuid, setUncategorizedCount]);
 
   // Fetch KPIs from server
   useEffect(() => {
@@ -195,6 +205,30 @@ export function TransactionsClient() {
       setKpiLoading(false);
     });
   }, [selectedAccount, kpiYear, hp?.bridgeUserUuid]);
+
+  // Current-year KPIs (always, used by "Solde estimé dispo")
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- early return: no user, finish loading
+    if (!hp?.bridgeUserUuid) { setDispoLoading(false); return; }
+    setDispoLoading(true);
+    const currentYear = new Date().getFullYear();
+    getTransactionKpisAction(selectedAccount, currentYear).then((result) => {
+      setCurrentYearEncaissement(result.encaissement);
+      setCurrentYearUrssafPaid(result.urssafPaid ?? 0);
+      setCurrentYearCarpimkoPaid(result.carpimkoPaid ?? 0);
+      // No CA → no estimate to wait for, loading is done.
+      if (result.encaissement <= 0) setDispoLoading(false);
+    });
+  }, [selectedAccount, hp?.bridgeUserUuid]);
+
+  // Fetch cotisations estimate based on current year YTD CA
+  useEffect(() => {
+    if (currentYearEncaissement <= 0) return;
+    getCotisationsEstimate(currentYearEncaissement)
+      .then((res) => { if (res) setEstimate(res); })
+      .catch(() => {})
+      .finally(() => setDispoLoading(false));
+  }, [currentYearEncaissement]);
 
   const saveAlert = useCallback(async () => {
     const value = parseFloat(alertThreshold);
@@ -263,6 +297,11 @@ export function TransactionsClient() {
 
   const totalBalance = filteredAccounts.reduce((sum, acc) => sum + Number(acc.balance), 0);
   const txTotalPages = Math.max(1, Math.ceil(paginatedTotal / TX_PER_PAGE));
+
+  // Solde estimé disponible = solde − URSSAF restantes − CARPIMKO restantes (sur l'année courante)
+  const urssafRemaining = estimate ? Math.max(0, estimate.urssafAnnuel - currentYearUrssafPaid) : 0;
+  const carpimkoRemaining = estimate ? Math.max(0, estimate.carpimkoAnnuel - currentYearCarpimkoPaid) : 0;
+  const soldeDispo = totalBalance - urssafRemaining - carpimkoRemaining;
 
   return (
     <div>
@@ -383,7 +422,7 @@ export function TransactionsClient() {
       <div className="flex items-center justify-end gap-1 mt-3 mb-1.5">
         <button
           type="button"
-          onClick={() => setKpiYear((y) => y - 1)}
+          onClick={() => { setKpiYear((y) => y - 1); setTxPage(1); }}
           className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -391,14 +430,14 @@ export function TransactionsClient() {
         <span className="text-sm font-semibold text-gray-900 w-12 text-center">{kpiYear}</span>
         <button
           type="button"
-          onClick={() => setKpiYear((y) => y + 1)}
+          onClick={() => { setKpiYear((y) => y + 1); setTxPage(1); }}
           disabled={kpiYear >= new Date().getFullYear()}
           className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {/* Solde de trésorerie — toujours visible */}
         <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
           <div className="flex items-center justify-between mb-1">
@@ -424,6 +463,34 @@ export function TransactionsClient() {
           </div>
           <p className="text-xl font-bold text-gray-900">{formatCurrencyRounded(totalBalance)}</p>
           <p className="text-[10px] text-gray-400 mt-0.5">{filteredAccounts.length === 1 ? filteredAccounts[0]!.name : `${filteredAccounts.length} comptes`}</p>
+        </div>
+
+        {/* Solde estimé disponible (après cotisations URSSAF + CARPIMKO restantes) */}
+        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-indigo-600">
+              <rect x="2" y="4" width="20" height="16" rx="3" fill="currentColor" opacity="0.35" />
+              <path d="M7 12h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+              <circle cx="17" cy="15" r="1.5" fill="currentColor" opacity="0.5" />
+            </svg>
+            <p className="text-xs font-medium text-gray-500">Solde estimé dispo</p>
+          </div>
+          {dispoLoading ? (
+            <div className="h-7 bg-gray-200 rounded w-24 animate-pulse" />
+          ) : (
+            <p className={`text-xl font-bold ${soldeDispo < 0 ? "text-red-600" : "text-gray-900"}`}>
+              {formatCurrencyRounded(soldeDispo)}
+            </p>
+          )}
+          {dispoLoading ? (
+            <div className="h-2.5 bg-gray-100 rounded w-32 mt-1.5 animate-pulse" />
+          ) : (
+            <p className="text-[10px] text-gray-400 mt-0.5">
+              {estimate
+                ? `Après ~${formatCurrencyRounded(urssafRemaining + carpimkoRemaining)} de cotisations restantes`
+                : "Estimation indisponible"}
+            </p>
+          )}
         </div>
 
         {/* Encaissement, Décaissement, Rémunération — skeleton on loading */}
@@ -516,7 +583,7 @@ export function TransactionsClient() {
                 <button
                   type="button"
                   onClick={async () => {
-                    const result = await fetchPaginatedTransactionsAction(1, 10000, selectedAccount, txSortBy, txSortDir, txTab === "uncategorized", searchDebounced || null, dateFrom || null, dateTo || null, categoryFilter || null);
+                    const result = await fetchPaginatedTransactionsAction(1, 10000, selectedAccount, txSortBy, txSortDir, txTab === "uncategorized", searchDebounced || null, effectiveDateFrom, effectiveDateTo, categoryFilter || null);
                     if ("transactions" in result && result.transactions) {
                       const headers = ["Date", "Libellé", "Catégorie", "Montant"];
                       const rows = result.transactions.map((tx: Transaction) => [
@@ -536,7 +603,7 @@ export function TransactionsClient() {
                 <button
                   type="button"
                   onClick={async () => {
-                    const result = await fetchPaginatedTransactionsAction(1, 10000, selectedAccount, txSortBy, txSortDir, txTab === "uncategorized", searchDebounced || null, dateFrom || null, dateTo || null, categoryFilter || null);
+                    const result = await fetchPaginatedTransactionsAction(1, 10000, selectedAccount, txSortBy, txSortDir, txTab === "uncategorized", searchDebounced || null, effectiveDateFrom, effectiveDateTo, categoryFilter || null);
                     if ("transactions" in result && result.transactions) {
                       const headers = ["Date", "Libellé", "Catégorie", "Montant"];
                       const rows = result.transactions.map((tx: Transaction) => [
@@ -591,24 +658,11 @@ export function TransactionsClient() {
               className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent w-full sm:w-44"
             />
           </div>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => { setDateFrom(e.target.value); setTxPage(1); }}
-            className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
-          />
-          <span className="text-xs text-gray-400">→</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => { setDateTo(e.target.value); setTxPage(1); }}
-            className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
-          />
           <CategoryFilterDropdown value={categoryFilter} onChange={(v) => { setCategoryFilter(v); setTxPage(1); }} />
-          {(searchQuery || dateFrom || dateTo || categoryFilter) && (
+          {(searchQuery || categoryFilter) && (
             <button
               type="button"
-              onClick={() => { setSearchQuery(""); setDateFrom(""); setDateTo(""); setCategoryFilter(""); setTxPage(1); }}
+              onClick={() => { setSearchQuery(""); setCategoryFilter(""); setTxPage(1); }}
               className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
             >
               Réinitialiser
@@ -636,10 +690,10 @@ export function TransactionsClient() {
             Aucune transaction trouvée.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <div className="min-w-[650px]">
-            {/* Header */}
-            <div className="grid grid-cols-[170px_1fr_200px_140px] border-b border-gray-200/60">
+          <div className="md:overflow-x-auto">
+            <div className="md:min-w-[650px]">
+            {/* Header — desktop uniquement */}
+            <div className="hidden md:grid md:grid-cols-[170px_1fr_200px_140px] border-b border-gray-200/60">
               <SortHeader label="Date" column="date" current={txSortBy} dir={txSortDir} onSort={(col, dir) => { setTxSortBy(col); setTxSortDir(dir); setTxPage(1); }} />
               <SortHeader label="Libellé" column="description" current={txSortBy} dir={txSortDir} onSort={(col, dir) => { setTxSortBy(col); setTxSortDir(dir); setTxPage(1); }} />
               <div className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">Catégorie</div>
@@ -653,10 +707,10 @@ export function TransactionsClient() {
               const filteredCategories = CATEGORY_OPTIONS.filter(([, { sign }]) => sign === null || sign === txSign);
               return (
                 <div key={tx.id} className="border-b border-gray-200/60 last:border-b-0">
-                  <div className="grid grid-cols-[170px_1fr_200px_140px] items-center hover:bg-white/50 transition-colors">
-                    <div className="px-5 py-3.5 text-sm text-gray-500 whitespace-nowrap">{formatDateFr(tx.date)}</div>
-                    <div className="px-5 py-3.5 text-sm font-medium text-gray-900 truncate">{tx.cleanDescription || tx.description}</div>
-                    <div className="px-5 py-3.5 text-sm">
+                  <div className="grid grid-cols-2 md:grid-cols-[170px_1fr_200px_140px] md:items-center gap-y-1.5 md:gap-y-0 px-4 py-3 md:p-0 hover:bg-white/50 transition-colors">
+                    <div className="order-1 text-xs text-gray-500 whitespace-nowrap md:text-sm md:px-5 md:py-3.5">{formatDateFr(tx.date)}</div>
+                    <div className="order-3 md:order-2 col-span-2 md:col-span-1 text-sm font-medium text-gray-900 break-words md:truncate md:px-5 md:py-3.5">{tx.cleanDescription || tx.description}</div>
+                    <div className="order-4 md:order-3 col-span-2 md:col-span-1 md:px-5 md:py-3.5 md:text-sm">
                       <button
                         type="button"
                         onClick={() => setExpandedTxId(isExpanded ? null : tx.id)}
@@ -670,12 +724,17 @@ export function TransactionsClient() {
                           <span className="text-brand-500">{CATEGORIES[tx.category].icon}</span>
                         )}
                         {tx.category ? (CATEGORIES[tx.category]?.label ?? tx.category) : "À catégoriser"}
+                        {tx.category && tx.categorizationSource === "auto_similarity" && (
+                          <span title="Catégorisée automatiquement par similarité" className="text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z"/></svg>
+                          </span>
+                        )}
                         {!tx.category && (
                           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
                         )}
                       </button>
                     </div>
-                    <div className={`px-5 py-3.5 text-base font-semibold text-right whitespace-nowrap ${
+                    <div className={`order-2 md:order-4 text-base font-semibold text-right whitespace-nowrap md:px-5 md:py-3.5 ${
                       Number(tx.amount) >= 0 ? "text-green-600" : "text-gray-900"
                     }`}>
                       {Number(tx.amount) >= 0 ? "+" : ""}{formatCurrency(Number(tx.amount))}
@@ -706,7 +765,7 @@ export function TransactionsClient() {
                                   // Refetch to reflect all changes
                                   fetchPaginatedTransactionsAction(
                                     txPage, TX_PER_PAGE, selectedAccount, txSortBy, txSortDir, txTab === "uncategorized",
-                                    searchDebounced || null, dateFrom || null, dateTo || null, categoryFilter || null,
+                                    searchDebounced || null, effectiveDateFrom, effectiveDateTo, categoryFilter || null,
                                   ).then((r) => {
                                     if (r.transactions) {
                                       setPaginatedTx(r.transactions as Transaction[]);
@@ -715,7 +774,7 @@ export function TransactionsClient() {
                                     }
                                   });
                                 } else {
-                                  setPaginatedTx((prev) => prev.map((t) => t.id === tx.id ? { ...t, category: key } : t));
+                                  setPaginatedTx((prev) => prev.map((t) => t.id === tx.id ? { ...t, category: key, categorizationSource: "manual" } : t));
                                   if (!hadCategory) setUncategorizedCount((c) => Math.max(0, c - 1));
                                 }
                                 refreshKpis();

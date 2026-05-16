@@ -5,6 +5,8 @@ import { refreshSession } from "@/lib/services/auth.service";
 const IS_PROD = process.env.NODE_ENV === "production";
 
 const publicPaths = ["/login", "/setup-password", "/forgot-password", "/reset-password"];
+// Pages toujours accessibles, peu importe l'état de connexion (RGPD / légal)
+const alwaysAccessiblePaths = ["/legal", "/privacy"];
 
 function isTokenExpired(token: string): boolean {
   try {
@@ -20,6 +22,11 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const accessToken = request.cookies.get("accessToken")?.value;
   const refreshToken = request.cookies.get("refreshToken")?.value;
+
+  // Pages légales : accessibles à tous, jamais de redirection
+  if (alwaysAccessiblePaths.some((p) => pathname.startsWith(p))) {
+    return NextResponse.next();
+  }
 
   const hasValidAccess = accessToken && !isTokenExpired(accessToken);
   const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));

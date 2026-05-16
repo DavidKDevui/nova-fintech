@@ -3,15 +3,23 @@ import pg from "pg";
 import * as schema from "./schema";
 import { syncDatabase } from "./sync";
 
-const connectionString = process.env.DATABASE_URL?.replace(/[?&]sslmode=[^&]*/g, "");
+const rawUrl = process.env.DATABASE_URL ?? "";
+
+// SSL est opt-in :
+//   - explicite via DATABASE_URL contient `sslmode=require` (ou similaire)
+//   - OU explicite via DATABASE_SSL=true
+// Par defaut OFF (cas Postgres en container interne sans cert TLS).
+const wantSSL = /[?&]sslmode=(require|verify-ca|verify-full)/i.test(rawUrl)
+  || process.env.DATABASE_SSL === "true";
+
+// On strip sslmode de la URL car le client pg gere le SSL via l'option dediee
+const connectionString = rawUrl.replace(/[?&]sslmode=[^&]*/g, "");
 
 const globalForPg = globalThis as unknown as { pgPool?: pg.Pool; dbReady?: Promise<void> };
 
-const isProduction = process.env.NODE_ENV === "production";
-
 const pool = globalForPg.pgPool ?? new pg.Pool({
   connectionString,
-  ...(isProduction && { ssl: { rejectUnauthorized: false } }),
+  ...(wantSSL && { ssl: { rejectUnauthorized: false } }),
   max: 1,
 });
 

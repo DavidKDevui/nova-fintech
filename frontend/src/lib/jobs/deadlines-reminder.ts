@@ -1,10 +1,9 @@
-import { NextResponse } from "next/server";
 import { eq, and, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { practitioners, users } from "@/lib/db/schema";
 import { sendDeadlinesReminder, type DeadlineEvent, type DeadlinesReminderData } from "@/lib/services/mail.service";
-import { verifyCronRequest } from "@/lib/cron-auth";
 import { buildCalendar, type PaymentPreferences, type CalendarEvent } from "@/lib/data/fiscal-calendar";
+import { emailToLogId } from "@/lib/log";
 
 const WINDOW_DAYS = 14;
 const DAY_OF_MS = 24 * 60 * 60 * 1000;
@@ -20,7 +19,7 @@ const EVENT_LABEL: Record<CalendarEvent["type"], string> = {
   carpimko: "CARPIMKO",
   ir: "Impôt sur le revenu (PAS)",
   cfe: "CFE",
-  declaration: "", // fall back to event.label for declarations
+  declaration: "",
 };
 
 function dayLabel(d: Date): string {
@@ -93,82 +92,73 @@ function groupByWeek(events: DatedEvent[]): Array<{ weekLabel: string; events: D
     .map(([, g]) => g);
 }
 
-export async function POST(request: Request) {
-  const auth = await verifyCronRequest(request);
-  if (!auth.ok) return auth.response;
+export type DeadlinesReminderResult = {
+  sent: number;
+  skipped: number;
+  candidates: number;
+  errors: string[];
+};
 
-  try {
-    const now = new Date();
-    const windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const windowEnd = new Date(windowStart.getTime() + (WINDOW_DAYS - 1) * DAY_OF_MS);
+export async function runDeadlinesReminder(): Promise<DeadlinesReminderResult> {
+  const now = new Date();
+  const windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const windowEnd = new Date(windowStart.getTime() + (WINDOW_DAYS - 1) * DAY_OF_MS);
 
-    const candidates = await db
-      .select({
-        practitionerId: practitioners.id,
-        firstName: practitioners.firstName,
-        email: users.email,
-        urssafFrequency: practitioners.urssafFrequency,
-        urssafPayDay: practitioners.urssafPayDay,
-        pasFrequency: practitioners.pasFrequency,
-        carpimkoFrequency: practitioners.carpimkoFrequency,
-        carpimkoPayDay: practitioners.carpimkoPayDay,
-        activityStartDate: practitioners.activityStartDate,
-      })
-      .from(practitioners)
-      .innerJoin(users, eq(practitioners.userId, users.id))
-      .where(and(
-        eq(practitioners.deadlinesReminderEnabled, true),
-        isNull(users.deletedAt),
-      ));
+  const candidates = await db
+    .select({
+      practitionerId: practitioners.id,
+      firstName: practitioners.firstName,
+      email: users.email,
+      urssafFrequency: practitioners.urssafFrequency,
+      urssafPayDay: practitioners.urssafPayDay,
+      pasFrequency: practitioners.pasFrequency,
+      carpimkoFrequency: practitioners.carpimkoFrequency,
+      carpimkoPayDay: practitioners.carpimkoPayDay,
+      activityStartDate: practitioners.activityStartDate,
+    })
+    .from(practitioners)
+    .innerJoin(users, eq(practitioners.userId, users.id))
+    .where(and(
+      eq(practitioners.deadlinesReminderEnabled, true),
+      isNull(users.deletedAt),
+    ));
 
-    let sent = 0;
-    let skipped = 0;
-    const errors: string[] = [];
+  let sent = 0;
+  let skipped = 0;
+  const errors: string[] = [];
 
-    for (const p of candidates) {
-      try {
-        const prefs: PaymentPreferences = {
-          urssafFrequency: p.urssafFrequency,
-          urssafPayDay: p.urssafPayDay,
-          pasFrequency: p.pasFrequency,
-          carpimkoFrequency: p.carpimkoFrequency,
-          carpimkoPayDay: p.carpimkoPayDay,
-          activityStartDate: p.activityStartDate,
-        };
+  for (const p of candidates) {
+    try {
+      const prefs: PaymentPreferences = {
+        urssafFrequency: p.urssafFrequency,
+        urssafPayDay: p.urssafPayDay,
+        pasFrequency: p.pasFrequency,
+        carpimkoFrequency: p.carpimkoFrequency,
+        carpimkoPayDay: p.carpimkoPayDay,
+        activityStartDate: p.activityStartDate,
+      };
 
-        const events = collectEventsInWindow(prefs, windowStart, windowEnd);
-        if (events.length === 0) {
-          skipped++;
-          continue;
-        }
-
-        const weekGroups = groupByWeek(events);
-        const data: DeadlinesReminderData = {
-          firstName: p.firstName,
-          periodLabel: formatRange(windowStart, windowEnd),
-          weekGroups,
-        };
-
-        await sendDeadlinesReminder(p.email, data);
-        sent++;
-        console.log(`[CRON] Deadlines reminder sent to ${p.email} (${events.length} events)`);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[CRON] Error sending deadlines reminder for ${p.practitionerId}:`, msg);
-        errors.push(`Practitioner ${p.practitionerId}: ${msg}`);
+      const events = collectEventsInWindow(prefs, windowStart, windowEnd);
+      if (events.length === 0) {
+        skipped++;
+        continue;
       }
-    }
 
-    return NextResponse.json({
-      message: "Deadlines reminder complete",
-      sent,
-      skipped,
-      candidates: candidates.length,
-      errors: errors.length > 0 ? errors : undefined,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[CRON] deadlines-reminder fatal error:", msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+      const data: DeadlinesReminderData = {
+        firstName: p.firstName,
+        periodLabel: formatRange(windowStart, windowEnd),
+        weekGroups: groupByWeek(events),
+      };
+
+      await sendDeadlinesReminder(p.email, data, p.practitionerId);
+      sent++;
+      console.log(`[deadlines-reminder] sent uid=${emailToLogId(p.email)} (${events.length} events)`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[deadlines-reminder] error for ${p.practitionerId}:`, msg);
+      errors.push(`Practitioner ${p.practitionerId}: ${msg}`);
+    }
   }
+
+  return { sent, skipped, candidates: candidates.length, errors };
 }

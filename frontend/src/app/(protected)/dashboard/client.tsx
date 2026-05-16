@@ -8,6 +8,7 @@ import { useData } from "@/providers/data-provider";
 import { PracticeSuggestionBanner } from "@/components/practice-suggestion-banner";
 import { getTransactionKpisAction } from "@/actions/transaction";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
+import { getHealthScoreAction, type HealthScore } from "@/actions/health-score";
 import {
   buildCalendar,
   MONTH_NAMES,
@@ -28,6 +29,7 @@ export function DashboardClient() {
   const hp = usePractitioner();
   const {
     facturationSummary: summary,
+    facturationPassages: passages,
     facturationLoading: loading,
     accounts,
     transactions,
@@ -49,6 +51,19 @@ export function DashboardClient() {
   const [kpiDecaissement, setKpiDecaissement] = useState(0);
   const [kpiNbDepenses, setKpiNbDepenses] = useState(0);
   const [kpiLoading, setKpiLoading] = useState(true);
+  const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
+  const [healthScore, setHealthScore] = useState<HealthScore | null>(null);
+  const [healthScoreLoading, setHealthScoreLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    getHealthScoreAction().then((result) => {
+      if (cancelled) return;
+      setHealthScore(result);
+      setHealthScoreLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
@@ -60,6 +75,28 @@ export function DashboardClient() {
       setKpiLoading(false);
     });
   }, [hp?.bridgeUserUuid, hp?.defaultBankAccountId]);
+
+  // CA et nb factures de l'année courante (cohérent avec les autres KPIs du dashboard)
+  const currentYear = new Date().getFullYear();
+  const { caCurrentYear, nbFacturesCurrentYear } = useMemo(() => {
+    let ca = 0;
+    let count = 0;
+    for (const p of passages) {
+      if (p.status !== "paye") continue;
+      if (parseInt(p.careDate.split("-")[0]!, 10) !== currentYear) continue;
+      ca += parseFloat(p.totalAmount);
+      count++;
+    }
+    return { caCurrentYear: ca, nbFacturesCurrentYear: count };
+  }, [passages, currentYear]);
+
+  // Cotisations estimate (annual URSSAF + CARPIMKO projected from YTD CA) — used by EcheancesCard.
+  useEffect(() => {
+    if (caCurrentYear <= 0) return;
+    getCotisationsEstimate(caCurrentYear).then((res) => {
+      if (res) setEstimate(res);
+    }).catch(() => {});
+  }, [caCurrentYear]);
 
   // Profile completion
   const profileCompletion = useMemo(() => {
@@ -97,6 +134,8 @@ export function DashboardClient() {
       <div>
         <h1 className="text-xl md:text-2xl font-bold mb-1">Hello {name},</h1>
         <p className="text-sm text-gray-400 mb-4">On fait le point ensemble ?</p>
+
+        <HealthScoreCard loading={healthScoreLoading} data={healthScore} />
 
         {profileCompletion < 100 && (
           <div className="rounded-lg bg-white backdrop-blur-xl border border-gray-200/70 px-3.5 py-3 mb-2">
@@ -170,11 +209,11 @@ export function DashboardClient() {
           soldePrevMonth={soldePrevMonth}
           encaissement={kpiEncaissement}
           decaissement={kpiDecaissement}
-          ca={summary?.byStatus.paye.total ?? 0}
-          nbFactures={summary?.byStatus.paye.count ?? 0}
+          ca={caCurrentYear}
+          nbFactures={nbFacturesCurrentYear}
           nbTransactionsDepenses={kpiNbDepenses}
         />
-        <EcheancesCard hp={hp} totalCA={summary?.byStatus.paye.total ?? 0} />
+        <EcheancesCard hp={hp} estimate={estimate} />
       </div>
     </div>
   );
@@ -257,10 +296,13 @@ function TresorerieCard({
         </div>
       )}
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold text-gray-900">Vue financière</h2>
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Vue financière</h2>
+          <p className="text-[11px] text-gray-400">Année {new Date().getFullYear()}</p>
+        </div>
         <DetailLink href="/transactions" />
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
         <KpiTile label="Trésorerie" value={solde !== null ? formatCurrencyRounded(solde) : "—"} sub={evolTreso} icon={<KpiWalletIcon />} iconColor="text-blue-400" />
         <KpiTile label="Chiffre d&apos;affaires" value={formatCurrencyRounded(ca)} sub={`${nbFactures} facture${nbFactures > 1 ? "s" : ""}`} icon={<KpiChartIcon />} iconColor="text-green-400" />
         <KpiTile label="Dépenses" value={formatCurrencyRounded(decaissement)} sub={`${nbTransactionsDepenses} transaction${nbTransactionsDepenses > 1 ? "s" : ""}`} icon={<KpiExpenseIcon />} iconColor="text-red-400" />
@@ -284,16 +326,7 @@ function KpiTile({ label, value, sub, icon, iconColor = "text-gray-300" }: { lab
 }
 
 /* ─── 0c. Échéances ─── */
-function EcheancesCard({ hp, totalCA }: { hp: ReturnType<typeof usePractitioner>; totalCA: number }) {
-  const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
-
-  useEffect(() => {
-    if (totalCA <= 0) return;
-    getCotisationsEstimate(totalCA).then((res) => {
-      if (res) setEstimate(res);
-    }).catch(() => {});
-  }, [totalCA]);
-
+function EcheancesCard({ hp, estimate }: { hp: ReturnType<typeof usePractitioner>; estimate: CotisationsEstimate | null }) {
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentDay = now.getDate();
@@ -359,6 +392,107 @@ function EcheancesCard({ hp, totalCA }: { hp: ReturnType<typeof usePractitioner>
         </div>
       )}
     </Card>
+  );
+}
+
+/* ─── Health score ─── */
+function scoreColor(score: number): { text: string; bg: string; bar: string; label: string } {
+  if (score >= 80) return { text: "text-green-600", bg: "bg-green-50", bar: "bg-green-500", label: "Excellent" };
+  if (score >= 60) return { text: "text-emerald-600", bg: "bg-emerald-50", bar: "bg-emerald-500", label: "Bon" };
+  if (score >= 40) return { text: "text-amber-600", bg: "bg-amber-50", bar: "bg-amber-500", label: "À surveiller" };
+  return { text: "text-red-600", bg: "bg-red-50", bar: "bg-red-500", label: "Critique" };
+}
+
+function severityStyle(s: "info" | "warning" | "critical"): { icon: string; text: string } {
+  if (s === "critical") return { icon: "text-red-500", text: "text-red-900" };
+  if (s === "warning") return { icon: "text-amber-500", text: "text-amber-900" };
+  return { icon: "text-gray-400", text: "text-gray-700" };
+}
+
+function HealthScoreCard({ loading, data }: { loading: boolean; data: HealthScore | null }) {
+  if (loading) {
+    return (
+      <div className="rounded-lg bg-white backdrop-blur-xl border border-gray-200/70 p-4 mb-2">
+        <div className="animate-pulse space-y-2">
+          <div className="h-3 bg-gray-200 rounded w-32" />
+          <div className="h-7 bg-gray-200 rounded w-20" />
+          <div className="h-1.5 bg-gray-200 rounded w-full" />
+          <div className="h-1.5 bg-gray-200 rounded w-full" />
+        </div>
+      </div>
+    );
+  }
+  if (!data) return null;
+  const color = scoreColor(data.score);
+  const availableSubs = data.subscores.filter((s) => s.available);
+
+  return (
+    <div className="rounded-lg bg-white backdrop-blur-xl border border-gray-200/70 px-4 py-3.5 mb-2">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-sm font-bold text-gray-900">Score de santé financière</p>
+          <p className={`text-xs font-medium ${color.text}`}>{color.label}</p>
+        </div>
+        <div className={`flex items-baseline gap-1 ${color.text}`}>
+          <span className="text-3xl font-bold">{data.score}</span>
+          <span className="text-sm font-medium text-gray-400">/100</span>
+        </div>
+      </div>
+
+      <div className="space-y-1.5 mb-3">
+        {data.subscores.map((s) => {
+          const sColor = scoreColor(s.score);
+          return (
+            <div key={s.key} className="flex items-center gap-2" title={s.detail}>
+              <span className="text-[11px] text-gray-600 w-36 shrink-0 truncate">{s.label}</span>
+              <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                {s.available && (
+                  <div
+                    className={`h-full ${sColor.bar} transition-all`}
+                    style={{ width: `${s.score}%` }}
+                  />
+                )}
+              </div>
+              <span className={`text-[11px] font-medium w-10 text-right ${s.available ? sColor.text : "text-gray-300"}`}>
+                {s.available ? `${Math.round(s.score)}` : "—"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {availableSubs.length < data.subscores.length && (
+        <p className="text-[10px] text-gray-400 mb-2">
+          Score partiel basé sur {availableSubs.length} indicateur{availableSubs.length > 1 ? "s" : ""} sur {data.subscores.length}.
+        </p>
+      )}
+
+      {data.recommendations.length > 0 && (
+        <div className="border-t border-gray-100 pt-2.5 space-y-2">
+          <p className="text-[11px] uppercase tracking-wide text-gray-400 font-medium">Recommandations</p>
+          {data.recommendations.map((r) => {
+            const style = severityStyle(r.severity);
+            return (
+              <div key={r.key} className="flex items-start gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 mt-0.5 ${style.icon}`}>
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs ${style.text}`}>{r.message}</p>
+                  {r.cta && (
+                    <Link href={r.cta.href} className="text-[11px] font-medium text-brand-600 hover:text-brand-700 mt-0.5 inline-block transition-colors">
+                      {r.cta.label} →
+                    </Link>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

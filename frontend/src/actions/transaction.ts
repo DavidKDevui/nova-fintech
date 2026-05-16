@@ -4,6 +4,7 @@ import { eq, and, inArray, isNull, desc, asc, count, sum, sql, gte, lte, ilike, 
 import { getSession } from "@/lib/session";
 import { db, pool } from "@/lib/db";
 import { practitioners, bankAccounts, bankTransactions } from "@/lib/db/schema";
+import { isUuid } from "@/lib/validation";
 
 const VALID_CATEGORIES = [
   "income", "professional_reimbursement", "royalty", "urssaf", "carpimko",
@@ -14,6 +15,10 @@ export async function updateTransactionCategoryAction(transactionId: string, cat
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") {
     return { error: "Non autorisé" };
+  }
+
+  if (!isUuid(transactionId)) {
+    return { error: "Identifiant invalide" };
   }
 
   if (category !== null && !VALID_CATEGORIES.includes(category as typeof VALID_CATEGORIES[number])) {
@@ -36,26 +41,30 @@ export async function updateTransactionCategoryAction(transactionId: string, cat
     if (!tx) return { error: "Transaction introuvable" };
 
     // Update the target transaction
-    await db.update(bankTransactions).set({ category }).where(eq(bankTransactions.id, transactionId));
+    await db
+      .update(bankTransactions)
+      .set({ category, categorizationSource: category === null ? null : "manual" })
+      .where(eq(bankTransactions.id, transactionId));
 
     // Auto-categorize similar uncategorized transactions
     let autoCount = 0;
     if (category !== null) {
       const txDescription = tx.cleanDescription || tx.description;
-      const amountCond = Number(tx.amount) >= 0 ? "amount >= 0" : "amount < 0";
-      const placeholders = accountIds.map((_, i) => `$${i + 4}`).join(", ");
+      const amountSign = Number(tx.amount) >= 0 ? "positive" : "negative";
 
       try {
-        // Try pg_trgm first (fast, in-DB)
+        // Try pg_trgm first (fast, in-DB).
+        // Tous les inputs sont paramétrés (pas d'interpolation string) pour
+        // éliminer tout risque d'injection même si une valeur amont fuit.
         const result = await pool.query(
           `UPDATE bank_transactions
-           SET category = $1
+           SET category = $1, categorization_source = 'auto_similarity'
            WHERE id != $2
-             AND bank_account_id IN (${placeholders})
+             AND bank_account_id = ANY($4::uuid[])
              AND category IS NULL
-             AND ${amountCond}
+             AND ((amount >= 0 AND $5 = 'positive') OR (amount < 0 AND $5 = 'negative'))
              AND similarity(COALESCE(clean_description, description), $3) >= 0.8`,
-          [category, transactionId, txDescription, ...accountIds],
+          [category, transactionId, txDescription, accountIds, amountSign],
         );
         autoCount = result.rowCount ?? 0;
       } catch {
@@ -91,7 +100,10 @@ export async function updateTransactionCategoryAction(transactionId: string, cat
         }
 
         if (matchIds.length > 0) {
-          await db.update(bankTransactions).set({ category }).where(inArray(bankTransactions.id, matchIds));
+          await db
+            .update(bankTransactions)
+            .set({ category, categorizationSource: "auto_similarity" })
+            .where(inArray(bankTransactions.id, matchIds));
         }
         autoCount = matchIds.length;
       }
@@ -160,21 +172,27 @@ export async function getTransactionKpisAction(accountId?: string | null, year?:
         .where(depenseFilter),
     ]);
 
-    // Cotisations sociales = urssaf + carpimko
-    const [cotisationsRow] = await db
-      .select({ total: sum(bankTransactions.amount) })
+    // Cotisations sociales — détail par caisse + total
+    const cotisationsRows = await db
+      .select({ category: bankTransactions.category, total: sum(bankTransactions.amount) })
       .from(bankTransactions)
-      .where(and(accountFilter, inArray(bankTransactions.category, ["urssaf", "carpimko"]), sql`${bankTransactions.amount} < 0`));
+      .where(and(accountFilter, inArray(bankTransactions.category, ["urssaf", "carpimko"]), sql`${bankTransactions.amount} < 0`))
+      .groupBy(bankTransactions.category);
+
+    const urssafPaid = Math.abs(Number(cotisationsRows.find((r) => r.category === "urssaf")?.total ?? 0));
+    const carpimkoPaid = Math.abs(Number(cotisationsRows.find((r) => r.category === "carpimko")?.total ?? 0));
 
     return {
       encaissement: Math.abs(Number(encaissementRow[0]?.total ?? 0)),
       decaissement: Math.abs(Number(decaissementRow[0]?.total ?? 0)),
       remuneration: Math.abs(Number(remunerationRow[0]?.total ?? 0)),
-      cotisations: Math.abs(Number(cotisationsRow?.total ?? 0)),
+      cotisations: urssafPaid + carpimkoPaid,
+      urssafPaid,
+      carpimkoPaid,
       nbTransactionsDepenses: depenseCountRow[0]?.total ?? 0,
     };
   } catch {
-    return { encaissement: 0, decaissement: 0, remuneration: 0, cotisations: 0, nbTransactionsDepenses: 0 };
+    return { encaissement: 0, decaissement: 0, remuneration: 0, cotisations: 0, urssafPaid: 0, carpimkoPaid: 0, nbTransactionsDepenses: 0 };
   }
 }
 

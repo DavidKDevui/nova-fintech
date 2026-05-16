@@ -11,7 +11,7 @@ export default async function AdminAdminsPage() {
 
   return (
     <div>
-      <InvitationsSection initialInvitations={pendingInvitations} />
+      <InvitationsSection initialInvitations={pendingInvitations} accountType="admin" />
       <UserTable users={admins} emptyMessage="Aucun administrateur" />
     </div>
   );

@@ -136,6 +136,28 @@ export async function getPlafondSecuriteSociale(annee: number): Promise<number> 
   return applicableValue;
 }
 
+/**
+ * Récupère le SMIC brut mensuel pour une année donnée.
+ * Endpoint : /parameter/marche_travail.salaire_minimum.smic.smic_b_mensuel
+ */
+export async function getSmicMensuel(annee: number): Promise<number> {
+  const response = await openfiscaFetch<OpenFiscaParameterResponse>(
+    "/parameter/marche_travail.salaire_minimum.smic.smic_b_mensuel"
+  );
+
+  const targetDate = `${annee}-01-01`;
+  let applicableValue = 0;
+
+  const sortedDates = Object.keys(response.values).sort();
+  for (const date of sortedDates) {
+    if (date <= targetDate) {
+      applicableValue = response.values[date];
+    }
+  }
+
+  return applicableValue;
+}
+
 export async function simulerCotisationsURSSAF(input: OpenFiscaInput): Promise<OpenFiscaResult> {
   const payload = buildSimulationPayload(input);
 

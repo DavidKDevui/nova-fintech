@@ -2,10 +2,11 @@
 
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { practices, carePassages, practitioners, statementUploads, carePayments } from "@/lib/db/schema";
+import { practices, carePassages, statementUploads, carePayments, practiceLinks } from "@/lib/db/schema";
 import type { ParsedCarePassage } from "@/lib/parsers/parse-rattrapages";
 import type { ParsedNoemiePayment } from "@/lib/parsers/parse-noemie";
-import { detectAndCreateSuggestions } from "@/actions/practice-links";
+import { detectSuggestionsForPractice } from "@/actions/practice-links";
+import { reconcileIncomingForPractitioner } from "@/lib/services/reconciliation-runner";
 import { encrypt, encryptNullable, decrypt } from "@/lib/encryption";
 
 export async function createPracticeFromBordereau(name: string, finess: string) {
@@ -131,14 +132,11 @@ export async function importBordereauAction(
       }))
     );
 
-    // Detect practice link suggestions for all registered practitioners
-    const allPractitioners = await db
-      .select({ id: practitioners.id, firstName: practitioners.firstName, lastName: practitioners.lastName })
-      .from(practitioners);
-
-    for (const p of allPractitioners) {
-      await detectAndCreateSuggestions(p.id, `${p.firstName} ${p.lastName}`);
-    }
+    // Détection des suggestions de lien praticien-cabinet pour ce cabinet.
+    // On fait UNE seule passe scopée à la `practiceId` qu'on vient d'alimenter,
+    // au lieu d'itérer sur tous les praticiens (qui chacun re-scannait tous
+    // les `carePassages` — N+1 sur grosse base).
+    await detectSuggestionsForPractice(practiceId);
 
     return {
       success: true,
@@ -257,6 +255,21 @@ export async function importNoemieAction(
             eq(carePassages.invoiceNumber, p.invoiceNumber)
           )
         );
+    }
+
+    // Déclenche le rapprochement automatique pour chaque praticien lié au cabinet :
+    // les nouveaux carePayments peuvent matcher des virements déjà présents en banque.
+    const linkedPractitioners = await db
+      .select({ practitionerId: practiceLinks.practitionerId })
+      .from(practiceLinks)
+      .where(eq(practiceLinks.practiceId, practiceId));
+    for (const link of linkedPractitioners) {
+      try {
+        await reconcileIncomingForPractitioner(link.practitionerId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[IMPORT NOEMIE] reconciliation failed for practitioner ${link.practitionerId}:`, msg);
+      }
     }
 
     return {

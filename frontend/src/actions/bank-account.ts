@@ -4,14 +4,23 @@ import { eq, and } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { practitioners, bankAccounts } from "@/lib/db/schema";
+import { isUuid } from "@/lib/validation";
 
 export async function setDefaultBankAccountAction(bankAccountId: string) {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") {
     return { error: "Non autorisé" };
   }
+  if (!isUuid(bankAccountId)) return { error: "Identifiant invalide" };
 
   try {
+    // Vérifie que le compte appartient bien au praticien avant de le poser
+    // comme défaut (évite qu'un client malicieux pose le compte d'un autre).
+    const [hp] = await db.select({ id: practitioners.id }).from(practitioners).where(eq(practitioners.userId, session.id));
+    if (!hp) return { error: "Profil professionnel requis" };
+    const [acc] = await db.select({ id: bankAccounts.id }).from(bankAccounts).where(and(eq(bankAccounts.id, bankAccountId), eq(bankAccounts.practitionerId, hp.id)));
+    if (!acc) return { error: "Compte introuvable" };
+
     await db
       .update(practitioners)
       .set({
@@ -32,6 +41,7 @@ export async function deleteBankAccountAction(bankAccountId: string) {
   if (!session || session.accountType !== "practitioner") {
     return { error: "Non autorisé" };
   }
+  if (!isUuid(bankAccountId)) return { error: "Identifiant invalide" };
 
   try {
     const [hp] = await db

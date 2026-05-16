@@ -9,6 +9,8 @@ import {
   DEFAULT_PREFERENCES,
 } from "@/lib/data/fiscal-calendar";
 import { getCotisationsEstimate } from "@/actions/cotisations-estimate";
+import { computeHealthScoreById } from "@/actions/health-score";
+import { computeRecommendationsById } from "@/actions/recommendations";
 import type OpenAI from "openai";
 
 function formatEur(n: number): string {
@@ -93,7 +95,7 @@ export const toolDefinitions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "project_treasury",
-      description: "Projette l'évolution de la trésorerie sur les N prochains mois en se basant sur la moyenne des 3 derniers mois et les échéances connues",
+      description: "Projette l'évolution de la trésorerie sur les N prochains mois en se basant sur la moyenne et la volatilité des 6 derniers mois. Retourne une projection centrale **et un intervalle de confiance à 80 %** (borne basse / borne haute), de plus en plus large à mesure qu'on s'éloigne dans le temps.",
       parameters: {
         type: "object",
         properties: {
@@ -236,6 +238,28 @@ export const toolDefinitions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_health_score",
+      description: "Retourne le score de santé financière du praticien sur 100, avec le détail des 4 sous-scores (trésorerie, poids des charges, complétude des données, recouvrement) et jusqu'à 3 recommandations actionnables. Utile pour 'comment ça va ?', 'quel est mon score ?', 'qu'est-ce que je dois améliorer ?'.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_recommendations",
+      description: "Retourne les recommandations personnalisées d'optimisation pour le praticien : PER ou Madelin sous-utilisés, régularisation URSSAF à provisionner, échéances supérieures au solde, régime fiscal sous-optimal, délai de paiement long, trésorerie dormante, cotisations en retard. Chaque reco a un impact € chiffré. Utile pour 'qu'est-ce que je peux optimiser ?', 'opportunités d'économie', 'que dois-je faire pour économiser ?'.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
 ];
 
 // Tool execution functions
@@ -313,12 +337,20 @@ export function createToolExecutors(practitionerId: string, accountIds: string[]
       const result = await getCotisationsEstimate(revenu);
       if (!result) return "Impossible de calculer les cotisations.";
 
+      // Marge ±15 % : reflète l'incertitude liée aux régularisations N+2,
+      // aux barèmes IR (tranches/plafonds qui évoluent) et aux options
+      // d'optimisation non encore activées (PER, Madelin…).
+      const COTISATIONS_MARGIN = 0.15;
+      const total = result.urssafAnnuel + result.carpimkoAnnuel + result.pasAnnuel;
+      const totalLow = Math.round(total * (1 - COTISATIONS_MARGIN));
+      const totalHigh = Math.round(total * (1 + COTISATIONS_MARGIN));
+
       return [
         `Simulation cotisations pour un revenu de ${formatEur(revenu)} :`,
         `URSSAF annuel : ${formatEur(result.urssafAnnuel)} (${formatEur(result.urssafParEcheance)}/échéance)`,
         `CARPIMKO annuel : ${formatEur(result.carpimkoAnnuel)} (${formatEur(result.carpimkoParEcheance)}/échéance)`,
         `PAS (impôt sur le revenu) : ${formatEur(result.pasAnnuel)} (${formatEur(result.pasParEcheance)}/échéance)`,
-        `Total cotisations : ${formatEur(result.urssafAnnuel + result.carpimkoAnnuel + result.pasAnnuel)}`,
+        `Total cotisations : ${formatEur(total)} (estimé entre ${formatEur(totalLow)} et ${formatEur(totalHigh)}, ±${Math.round(COTISATIONS_MARGIN * 100)} %)`,
       ].join("\n");
     },
 
@@ -372,45 +404,83 @@ export function createToolExecutors(practitionerId: string, accountIds: string[]
       if (accountIds.length === 0) return "Aucun compte bancaire connecté.";
       const months = args.months ?? 3;
 
-      // Current balance
+      // ── Solde actuel ──
       const accs = await db.select().from(bankAccounts).where(inArray(bankAccounts.id, accountIds));
-      let balance = accs.reduce((s, a) => s + Number(a.balance ?? 0), 0);
+      const currentBalance = accs.reduce((s, a) => s + Number(a.balance ?? 0), 0);
 
-      // Average monthly income/expense over last 3 months
+      // ── Historique : net mensuel sur les 6 derniers mois complets ──
+      // (on exclut le mois en cours, partiel par nature, qui fausserait la moyenne)
       const now = new Date();
-      const threeMonthsAgo = new Date(now);
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-      const fromDate = threeMonthsAgo.toISOString().split("T")[0]!;
+      const lookbackStart = new Date(now);
+      lookbackStart.setMonth(lookbackStart.getMonth() - 6);
+      lookbackStart.setDate(1);
+      const fromDate = lookbackStart.toISOString().split("T")[0]!;
 
-      const [avgRow] = await db
+      const monthlyRows = await db
         .select({
-          avgIncome: sql<string>`COALESCE(SUM(CASE WHEN ${bankTransactions.amount} >= 0 THEN ${bankTransactions.amount} ELSE 0 END) / 3, 0)`,
-          avgExpense: sql<string>`COALESCE(SUM(CASE WHEN ${bankTransactions.amount} < 0 THEN ${bankTransactions.amount} ELSE 0 END) / 3, 0)`,
+          yearMonth: sql<string>`TO_CHAR(${bankTransactions.date}::date, 'YYYY-MM')`,
+          net: sql<string>`COALESCE(SUM(${bankTransactions.amount}), 0)`,
         })
         .from(bankTransactions)
-        .where(and(inArray(bankTransactions.bankAccountId, accountIds), gte(bankTransactions.date, fromDate)));
+        .where(and(inArray(bankTransactions.bankAccountId, accountIds), gte(bankTransactions.date, fromDate)))
+        .groupBy(sql`TO_CHAR(${bankTransactions.date}::date, 'YYYY-MM')`);
 
-      const monthlyIncome = Number(avgRow?.avgIncome ?? 0);
-      const monthlyExpense = Number(avgRow?.avgExpense ?? 0);
-      const monthlyNet = monthlyIncome + monthlyExpense; // expense is negative
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const monthlyNets = monthlyRows
+        .filter((r) => r.yearMonth !== currentMonthKey)
+        .map((r) => Number(r.net))
+        .slice(-6);
 
-      const lines = [
+      const meanNet = monthlyNets.length > 0
+        ? monthlyNets.reduce((a, b) => a + b, 0) / monthlyNets.length
+        : 0;
+
+      // Écart-type de l'échantillon (n-1) — nécessite au moins 2 points.
+      let stdDev = 0;
+      if (monthlyNets.length >= 2) {
+        const variance = monthlyNets.reduce((a, b) => a + (b - meanNet) ** 2, 0) / (monthlyNets.length - 1);
+        stdDev = Math.sqrt(variance);
+      }
+
+      // ── Projection avec intervalle de confiance 80 % ──
+      // Modèle : la trésorerie au mois N est la somme du solde + N tirages
+      // indépendants du flux mensuel. L'écart-type de cette somme est
+      // sqrt(N) × stdDev. On utilise z=1.28 (80 % → marge symétrique ±X).
+      const Z80 = 1.28;
+      const lines: string[] = [
         `Projection trésorerie sur ${months} mois :`,
-        `Solde actuel : ${formatEur(balance)}`,
-        `Moyenne mensuelle : +${formatEur(monthlyIncome)} / ${formatEur(monthlyExpense)} = ${formatEur(monthlyNet)} net`,
-        "",
+        `Solde actuel : ${formatEur(currentBalance)}`,
+        `Flux net mensuel moyen (${monthlyNets.length} mois) : ${formatEur(meanNet)}`,
       ];
+      if (stdDev > 0) {
+        lines.push(`Volatilité mensuelle (écart-type) : ${formatEur(stdDev)}`);
+      } else if (monthlyNets.length < 2) {
+        lines.push(`(Historique trop court pour calculer une marge fiable — projection sans intervalle.)`);
+      }
+      lines.push("");
 
       for (let i = 1; i <= months; i++) {
         const futureDate = new Date(now);
         futureDate.setMonth(futureDate.getMonth() + i);
         const monthLabel = MONTH_SHORT[futureDate.getMonth()];
-        balance += monthlyNet;
-        lines.push(`${monthLabel} ${futureDate.getFullYear()} : ~${formatEur(balance)}`);
+        const central = currentBalance + i * meanNet;
+        if (stdDev > 0) {
+          const margin = Z80 * stdDev * Math.sqrt(i);
+          lines.push(
+            `${monthLabel} ${futureDate.getFullYear()} : ~${formatEur(central)} ` +
+            `(entre ${formatEur(central - margin)} et ${formatEur(central + margin)}, à 80 %)`,
+          );
+        } else {
+          lines.push(`${monthLabel} ${futureDate.getFullYear()} : ~${formatEur(central)}`);
+        }
       }
 
-      if (balance < 0) {
-        lines.push(`\n⚠ Attention : la trésorerie deviendrait négative.`);
+      const finalCentral = currentBalance + months * meanNet;
+      const finalLow = stdDev > 0 ? finalCentral - Z80 * stdDev * Math.sqrt(months) : finalCentral;
+      if (finalCentral < 0) {
+        lines.push(`\n⚠ Attention : projection centrale négative — risque de trésorerie tendue.`);
+      } else if (finalLow < 0) {
+        lines.push(`\n⚠ La borne basse de l'intervalle passe sous 0 — il existe un risque de trou de trésorerie.`);
       }
 
       return lines.join("\n");
@@ -840,6 +910,76 @@ export function createToolExecutors(practitionerId: string, accountIds: string[]
           lines.push(`  Dernière synchro : ${new Date(acc.lastSyncAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}`);
         }
       }
+      return lines.join("\n");
+    },
+
+    async get_recommendations(): Promise<string> {
+      const recos = await computeRecommendationsById(practitionerId);
+      if (recos.length === 0) return "Aucune opportunité d'optimisation détectée pour l'instant — bravo !";
+
+      const totalImpact = recos.reduce((s, r) => s + (r.impactEur ?? 0), 0);
+      const lines: string[] = [];
+      lines.push(`${recos.length} recommandation${recos.length > 1 ? "s" : ""} personnalisée${recos.length > 1 ? "s" : ""}.`);
+      if (totalImpact !== 0) {
+        lines.push(`Impact cumulé estimé : ${totalImpact > 0 ? "+" : ""}${formatEur(totalImpact)}/an`);
+      }
+      lines.push("");
+
+      for (const r of recos) {
+        const sev = r.severity === "critical" ? "[critique]"
+          : r.severity === "warning" ? "[à surveiller]"
+          : r.severity === "opportunity" ? "[opportunité]"
+          : "[info]";
+        const impact = r.impactEur !== undefined
+          ? ` — impact ${r.impactEur > 0 ? "+" : ""}${formatEur(r.impactEur)}/an`
+          : "";
+        lines.push(`${sev} ${r.title}${impact}`);
+        lines.push(`  ${r.message}`);
+        for (const ev of r.evidence) lines.push(`  · ${ev}`);
+        if (r.cta) lines.push(`  → ${r.cta.label} (${r.cta.href})`);
+        lines.push("");
+      }
+      return lines.join("\n");
+    },
+
+    async get_health_score(): Promise<string> {
+      const result = await computeHealthScoreById(practitionerId);
+      if (!result) return "Score de santé financière indisponible.";
+
+      const label = result.score >= 80 ? "Excellent"
+        : result.score >= 60 ? "Bon"
+        : result.score >= 40 ? "À surveiller"
+        : "Critique";
+
+      const lines: string[] = [];
+      lines.push(`Score global : ${result.score}/100 (${label})`);
+
+      const available = result.subscores.filter((s) => s.available);
+      const skipped = result.subscores.filter((s) => !s.available);
+      if (skipped.length > 0) {
+        lines.push(`Score partiel basé sur ${available.length}/${result.subscores.length} indicateurs.`);
+      }
+
+      lines.push("");
+      lines.push("Détail des sous-scores :");
+      for (const s of result.subscores) {
+        if (s.available) {
+          lines.push(`- ${s.label} : ${Math.round(s.score)}/100 — ${s.detail}`);
+        } else {
+          lines.push(`- ${s.label} : non calculé — ${s.detail}`);
+        }
+      }
+
+      if (result.recommendations.length > 0) {
+        lines.push("");
+        lines.push("Recommandations :");
+        for (const r of result.recommendations) {
+          const sev = r.severity === "critical" ? "[critique]" : r.severity === "warning" ? "[à surveiller]" : "[info]";
+          const cta = r.cta ? ` → ${r.cta.label} (${r.cta.href})` : "";
+          lines.push(`- ${sev} ${r.message}${cta}`);
+        }
+      }
+
       return lines.join("\n");
     },
   };

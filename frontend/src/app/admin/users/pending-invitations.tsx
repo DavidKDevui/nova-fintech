@@ -24,9 +24,12 @@ function timeRemaining(expiresAt: Date): string {
 
 export function InvitationsSection({
   initialInvitations,
+  accountType,
 }: {
   initialInvitations: Invitation[];
+  accountType: "practitioner" | "admin";
 }) {
+  const label = accountType === "admin" ? "un administrateur" : "un praticien";
   const [invitations, setInvitations] = useState(initialInvitations);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [state, action, pending] = useActionState(createUserAction, null);
@@ -62,7 +65,7 @@ export function InvitationsSection({
     <>
       {/* Formulaire d'invitation */}
       <div className="mb-8 bg-white/70 backdrop-blur-xl border border-white/50 rounded-lg p-4 md:p-6">
-        <h2 className="text-lg font-semibold mb-4">Inviter un praticien</h2>
+        <h2 className="text-lg font-semibold mb-4">Inviter {label}</h2>
         <form ref={formRef} action={action} className="flex flex-col sm:flex-row gap-3">
           <input
             name="email"
@@ -71,14 +74,7 @@ export function InvitationsSection({
             required
             className="flex-1 border border-gray-200/50 bg-white/50 px-4 py-2.5 text-sm rounded-md backdrop-blur-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
-          <select
-            name="accountType"
-            defaultValue="practitioner"
-            className="sm:w-44 border border-gray-200/50 bg-white/50 px-4 py-2.5 text-sm rounded-md backdrop-blur-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option value="practitioner">Praticien</option>
-            <option value="admin">Administrateur</option>
-          </select>
+          <input type="hidden" name="accountType" value={accountType} />
           <button
             type="submit"
             disabled={pending}

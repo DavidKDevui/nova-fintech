@@ -24,17 +24,25 @@ function colToSQL(col: PgColumn): string {
 
   if (ct === "PgUUID") return "uuid";
   if (ct === "PgBoolean") return "boolean";
+  if (ct === "PgSmallInt") return "smallint";
   if (ct === "PgInteger") return "integer";
   if (ct === "PgBigInt53") return "bigint";
+  if (ct === "PgReal") return "real";
+  if (ct === "PgDoublePrecision") return "double precision";
   if (ct === "PgDate") return "date";
+  if (ct === "PgTime") return "time";
   if (ct === "PgTimestamp") return "timestamp";
   if (ct === "PgVarchar") return c.length ? `varchar(${c.length})` : "varchar";
+  if (ct === "PgText") return "text";
+  if (ct === "PgJson") return "json";
+  if (ct === "PgJsonb") return "jsonb";
   if (ct === "PgNumeric") {
     if (c.precision != null && c.scale != null) return `numeric(${c.precision},${c.scale})`;
     return "numeric";
   }
   if (ct === "PgEnumColumn") return `"${c.enum.enumName}"`;
-  return col.dataType;
+  // Fail loud plutôt que retourner le type JS (ex: "number") qui produirait du SQL invalide.
+  throw new Error(`[SYNC] Type de colonne non géré: ${ct} (colonne "${col.name}")`);
 }
 
 function defaultSQL(col: PgColumn): string | null {

@@ -1,5 +1,23 @@
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Vrai si `s` est un UUID v1-v5 (RFC 4122). À utiliser en entrée de Server
+ * Action sur tout ID reçu du client pour éviter qu'une chaîne arbitraire
+ * arrive jusqu'aux requêtes DB.
+ */
+export function isUuid(s: unknown): s is string {
+  return typeof s === "string" && UUID_REGEX.test(s);
+}
+
+/**
+ * Renvoie `value` si c'est un UUID valide, sinon `null`. Pratique en garde
+ * courte : `const id = parseUuid(input); if (!id) return { error: ... };`
+ */
+export function parseUuid(value: unknown): string | null {
+  return isUuid(value) ? value : null;
+}
 
 export function validateEmail(email: string): string {
   const normalized = email.trim().toLowerCase();

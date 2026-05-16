@@ -19,28 +19,29 @@ export function downloadCSV(filename: string, headers: string[], rows: (string |
 export type PdfOptions = {
   /** Sous-titre affiché sous le titre principal (ex : "Année 2025"). */
   subtitle?: string;
-  /** SVG sérialisé d'un chart à inclure au-dessus du tableau (ex : extrait via getChartSvg). */
-  chartSvg?: string;
+  /** Image PNG (data URL) d'un chart à inclure au-dessus du tableau (ex : extraite via getChartImage). */
+  chartImage?: string;
   /** Lignes d'en-tête (KPIs / résumé) affichées au-dessus du tableau, format clé/valeur. */
   summary?: Array<{ label: string; value: string }>;
 };
 
 /**
- * Récupère le SVG d'un chart recharts (rendu par ResponsiveContainer) sous forme de string.
+ * Capture un conteneur (chart Recharts ou autre) en PNG (data URL) via html2canvas-pro.
+ * Plus fiable qu'une sérialisation SVG : préserve fidèlement le rendu visuel (couleurs, polices, etc.).
  * À appeler juste avant l'export pour capturer le rendu courant.
- * Renvoie null si aucun SVG n'est trouvé.
  */
-export function getChartSvg(container: HTMLElement | null): string | null {
+export async function getChartImage(
+  container: HTMLElement | null,
+  options?: { scale?: number; background?: string },
+): Promise<string | null> {
   if (!container) return null;
-  const svg = container.querySelector("svg");
-  if (!svg) return null;
-  const clone = svg.cloneNode(true) as SVGElement;
-  const rect = svg.getBoundingClientRect();
-  // Forcer des dimensions absolues pour que le SVG s'affiche bien dans le PDF
-  if (rect.width > 0) clone.setAttribute("width", String(Math.round(rect.width)));
-  if (rect.height > 0) clone.setAttribute("height", String(Math.round(rect.height)));
-  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  return new XMLSerializer().serializeToString(clone);
+  const { default: html2canvas } = await import("html2canvas-pro");
+  const canvas = await html2canvas(container, {
+    backgroundColor: options?.background ?? "#ffffff",
+    scale: options?.scale ?? 2,
+    useCORS: true,
+  });
+  return canvas.toDataURL("image/png");
 }
 
 export function downloadPDF(
@@ -50,7 +51,7 @@ export function downloadPDF(
   rows: (string | number | null | undefined)[][],
   options: PdfOptions = {},
 ) {
-  const { subtitle, chartSvg, summary } = options;
+  const { subtitle, chartImage, summary } = options;
 
   const summaryHtml = summary && summary.length > 0
     ? `<div class="summary">${summary
@@ -58,8 +59,8 @@ export function downloadPDF(
         .join("")}</div>`
     : "";
 
-  const chartHtml = chartSvg
-    ? `<div class="chart">${chartSvg}</div>`
+  const chartHtml = chartImage
+    ? `<div class="chart"><img src="${chartImage}" alt="" /></div>`
     : "";
 
   const tableHtml = headers.length > 0 ? `
@@ -86,7 +87,7 @@ export function downloadPDF(
         .summary-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
         .summary-value { font-size: 14px; color: #111827; font-weight: 700; }
         .chart { margin-bottom: 24px; text-align: center; }
-        .chart svg { max-width: 100%; height: auto; }
+        .chart img { max-width: 100%; height: auto; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
         th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e5e7eb; font-weight: 600; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
         td { padding: 7px 10px; border-bottom: 1px solid #f3f4f6; }

@@ -31,6 +31,24 @@
         "taux": 0.003,
         "minimum": 141
       }
+    },
+    "2026": {
+      "retraiteComplementaire": {
+        "mode": "proportionnel",
+        "taux": 0.087,
+        "assietteMin": 24030,
+        "assietteMax": 144180
+      },
+      "asv": {
+        "forfaitaire": 224,
+        "proportionnel": { "plafond": 235500, "taux": 0.004 }
+      },
+      "invaliditeDeces": 1022,
+      "indemnitesJournalieres": {
+        "plafond": 144180,
+        "taux": 0.003,
+        "minimum": 144
+      }
     }
   }
 }

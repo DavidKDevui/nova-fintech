@@ -40,8 +40,19 @@ const QF_CAP_PER_HALF_PART: Record<number, number> = {
   2025: 1_807,
 };
 
+// Décote (mécanisme de réduction d'IR pour faibles revenus).
+// Formule : décote = max(0, plafond - 0,4525 × IR brut), si IR brut < seuilEligibilite.
+// Source : article 197 CGI, valeurs LF revaloriées chaque année.
+type DecoteParams = { plafondCelibataire: number; plafondCouple: number; taux: number; seuilCelibataire: number; seuilCouple: number };
+const DECOTE: Record<number, DecoteParams> = {
+  2023: { plafondCelibataire: 873, plafondCouple: 1_444, taux: 0.4525, seuilCelibataire: 1_929, seuilCouple: 3_191 },
+  2024: { plafondCelibataire: 889, plafondCouple: 1_470, taux: 0.4525, seuilCelibataire: 1_964, seuilCouple: 3_249 },
+  2025: { plafondCelibataire: 897, plafondCouple: 1_483, taux: 0.4525, seuilCelibataire: 1_982, seuilCouple: 3_277 },
+};
+
 const LATEST_BAREME_YEAR = Math.max(...Object.keys(BAREMES).map(Number));
 const LATEST_QF_YEAR = Math.max(...Object.keys(QF_CAP_PER_HALF_PART).map(Number));
+const LATEST_DECOTE_YEAR = Math.max(...Object.keys(DECOTE).map(Number));
 
 export function getBareme(incomeYear: number): Tranche[] {
   return BAREMES[incomeYear] ?? BAREMES[LATEST_BAREME_YEAR]!;
@@ -49,6 +60,21 @@ export function getBareme(incomeYear: number): Tranche[] {
 
 export function getQfCap(incomeYear: number): number {
   return QF_CAP_PER_HALF_PART[incomeYear] ?? QF_CAP_PER_HALF_PART[LATEST_QF_YEAR]!;
+}
+
+function getDecote(incomeYear: number): DecoteParams {
+  return DECOTE[incomeYear] ?? DECOTE[LATEST_DECOTE_YEAR]!;
+}
+
+function applyDecote(impot: number, partsDeReference: number, incomeYear: number): number {
+  if (impot <= 0) return 0;
+  const d = getDecote(incomeYear);
+  const isCouple = partsDeReference >= 2;
+  const seuil = isCouple ? d.seuilCouple : d.seuilCelibataire;
+  if (impot >= seuil) return impot;
+  const plafond = isCouple ? d.plafondCouple : d.plafondCelibataire;
+  const decote = Math.max(0, plafond - d.taux * impot);
+  return Math.max(0, Math.round(impot - decote));
 }
 
 function irOnePart(taxableIncome: number, bareme: Tranche[]): { impot: number; trancheIndex: number; fillPercent: number; distanceToNext: number } {
@@ -115,8 +141,8 @@ export function computeIR(input: FiscalInputs): FiscalResult {
     }
   }
 
-  // 3. Décote pour faibles revenus (simplifiée) — ignorée à ce stade.
-  // On garde le calcul nu : pour les IDEL, on est rarement dans la zone de décote.
+  // 3. Décote pour faibles revenus (article 197 CGI).
+  impotReel = applyDecote(impotReel, partsDeReference, incomeYear);
 
   const tauxMoyen = revenuImposable > 0 ? Math.round((impotReel / revenuImposable) * 100) : 0;
 

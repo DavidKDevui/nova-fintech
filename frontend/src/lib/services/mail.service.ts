@@ -1,8 +1,21 @@
 import nodemailer from "nodemailer";
 import { type Block, buildMailHtml } from "../mail/template";
+import { db } from "../db";
+import { logsNotifications } from "../db/schema";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 const SMTP_FROM = process.env.SMTP_FROM || "noreply@actidec.com";
+
+export type NotificationType =
+  | "account_setup"
+  | "account_deleted"
+  | "password_reset"
+  | "treasury_alert"
+  | "rejection_alert"
+  | "monthly_recap"
+  | "deadlines_reminder";
+
+export type SendMeta = { type: NotificationType; practitionerId?: string };
 
 function createTransporter() {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER) {
@@ -22,9 +35,40 @@ function createTransporter() {
 
 const transporter = createTransporter();
 
-async function sendMail(to: string, subject: string, blocks: Block[]) {
+async function logNotification(row: {
+  type: NotificationType;
+  recipient: string;
+  subject: string;
+  status: "sent" | "failed";
+  errorMessage?: string;
+  practitionerId?: string;
+}) {
+  try {
+    await db.insert(logsNotifications).values({
+      channel: "mail",
+      type: row.type,
+      recipient: row.recipient,
+      subject: row.subject,
+      status: row.status,
+      errorMessage: row.errorMessage ?? null,
+      practitionerId: row.practitionerId ?? null,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[notification-log] failed to persist:", msg);
+  }
+}
+
+async function sendMail(to: string, subject: string, blocks: Block[], meta: SendMeta) {
   const html = buildMailHtml(blocks);
-  await transporter.sendMail({ from: "Actidec <" + SMTP_FROM + ">", to, subject, html });
+  try {
+    await transporter.sendMail({ from: "Actidec <" + SMTP_FROM + ">", to, subject, html });
+    await logNotification({ type: meta.type, recipient: to, subject, status: "sent", practitionerId: meta.practitionerId });
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    await logNotification({ type: meta.type, recipient: to, subject, status: "failed", errorMessage, practitionerId: meta.practitionerId });
+    throw err;
+  }
 }
 
 export async function sendAccountSetup(to: string, token: string) {
@@ -34,7 +78,7 @@ export async function sendAccountSetup(to: string, token: string) {
     { type: "button", label: "Configurer mon compte", url: `${APP_URL}/setup-password?token=${token}`, icon: "arrow-right" },
     { type: "divider" },
     { type: "text", content: "Ce lien expire dans 24 heures. Si vous n'avez pas demandé ce compte, ignorez cet email.", muted: true },
-  ]);
+  ], { type: "account_setup" });
 }
 
 export async function sendAccountDeleted(to: string) {
@@ -44,7 +88,7 @@ export async function sendAccountDeleted(to: string) {
     { type: "info", content: "Si vous n'êtes pas à l'origine de cette action, contactez-nous immédiatement." },
     { type: "divider" },
     { type: "text", content: "Nous sommes désolés de vous voir partir. Si vous changez d'avis, un administrateur pourra vous inviter à nouveau.", muted: true },
-  ]);
+  ], { type: "account_deleted" });
 }
 
 export async function sendResetPassword(to: string, token: string) {
@@ -55,14 +99,14 @@ export async function sendResetPassword(to: string, token: string) {
     { type: "button", label: "Réinitialiser mon mot de passe", url: `${APP_URL}/reset-password?token=${token}`, icon: "lock" },
     { type: "divider" },
     { type: "text", content: "Ce lien expire dans 1 heure. Si vous n'avez pas fait cette demande, ignorez cet email.", muted: true },
-  ]);
+  ], { type: "password_reset" });
 }
 
 export async function sendTreasuryAlert(to: string, data: {
   accountName: string;
   currentBalance: string;
   threshold: string;
-}) {
+}, practitionerId?: string) {
   await sendMail(to, "Actidec - Alerte trésorerie", [
     { type: "title", content: "Alerte trésorerie" },
     { type: "text", content: `Le solde de votre compte « ${data.accountName} » est passé sous votre seuil d'alerte.` },
@@ -73,7 +117,31 @@ export async function sendTreasuryAlert(to: string, data: {
     { type: "button", label: "Voir mes transactions", url: `${APP_URL}/transactions`, icon: "arrow-right" },
     { type: "divider" },
     { type: "text", content: "Vous recevez cet email car vous avez configuré une alerte de trésorerie sur Actidec. Vous ne serez pas notifié à nouveau avant 7 jours.", muted: true },
-  ]);
+  ], { type: "treasury_alert", practitionerId });
+}
+
+export async function sendRejectionAlert(to: string, data: {
+  firstName: string;
+  rejectionRate: number;
+  threshold: number;
+  rejectedCount: number;
+  totalCount: number;
+  periodDays: number;
+}, practitionerId?: string) {
+  const fmtPct = (n: number) => `${(n * 100).toFixed(1)} %`;
+  await sendMail(to, "Actidec - Taux de rejet élevé", [
+    { type: "title", content: "Taux de rejet élevé" },
+    { type: "subtitle", content: `Bonjour ${data.firstName}` },
+    { type: "text", content: `Votre taux de rejet bordereaux sur les ${data.periodDays} derniers jours a dépassé votre seuil d'alerte. Identifier les causes des rejets permet souvent de récupérer du chiffre d'affaires.` },
+    { type: "list", items: [
+      `Taux de rejet actuel : ${fmtPct(data.rejectionRate)}`,
+      `Seuil configuré : ${fmtPct(data.threshold)}`,
+      `Bordereaux rejetés : ${data.rejectedCount} sur ${data.totalCount}`,
+    ]},
+    { type: "button", label: "Voir ma facturation", url: `${APP_URL}/facturation`, icon: "arrow-right" },
+    { type: "divider" },
+    { type: "text", content: "Vous recevez cet email car vous avez activé l'alerte de taux de rejet sur Actidec. Vous ne serez pas notifié à nouveau avant 14 jours.", muted: true },
+  ], { type: "rejection_alert", practitionerId });
 }
 
 function fmtCurrency(v: number | string): string {
@@ -103,7 +171,7 @@ export type MonthlyRecapData = {
   staleAccountsCount?: number;
 };
 
-export async function sendMonthlyRecap(to: string, data: MonthlyRecapData) {
+export async function sendMonthlyRecap(to: string, data: MonthlyRecapData, practitionerId?: string) {
   const kind = data.isQuarterly ? "trimestriel" : "mensuel";
   const blocks: Block[] = [
     { type: "title", content: `Récap ${kind} — ${data.periodLabel}` },
@@ -191,7 +259,7 @@ export async function sendMonthlyRecap(to: string, data: MonthlyRecapData) {
     { type: "text", content: "Vous pouvez modifier la fréquence ou désactiver ces récapitulatifs depuis votre profil.", muted: true },
   );
 
-  await sendMail(to, `Actidec — Récap ${kind} ${data.periodLabel}`, blocks);
+  await sendMail(to, `Actidec — Récap ${kind} ${data.periodLabel}`, blocks, { type: "monthly_recap", practitionerId });
 }
 
 export type DeadlineEvent = {
@@ -208,7 +276,7 @@ export type DeadlinesReminderData = {
   }>;
 };
 
-export async function sendDeadlinesReminder(to: string, data: DeadlinesReminderData) {
+export async function sendDeadlinesReminder(to: string, data: DeadlinesReminderData, practitionerId?: string) {
   const blocks: Block[] = [
     { type: "title", content: "Vos échéances à venir" },
     { type: "subtitle", content: data.periodLabel },
@@ -228,5 +296,5 @@ export async function sendDeadlinesReminder(to: string, data: DeadlinesReminderD
     { type: "text", content: "Vous pouvez désactiver ces rappels depuis votre profil.", muted: true },
   );
 
-  await sendMail(to, "Actidec — Vos échéances à venir", blocks);
+  await sendMail(to, "Actidec — Vos échéances à venir", blocks, { type: "deadlines_reminder", practitionerId });
 }

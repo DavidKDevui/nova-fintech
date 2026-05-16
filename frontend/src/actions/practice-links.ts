@@ -51,6 +51,53 @@ export async function detectAndCreateSuggestions(practitionerId: string, fullNam
   }
 }
 
+/**
+ * Variante "scopée par cabinet" : appelée après import d'un bordereau pour ne
+ * scanner qu'UN seul cabinet (au lieu d'itérer sur tous les praticiens).
+ * Coût : ~3 requêtes constant, indépendant du nombre de praticiens.
+ */
+export async function detectSuggestionsForPractice(practiceId: string) {
+  // Tous les praticiens enregistrés
+  const allPractitioners = await db
+    .select({ id: practitioners.id, firstName: practitioners.firstName, lastName: practitioners.lastName })
+    .from(practitioners);
+  if (allPractitioners.length === 0) return;
+
+  // Noms distincts présents dans les passages de CE cabinet
+  const passages = await db
+    .selectDistinct({ practitioner: carePassages.practitioner })
+    .from(carePassages)
+    .where(eq(carePassages.practiceId, practiceId));
+  if (passages.length === 0) return;
+
+  // Praticiens déjà liés ou ayant déjà une suggestion sur ce cabinet
+  const [existingSuggestions, existingLinks] = await Promise.all([
+    db.select({ practitionerId: practiceLinkSuggestions.practitionerId })
+      .from(practiceLinkSuggestions)
+      .where(eq(practiceLinkSuggestions.practiceId, practiceId)),
+    db.select({ practitionerId: practiceLinks.practitionerId })
+      .from(practiceLinks)
+      .where(eq(practiceLinks.practiceId, practiceId)),
+  ]);
+  const excluded = new Set<string>([
+    ...existingSuggestions.map((s) => s.practitionerId),
+    ...existingLinks.map((l) => l.practitionerId),
+  ]);
+
+  // Match en mémoire
+  const newSuggestions: { practiceId: string; practitionerId: string }[] = [];
+  for (const hp of allPractitioners) {
+    if (excluded.has(hp.id)) continue;
+    const fullName = `${hp.firstName} ${hp.lastName}`;
+    const matched = passages.some((p) => namesMatch(fullName, p.practitioner));
+    if (matched) newSuggestions.push({ practiceId, practitionerId: hp.id });
+  }
+
+  if (newSuggestions.length > 0) {
+    await db.insert(practiceLinkSuggestions).values(newSuggestions);
+  }
+}
+
 export async function getPendingSuggestions() {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") {

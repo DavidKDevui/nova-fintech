@@ -1,11 +1,26 @@
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { eq, and, isNull, gt } from "drizzle-orm";
+import { eq, and, isNull, gt, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
-import { users, invitations, verifications, practitioners, bankAccounts, bankTransactions, practiceLinks, practiceLinkSuggestions } from "../db/schema";
+import {
+  users,
+  invitations,
+  verifications,
+  practitioners,
+  bankAccounts,
+  bankTransactions,
+  bankAlerts,
+  practiceLinks,
+  practiceLinkSuggestions,
+  practitionerFiscalSituations,
+  practitionerVacations,
+  carePassages,
+  logsNotifications,
+} from "../db/schema";
 import { JWT_SECRET } from "../env";
 import { validateEmail, validatePassword } from "../validation";
+import { namesMatch } from "../name-matching";
 import * as mail from "./mail.service";
 const ACCESS_TOKEN_EXPIRY = "15m";
 const REFRESH_TOKEN_EXPIRY = "7d";
@@ -239,17 +254,64 @@ export async function logout(userId: string) {
   await db.update(users).set({ refreshToken: null, previousRefreshToken: null, previousRefreshTokenExpiresAt: null, updatedAt: new Date() }).where(eq(users.id, userId));
 }
 
+const ANONYMIZED_PRACTITIONER_LABEL = "PRAT_ANONYMISE";
+const ANONYMIZED_EMAIL_LABEL = "anonymized@deleted.local";
+
 export async function deleteAccount(userId: string) {
   const [user] = await findActiveUser("id", userId);
   if (!user) throw new Error("User not found");
 
-  // Find practitioner profile
+  // Capture l'identité avant toute suppression pour pouvoir anonymiser
+  // les enregistrements indirectement liés (logs de notifications, bordereaux).
+  const originalEmail = user.email;
+
   const [practitioner] = await db
-    .select({ id: practitioners.id })
+    .select({
+      id: practitioners.id,
+      firstName: practitioners.firstName,
+      lastName: practitioners.lastName,
+    })
     .from(practitioners)
     .where(eq(practitioners.userId, userId));
 
   if (practitioner) {
+    const fullName = `${practitioner.firstName} ${practitioner.lastName}`;
+    const lastNamePattern = `%${practitioner.lastName}%`;
+
+    // ── RGPD Art. 17 : anonymise le nom du praticien dans care_passages ──
+    // Les bordereaux Ozzen sont importés au niveau du cabinet (practiceId),
+    // pas du praticien. Le cabinet a une obligation de conservation comptable
+    // (CGI, 10 ans) : on garde donc les passages mais on efface le nom du
+    // praticien qui les a réalisés. On capture les practiceIds AVANT de
+    // supprimer practice_links.
+    const links = await db
+      .select({ practiceId: practiceLinks.practiceId })
+      .from(practiceLinks)
+      .where(eq(practiceLinks.practitionerId, practitioner.id));
+
+    if (links.length > 0) {
+      const practiceIds = links.map((l) => l.practiceId);
+      // Pré-filtre SQL sur le nom + matching exact JS via namesMatch (même
+      // approche que cotisations-estimate.ts pour éviter les faux positifs
+      // sur les noms courants).
+      const candidates = await db
+        .select({ id: carePassages.id, practitioner: carePassages.practitioner })
+        .from(carePassages)
+        .where(and(
+          inArray(carePassages.practiceId, practiceIds),
+          sql`${carePassages.practitioner} ILIKE ${lastNamePattern}`,
+        ));
+      const matchedIds = candidates
+        .filter((c) => namesMatch(fullName, c.practitioner))
+        .map((c) => c.id);
+      if (matchedIds.length > 0) {
+        await db
+          .update(carePassages)
+          .set({ practitioner: ANONYMIZED_PRACTITIONER_LABEL })
+          .where(inArray(carePassages.id, matchedIds));
+      }
+    }
+
     // Delete bank transactions (via bank accounts)
     const accs = await db
       .select({ id: bankAccounts.id })
@@ -260,19 +322,36 @@ export async function deleteAccount(userId: string) {
       await db.delete(bankTransactions).where(eq(bankTransactions.bankAccountId, acc.id));
     }
 
+    // Delete bank alerts (référencent practitioner et bank_accounts)
+    await db.delete(bankAlerts).where(eq(bankAlerts.practitionerId, practitioner.id));
+
     // Delete bank accounts
     await db.delete(bankAccounts).where(eq(bankAccounts.practitionerId, practitioner.id));
+
+    // Delete fiscal situations & vacations (données RGPD personnelles)
+    await db.delete(practitionerFiscalSituations).where(eq(practitionerFiscalSituations.practitionerId, practitioner.id));
+    await db.delete(practitionerVacations).where(eq(practitionerVacations.practitionerId, practitioner.id));
 
     // Delete practice links & suggestions
     await db.delete(practiceLinks).where(eq(practiceLinks.practitionerId, practitioner.id));
     await db.delete(practiceLinkSuggestions).where(eq(practiceLinkSuggestions.practitionerId, practitioner.id));
 
-    // Delete practitioner profile
+    // Delete practitioner profile (déclenche ON DELETE SET NULL sur
+    // logs_notifications.practitioner_id).
     await db.delete(practitioners).where(eq(practitioners.id, practitioner.id));
   }
 
   // Delete verifications
   await db.delete(verifications).where(eq(verifications.userId, userId));
+
+  // ── RGPD Art. 17 : anonymise l'email destinataire dans logs_notifications ──
+  // L'historique des mails envoyés (rappels échéances, alertes trésorerie,
+  // recap mensuel) est conservé pour traçabilité opérationnelle, mais l'email
+  // du destinataire est une donnée personnelle qui doit être effacée.
+  await db
+    .update(logsNotifications)
+    .set({ recipient: ANONYMIZED_EMAIL_LABEL })
+    .where(eq(logsNotifications.recipient, originalEmail));
 
   // Anonymize & soft-delete user
   const anonymized = `deleted_${crypto.randomBytes(8).toString("hex")}@anonymous.local`;

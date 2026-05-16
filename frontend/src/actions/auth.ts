@@ -1,8 +1,23 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import * as authService from "@/lib/services/auth.service";
 import { getSession, setSessionCookies, clearSessionCookies } from "@/lib/session";
+import { emailToLogId } from "@/lib/log";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+// 10 tentatives par couple (IP, email) sur 5 minutes — assez pour les fautes de frappe,
+// trop peu pour un brute force.
+const LOGIN_RATE_LIMIT = 10;
+const LOGIN_RATE_WINDOW_MS = 5 * 60_000;
+
+async function getClientIp(): Promise<string> {
+  const h = await headers();
+  const fwd = h.get("x-forwarded-for");
+  if (fwd) return fwd.split(",")[0]!.trim();
+  return h.get("x-real-ip") ?? "unknown";
+}
 
 export async function loginAction(_prevState: unknown, formData: FormData) {
   const email = formData.get("email") as string;
@@ -12,17 +27,29 @@ export async function loginAction(_prevState: unknown, formData: FormData) {
     return { error: "Email et mot de passe requis" };
   }
 
+  // Identifiant non-PII pour les logs (pour corrélation sans exposer l'email)
+  const uid = emailToLogId(email);
+  const ip = await getClientIp();
+  const rateLimitKey = `login:${ip}:${uid}`;
+
+  const rl = checkRateLimit(rateLimitKey, LOGIN_RATE_LIMIT, LOGIN_RATE_WINDOW_MS);
+  if (!rl.allowed) {
+    console.warn(`[LOGIN] Rate limit dépassé uid=${uid} ip=${ip}`);
+    const minutes = Math.ceil(rl.resetInSeconds / 60);
+    return { error: `Trop de tentatives. Réessayez dans ${minutes} minute${minutes > 1 ? "s" : ""}.` };
+  }
+
   let accountType: string;
 
   try {
-    console.log(`[LOGIN] Tentative de connexion pour : ${email}`);
+    console.log(`[LOGIN] Tentative uid=${uid}`);
     const data = await authService.login(email, password);
-    console.log(`[LOGIN] Connexion réussie pour : ${email}`);
+    console.log(`[LOGIN] Succès uid=${uid}`);
     await setSessionCookies(data.accessToken, data.refreshToken);
     accountType = data.user.accountType;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[LOGIN] Échec pour ${email} :`, message);
+    console.error(`[LOGIN] Échec uid=${uid} :`, message);
     if (message === "Invalid credentials") {
       return { error: "Identifiants invalides" };
     }

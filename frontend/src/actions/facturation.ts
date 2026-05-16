@@ -3,7 +3,7 @@
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { practitioners, practiceLinks, carePassages, carePayments, practices } from "@/lib/db/schema";
+import { practitioners, practiceLinks, carePassages, carePayments, carePaymentReconciliations, bankTransactions, practices } from "@/lib/db/schema";
 import { namesMatch } from "@/lib/name-matching";
 import { decrypt } from "@/lib/encryption";
 
@@ -22,6 +22,9 @@ export interface CarePassageRow {
   adj2: string;
   adj3: string;
   totalAmount: string;
+  paymentDate: string | null;
+  /** Virement bancaire détecté pour ce passage (rapprochement automatique). null si non rapproché. */
+  reconciliation: { bankTxDate: string; bankTxAmount: string } | null;
 }
 
 export interface RejectionDetail {
@@ -112,6 +115,61 @@ export async function getFacturationData() {
 
   const myPassages = preFiltered.filter((p) => namesMatch(fullName, p.practitioner));
 
+  // Fetch payments first so paymentDate can be attached to each row (used client-side
+  // to compute per-year average payment delay).
+  const myInvoiceNumbers = [...new Set(myPassages.map((p) => p.invoiceNumber))];
+
+  const myPayments = myInvoiceNumbers.length > 0
+    ? await db
+        .select({
+          id: carePayments.id,
+          invoiceNumber: carePayments.invoiceNumber,
+          status: carePayments.status,
+          amountBilled: carePayments.amountBilled,
+          rejectionReason: carePayments.rejectionReason,
+          paymentRef: carePayments.paymentRef,
+          paymentDate: carePayments.paymentDate,
+        })
+        .from(carePayments)
+        .where(
+          and(
+            inArray(carePayments.practiceId, practiceIds),
+            inArray(carePayments.invoiceNumber, myInvoiceNumbers)
+          )
+        )
+    : [];
+
+  const paidPayments = myPayments.filter((p) => p.status === "paid");
+  const paidPaymentDateMap = new Map(
+    paidPayments.map((p) => [p.invoiceNumber, p.paymentDate]),
+  );
+
+  // Rapprochements bancaires : pour chaque carePayment "paid", trouve le virement matché.
+  const paidPaymentIds = paidPayments.map((p) => p.id);
+  const reconciliationRows = paidPaymentIds.length > 0
+    ? await db
+        .select({
+          carePaymentId: carePaymentReconciliations.carePaymentId,
+          bankTxDate: bankTransactions.date,
+          bankTxAmount: bankTransactions.amount,
+        })
+        .from(carePaymentReconciliations)
+        .innerJoin(bankTransactions, eq(bankTransactions.id, carePaymentReconciliations.bankTransactionId))
+        .where(inArray(carePaymentReconciliations.carePaymentId, paidPaymentIds))
+    : [];
+
+  // Map invoiceNumber → reconciliation. Si plusieurs carePayments partagent un invoiceNumber
+  // (paiement partagé C+M), on remonte le premier rapproché — suffisant pour un badge "encaissé".
+  const invoiceToReconciliation = new Map<string, { bankTxDate: string; bankTxAmount: string }>();
+  const recByCarePaymentId = new Map(
+    reconciliationRows.map((r) => [r.carePaymentId, { bankTxDate: r.bankTxDate, bankTxAmount: r.bankTxAmount }]),
+  );
+  for (const p of paidPayments) {
+    if (invoiceToReconciliation.has(p.invoiceNumber)) continue;
+    const rec = recByCarePaymentId.get(p.id);
+    if (rec) invoiceToReconciliation.set(p.invoiceNumber, rec);
+  }
+
   // Build rows
   const rows: CarePassageRow[] = myPassages.map((p) => ({
     id: p.id,
@@ -128,6 +186,8 @@ export async function getFacturationData() {
     adj2: p.adj2,
     adj3: p.adj3,
     totalAmount: p.totalAmount,
+    paymentDate: paidPaymentDateMap.get(p.invoiceNumber) ?? null,
+    reconciliation: invoiceToReconciliation.get(p.invoiceNumber) ?? null,
   }));
 
   // Build summary
@@ -166,28 +226,7 @@ export async function getFacturationData() {
     }
   }
 
-  // Rejection stats from care_payments, filtered by practitioner's invoices
-  const myInvoiceNumbers = [...new Set(myPassages.map((p) => p.invoiceNumber))];
-
-  const myPayments = myInvoiceNumbers.length > 0
-    ? await db
-        .select({
-          invoiceNumber: carePayments.invoiceNumber,
-          status: carePayments.status,
-          amountBilled: carePayments.amountBilled,
-          rejectionReason: carePayments.rejectionReason,
-          paymentRef: carePayments.paymentRef,
-          paymentDate: carePayments.paymentDate,
-        })
-        .from(carePayments)
-        .where(
-          and(
-            inArray(carePayments.practiceId, practiceIds),
-            inArray(carePayments.invoiceNumber, myInvoiceNumbers)
-          )
-        )
-    : [];
-
+  // Rejection stats from care_payments (already fetched above)
   const rejectedPayments = myPayments.filter((p) => p.status === "rejected");
   summary.rejections = {
     totalInvoices: myPayments.length,
@@ -204,7 +243,6 @@ export async function getFacturationData() {
   };
 
   // Délai moyen de paiement (jours entre date de soin et date de paiement)
-  const paidPayments = myPayments.filter((p) => p.status === "paid");
   if (paidPayments.length > 0) {
     const passageDateMap = new Map(myPassages.map((p) => [p.invoiceNumber, p.careDate]));
     let totalDays = 0;

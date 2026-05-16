@@ -9,7 +9,7 @@ export function Logo({ size = "default", variant = "dark" }: { size?: "small" | 
 
   const { width, height } = dimensions[size];
   const textColor = variant === "light" ? "white" : "#1a1a1f";
-  const subColor = variant === "light" ? "#EC6C12" : "#9060B6";
+  const subColor = "#EC6C12";
 
   return (
     <Link href="/" className="inline-block select-none" draggable={false}>

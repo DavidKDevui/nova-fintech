@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, varchar, boolean, timestamp, date, integer, numeric, bigint, index } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, uuid, varchar, boolean, timestamp, date, integer, numeric, bigint, smallint, index, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const accountTypeEnum = pgEnum("account_type", ["practitioner", "admin"]);
 export const professionEnum = pgEnum("profession", ["nurse"]);
@@ -12,6 +12,11 @@ export const carpimkoPayDayEnum = pgEnum("carpimko_pay_day", ["5", "10", "15", "
 export const retrocessionTypeEnum = pgEnum("retrocession_type", ["percentage", "fixed"]);
 
 export const recapFrequencyEnum = pgEnum("recap_frequency", ["none", "monthly", "quarterly"]);
+
+export const notificationChannelEnum = pgEnum("notification_channel", ["mail"]);
+export const notificationStatusEnum = pgEnum("notification_status", ["sent", "failed"]);
+
+export const categorizationSourceEnum = pgEnum("categorization_source", ["manual", "auto_similarity"]);
 
 export const verificationTypeEnum = pgEnum("verification_type", [
   "email_verification",
@@ -58,6 +63,9 @@ export const practitioners = pgTable("practitioners", {
   daysPerWeekWorked: integer("days_per_week_worked").notNull().default(5),
   recapFrequency: recapFrequencyEnum("recap_frequency").notNull().default("monthly"),
   deadlinesReminderEnabled: boolean("deadlines_reminder_enabled").notNull().default(true),
+  rejectionAlertEnabled: boolean("rejection_alert_enabled").notNull().default(false),
+  rejectionAlertThreshold: numeric("rejection_alert_threshold", { precision: 5, scale: 2 }).notNull().default("5.00"),
+  rejectionAlertLastSentAt: timestamp("rejection_alert_last_sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -97,6 +105,7 @@ export const bankTransactions = pgTable("bank_transactions", {
   operationType: varchar("operation_type", { length: 100 }),
   categoryId: integer("category_id"),
   category: varchar("category", { length: 50 }),
+  categorizationSource: categorizationSourceEnum("categorization_source"),
   bridgeUpdatedAt: timestamp("bridge_updated_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
@@ -121,6 +130,7 @@ export const bankAlerts = pgTable("bank_alerts", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_bank_alerts_practitioner").on(table.practitionerId),
+  uniqueIndex("uniq_bank_alerts_practitioner_account").on(table.practitionerId, table.bankAccountId),
 ]);
 
 // ── Practices (cabinets infirmiers) ──
@@ -236,6 +246,25 @@ export const carePayments = pgTable("care_payments", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ── Reconciliation entre carePayments (bordereaux) et bankTransactions (virements caisse) ──
+// Un même carePayment ne peut être réconcilié qu'une fois (UNIQUE).
+// Plusieurs carePayments peuvent pointer la même bankTransaction (virements groupés caisse).
+// pass: 1 = match 1-pour-1 exact ; 2 = subset-sum unique sur ±1j.
+export const carePaymentReconciliations = pgTable("care_payment_reconciliations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  carePaymentId: uuid("care_payment_id")
+    .notNull()
+    .unique()
+    .references(() => carePayments.id, { onDelete: "cascade" }),
+  bankTransactionId: uuid("bank_transaction_id")
+    .notNull()
+    .references(() => bankTransactions.id, { onDelete: "cascade" }),
+  pass: smallint("pass").notNull(),
+  matchedAt: timestamp("matched_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_care_payment_reconciliations_bank_tx").on(table.bankTransactionId),
+]);
+
 export const invitations = pgTable("invitations", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email", { length: 255 }).notNull(),
@@ -277,6 +306,23 @@ export const practitionerFiscalSituations = pgTable("practitioner_fiscal_situati
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_fiscal_situations_practitioner_year").on(table.practitionerId, table.year),
+]);
+
+// ── Notifications log ──
+
+export const logsNotifications = pgTable("logs_notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  channel: notificationChannelEnum("channel").notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
+  recipient: varchar("recipient", { length: 255 }).notNull(),
+  practitionerId: uuid("practitioner_id").references(() => practitioners.id, { onDelete: "set null" }),
+  subject: varchar("subject", { length: 500 }),
+  status: notificationStatusEnum("status").notNull(),
+  errorMessage: varchar("error_message", { length: 1000 }),
+  sentAt: timestamp("sent_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_logs_notifications_practitioner").on(table.practitionerId),
+  index("idx_logs_notifications_sent_at").on(table.sentAt),
 ]);
 
 // ── Vacations (per practitioner, per month) ──

@@ -7,7 +7,12 @@ import { buildFinancialContext } from "@/lib/ai/context-builder";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { toolDefinitions, createToolExecutors } from "@/lib/ai/tools";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Lazy init : on n'instancie pas le client au chargement du module,
+// sinon le build Next.js crash quand OPENAI_API_KEY n'est pas defini.
+let _openai: OpenAI | undefined;
+function openai(): OpenAI {
+  return _openai ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 
 // Simple in-memory rate limiting
 const rateLimits = new Map<string, { count: number; resetAt: number }>();
@@ -64,7 +69,7 @@ export async function POST(request: Request) {
   // Tool calling loop (max 3 rounds)
   const allToolsUsed: string[] = [];
   for (let round = 0; round < 3; round++) {
-    const response = await openai.chat.completions.create({
+    const response = await openai().chat.completions.create({
       model: "gpt-4o-mini",
       messages: allMessages,
       tools: toolDefinitions,
@@ -77,7 +82,7 @@ export async function POST(request: Request) {
     // If no tool calls, stream the final response
     if (!message.tool_calls || message.tool_calls.length === 0) {
       // Re-do the call with streaming for the final response
-      const stream = await openai.chat.completions.create({
+      const stream = await openai().chat.completions.create({
         model: "gpt-4o-mini",
         messages: allMessages,
         stream: true,
@@ -140,7 +145,7 @@ export async function POST(request: Request) {
   }
 
   // If we exhausted rounds, do a final streaming call
-  const stream = await openai.chat.completions.create({
+  const stream = await openai().chat.completions.create({
     model: "gpt-4o-mini",
     messages: allMessages,
     stream: true,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { useData } from "@/providers/data-provider";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
@@ -38,6 +38,43 @@ export function DeadlinesClient() {
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
+  const [calExporting, setCalExporting] = useState(false);
+  const calendarCardRef = useRef<HTMLDivElement>(null);
+
+  async function exportCalendarToPdf() {
+    if (!calendarCardRef.current) return;
+    setCalExporting(true);
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas-pro"),
+        import("jspdf"),
+      ]);
+      const canvas = await html2canvas(calendarCardRef.current, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 12;
+      const maxW = pageWidth - margin * 2;
+      const maxH = pageHeight - margin * 2 - 12;
+      const ratio = Math.min(maxW / canvas.width, maxH / canvas.height);
+      const w = canvas.width * ratio;
+      const h = canvas.height * ratio;
+      const x = (pageWidth - w) / 2;
+      const y = margin + 8;
+      pdf.setFontSize(13);
+      pdf.setTextColor(30);
+      pdf.text(`Calendrier fiscal — ${MONTH_NAMES[calMonth]} ${new Date().getFullYear()}`, margin, margin);
+      pdf.addImage(imgData, "PNG", x, y, w, h);
+      pdf.save(`calendrier-fiscal-${new Date().getFullYear()}-${String(calMonth + 1).padStart(2, "0")}.pdf`);
+    } finally {
+      setCalExporting(false);
+    }
+  }
 
   // Fetch cotisations estimate — use total CA (payé + en attente) for better estimation
   const totalCAForEstimate = useMemo(() => {
@@ -313,12 +350,13 @@ export function DeadlinesClient() {
       </div>
 
       {/* ── Calendar Grid ── */}
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
+      <div ref={calendarCardRef} className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
         {/* Month navigation */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <button
             onClick={() => { setCalMonth(Math.max(0, calMonth - 1)); setSelectedDay(null); }}
             disabled={calMonth <= 0}
+            data-html2canvas-ignore="true"
             className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -326,13 +364,27 @@ export function DeadlinesClient() {
           <div className="text-center">
             <h2 className="text-sm font-bold text-gray-900">{MONTH_NAMES[calMonth]} {currentYear}</h2>
           </div>
-          <button
-            onClick={() => { setCalMonth(Math.min(11, calMonth + 1)); setSelectedDay(null); }}
-            disabled={calMonth >= 11}
-            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={exportCalendarToPdf}
+              disabled={calExporting}
+              data-html2canvas-ignore="true"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Exporter le calendrier en PDF"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+              {calExporting ? "..." : "PDF"}
+            </button>
+            <button
+              onClick={() => { setCalMonth(Math.min(11, calMonth + 1)); setSelectedDay(null); }}
+              disabled={calMonth >= 11}
+              data-html2canvas-ignore="true"
+              className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
         </div>
 
         {/* Grid */}

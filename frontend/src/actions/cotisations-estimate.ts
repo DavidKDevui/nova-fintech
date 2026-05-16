@@ -16,11 +16,40 @@ export type CotisationsEstimate = {
   urssafParEcheance: number;
   carpimkoParEcheance: number;
   pasParEcheance: number;
+  /** Revenu professionnel annualisé NET de rétrocession (= base des cotisations). */
   revenuAnnualise: number;
+  /** CA brut annualisé (avant rétrocession). Égal à `revenuAnnualise` si pas de rétrocession. */
+  caBrutAnnualise: number;
+  /** Rétrocession annualisée déduite du CA brut (0 si pas de rétrocession configurée). */
+  retrocessionAnnualise: number;
   revenuN2: number | null;
   urssafBase: "n2" | "forfaitaire" | "annualise";
   pss: number;
 };
+
+/**
+ * Calcule la rétrocession sur une période donnée à partir du profil du praticien.
+ *
+ * Conventions :
+ *  - `percentage` : pourcentage du CA → retrocession = CA × value / 100
+ *  - `fixed`      : montant **mensuel** fixe (cas typique : loyer cabinet)
+ *                   → retrocession = value × monthsElapsed
+ */
+function computeRetrocessionDeduction(
+  retrocessionType: "percentage" | "fixed" | null,
+  retrocessionValue: string | null,
+  caGross: number,
+  monthsElapsed: number,
+): number {
+  if (!retrocessionType || !retrocessionValue) return 0;
+  const v = parseFloat(retrocessionValue);
+  if (!Number.isFinite(v) || v <= 0) return 0;
+  if (retrocessionType === "percentage") {
+    return Math.max(0, caGross * (v / 100));
+  }
+  // fixed : interprété comme un montant mensuel
+  return Math.max(0, v * monthsElapsed);
+}
 
 /**
  * Récupère le CA payé d'une année donnée pour le praticien connecté,
@@ -66,7 +95,10 @@ async function getCAForYear(
     .reduce((sum, p) => sum + Number(p.totalAmount), 0);
 }
 
-export async function getCotisationsEstimate(totalCA: number): Promise<CotisationsEstimate | null> {
+export async function getCotisationsEstimate(
+  totalCA: number,
+  deductionSociale: number = 0,
+): Promise<CotisationsEstimate | null> {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return null;
 
@@ -89,6 +121,14 @@ export async function getCotisationsEstimate(totalCA: number): Promise<Cotisatio
   const monthsElapsed = now.getMonth() + 1;
   const daysPerWeek = hp.daysPerWeekWorked;
 
+  // Si activityStartDate est dans l'année en cours, on borne les jours
+  // travaillables à cette date (sinon on annualise sur 12 mois entiers même
+  // pour quelqu'un démarré en septembre, ce qui surestime gravement le CA).
+  const activityStartDate = new Date(hp.activityStartDate);
+  const startMonth = activityStartDate.getFullYear() === annee
+    ? activityStartDate.getMonth() + 1
+    : 1;
+
   // Charger les jours de vacances saisis pour l'année en cours.
   const vacationsRows = await db
     .select()
@@ -105,27 +145,57 @@ export async function getCotisationsEstimate(totalCA: number): Promise<Cotisatio
   }
 
   // Jours réellement travaillés YTD (mois écoulés − vacances déjà saisies).
+  // On démarre au mois d'activité, pas en janvier.
   let workedYTD = 0;
-  for (let m = 1; m <= monthsElapsed; m++) {
+  for (let m = startMonth; m <= monthsElapsed; m++) {
     const wd = countWorkingDays(annee, m, daysPerWeek);
     workedYTD += Math.max(0, wd - vacations[m - 1]);
   }
-  // Jours travaillables sur l'année complète (12 mois − vacances saisies).
+  // Jours travaillables sur le reste de l'année (depuis startMonth jusqu'à
+  // décembre). Pour un praticien établi, c'est l'année complète.
   let workedYear = 0;
-  for (let m = 1; m <= 12; m++) {
+  for (let m = startMonth; m <= 12; m++) {
     const wd = countWorkingDays(annee, m, daysPerWeek);
     workedYear += Math.max(0, wd - vacations[m - 1]);
   }
 
+  // Annualisation du CA **brut** : daily rate × jours travaillés sur le reste
+  // de l'année. On exige un minimum de jours travaillés YTD pour utiliser le
+  // daily rate, sinon une variance ponctuelle (3 jours d'activité, 2 grosses
+  // factures…) extrapole un revenu annuel artificiellement explosif. En dessous
+  // de ce seuil, on utilise une moyenne mensuelle (plus stable) ou on renvoie
+  // le CA brut si l'activité est trop récente.
+  const MIN_WORKED_DAYS_FOR_DAILY_PROJECTION = 60;
   const dailyRate = workedYTD > 0 ? totalCA / workedYTD : 0;
-  // Annualisation principale par daily rate. Fallback linéaire si pas de jours
-  // travaillés (cas dégénéré : praticien tout nouveau ou DB vide).
-  let revenuAnnualise = dailyRate > 0
-    ? Math.round(dailyRate * workedYear)
-    : (monthsElapsed >= 2 ? Math.round((totalCA / monthsElapsed) * 12) : totalCA);
+  let caBrutAnnualise: number;
+  if (workedYTD >= MIN_WORKED_DAYS_FOR_DAILY_PROJECTION && dailyRate > 0) {
+    caBrutAnnualise = Math.round(dailyRate * workedYear);
+  } else if (monthsElapsed >= 2) {
+    caBrutAnnualise = Math.round((totalCA / monthsElapsed) * 12);
+  } else {
+    caBrutAnnualise = totalCA;
+  }
 
-  if (revenuAnnualise <= 0) revenuAnnualise = totalCA;
-  if (revenuAnnualise <= 0) return null;
+  if (caBrutAnnualise <= 0) return null;
+
+  // ── Retrait de la rétrocession ──
+  // En BNC réel, la rétrocession est une charge déductible : on la retire du
+  // CA brut annualisé pour obtenir la base des cotisations URSSAF / CARPIMKO /
+  // PAS. En micro-BNC en revanche, l'abattement forfaitaire 34 % est censé
+  // couvrir toutes les charges (rétrocession comprise) — on n'applique donc
+  // pas de double déduction. La valeur est tout de même exposée (champ
+  // `retrocessionAnnualise`) pour usage informatif côté UI.
+  const retrocessionAnnualise = Math.round(computeRetrocessionDeduction(
+    hp.retrocessionType,
+    hp.retrocessionValue,
+    caBrutAnnualise,
+    12,
+  ));
+  const isMicroBNCRegime = regime === "micro_bnc";
+  let revenuAnnualise = isMicroBNCRegime
+    ? caBrutAnnualise
+    : Math.max(0, caBrutAnnualise - retrocessionAnnualise);
+  if (revenuAnnualise <= 0) revenuAnnualise = caBrutAnnualise;
 
   // ── Déterminer si le praticien est dans ses 2 premières années ──
   const activityStart = new Date(hp.activityStartDate);
@@ -174,8 +244,10 @@ export async function getCotisationsEstimate(totalCA: number): Promise<Cotisatio
     urssafRevenuNet = revenuNetN2!;
     urssafBase = "n2";
   } else {
-    urssafRevenu = revenuAnnualise;
-    urssafRevenuNet = revenuNet;
+    // Base annualisée : la déduction sociale (Madelin, blanchisserie...) s'applique
+    // immédiatement. Pour forfait/N-2, l'effet est différé en N+2 (régularisation).
+    urssafRevenu = Math.max(0, revenuAnnualise - deductionSociale);
+    urssafRevenuNet = Math.max(0, revenuNet - deductionSociale);
     urssafBase = "annualise";
   }
 
@@ -233,6 +305,8 @@ export async function getCotisationsEstimate(totalCA: number): Promise<Cotisatio
     carpimkoParEcheance: Math.round(carpimkoAnnuel / carpimkoDiviseur),
     pasParEcheance: Math.round(pasAnnuel / pasDiviseur),
     revenuAnnualise,
+    caBrutAnnualise,
+    retrocessionAnnualise,
     revenuN2,
     urssafBase,
     pss,

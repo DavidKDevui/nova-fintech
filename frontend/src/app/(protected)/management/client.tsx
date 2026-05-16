@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, useActionState, type
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, ReferenceLine, LabelList } from "recharts";
 import { getMonthlyActivityAction, getTransactionKpisAction, getCategoryTransactionsAction, type MonthlyActivityMonth, type CategoryTransaction } from "@/actions/transaction";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
+import { simulateCotisations, type SimulationResult } from "@/actions/simulate-cotisations";
 import { getFiscalSituationAction, upsertFiscalSituationAction } from "@/actions/fiscal-situation";
 import { getVacationsAction, upsertVacationDayAction } from "@/actions/vacations";
 import { useData } from "@/providers/data-provider";
@@ -11,7 +12,7 @@ import { usePractitioner } from "@/providers/practitioner-provider";
 import { buildCalendar, type PaymentPreferences, DEFAULT_PREFERENCES } from "@/lib/data/fiscal-calendar";
 import { countWorkingDays, countRemainingWorkingDays } from "@/lib/data/fr-holidays";
 import { computeIR, computeParts, getBareme } from "@/lib/data/fr-tax";
-import { downloadCSV, downloadPDF, getChartSvg } from "@/lib/export";
+import { downloadCSV, downloadPDF, getChartImage } from "@/lib/export";
 import { ExportButtons } from "@/components/export-buttons";
 
 const TABS = [
@@ -19,6 +20,7 @@ const TABS = [
   { key: "contributions", label: "Mes cotisations sociales" },
   { key: "taxes", label: "Mes impôts" },
   { key: "summary", label: "Ma synthèse" },
+  { key: "simulation", label: "Simulation" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["key"];
@@ -58,6 +60,8 @@ export function ManagementClient() {
       {tab === "taxes" && <TaxesTab />}
 
       {tab === "summary" && <SummaryTab />}
+
+      {tab === "simulation" && <SimulationTab />}
     </div>
   );
 }
@@ -140,7 +144,7 @@ function ActivityTab() {
     downloadCSV(`activite_${year}`, exportData.headers, exportData.rows);
   }, [exportData, year]);
 
-  const handleExportPdf = useCallback(() => {
+  const handleExportPdf = useCallback(async () => {
     const totalCA = chartData.reduce((s, m) => s + m.revenus, 0);
     const totalDepenses = chartData.reduce((s, m) => s + m.cotisations + m.autresDepenses, 0);
     const totalRem = chartData.reduce((s, m) => s + (m.revenus - m.urssaf - m.carpimko - m.chargesPro - m.retrocession - m.madelin), 0);
@@ -148,9 +152,10 @@ function ActivityTab() {
     const rowsForPdf = exportData.rows.map((r) =>
       r.map((cell, i) => (i > 0 && i < r.length - 1 && typeof cell === "number" ? formatCurrency(cell) : cell)),
     );
+    const chartImage = (await getChartImage(chartRef.current)) ?? undefined;
     downloadPDF(`activite_${year}`, `Mon activité ${year}`, exportData.headers, rowsForPdf, {
       subtitle: `Détail mensuel ${year}`,
-      chartSvg: getChartSvg(chartRef.current) ?? undefined,
+      chartImage,
       summary: [
         { label: "Chiffre d'affaires", value: formatCurrency(Math.round(totalCA)) },
         { label: "Dépenses", value: formatCurrency(Math.round(totalDepenses)) },
@@ -182,35 +187,19 @@ function ActivityTab() {
   }, [chartData, vacations, year, daysPerWeek]);
 
   return (
-    <div>
+    <div className="space-y-6">
+      {/* Sélecteur d'année global du tab (au-dessus, comme dans "Mes cotisations sociales") */}
+      <div className="flex items-center justify-end gap-2">
+        <ExportButtons
+          onCsv={handleExportCsv}
+          onPdf={handleExportPdf}
+          disabled={loading || chartData.length === 0}
+        />
+        <YearSelector year={year} setYear={setYear} maxYear={currentYear} />
+      </div>
+
       {/* Chart + monthly breakdown (aligned) */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
-        <div className="flex items-center justify-end gap-2 px-5 pt-4 pb-3">
-          <ExportButtons
-            onCsv={handleExportCsv}
-            onPdf={handleExportPdf}
-            disabled={loading || chartData.length === 0}
-          />
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setYear((y) => y - 1)}
-              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <span className="text-sm font-semibold text-gray-900 w-12 text-center">{year}</span>
-            <button
-              type="button"
-              onClick={() => setYear((y) => y + 1)}
-              disabled={year >= currentYear}
-              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
-        </div>
-
         <div className="pb-2 flex">
           {/* KPI cards stacked vertically */}
           <div style={{ width: 260 }} className="flex flex-col items-center px-2 py-1 shrink-0">
@@ -320,7 +309,8 @@ function ActivityTab() {
         </div>
 
         {!loading && (
-          <div className="border-t border-gray-100 text-xs">
+          <div className="border-t border-gray-100 text-xs overflow-x-auto">
+            <div className="min-w-[900px]">
               {/* Header */}
               <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
                 <div className="px-3 py-3.5" />
@@ -520,6 +510,7 @@ function ActivityTab() {
                 })}
               </div>
             </div>
+          </div>
         )}
       </div>
     </div>
@@ -530,7 +521,6 @@ function ActivityTab() {
 
 function ContributionsTab() {
   const hp = usePractitioner();
-  const { facturationSummary } = useData();
   const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
   const [cardsLoading, setCardsLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(true);
@@ -538,11 +528,6 @@ function ContributionsTab() {
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
-
-  const totalCA = useMemo(() => {
-    if (!facturationSummary) return 0;
-    return facturationSummary.byStatus.paye.total;
-  }, [facturationSummary]);
 
   // Build calendar to know which months have payments
   const prefs: PaymentPreferences = useMemo(() => {
@@ -559,27 +544,30 @@ function ContributionsTab() {
 
   const calendar = useMemo(() => buildCalendar(prefs), [prefs]);
 
-  // Load estimate (only once, independent of year)
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
-    if (totalCA <= 0) { setCardsLoading(false); return; }
-    getCotisationsEstimate(totalCA).then((est) => {
-      if (est) setEstimate(est);
-      setCardsLoading(false);
-    }).catch(() => setCardsLoading(false));
-  }, [totalCA]);
-
-  // Load monthly data (depends on year)
+  // Load monthly data + estimate.
+  // totalCA dérivé des bank_transactions (cohérent avec Mon activité). Avant
+  // on utilisait facturationSummary (bordereaux Ozzen) → 0 si pas d'import.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setTableLoading(true);
-    getMonthlyActivityAction(year).then((monthly) => {
-      if (monthly.months) {
-        setMonthlyData(monthly.months.map((m) => ({ urssaf: m.urssaf, carpimko: m.carpimko })));
-      }
+    setCardsLoading(true);
+    (async () => {
+      const monthly = await getMonthlyActivityAction(year);
+      const months = monthly.months ?? [];
+      setMonthlyData(months.map((m) => ({ urssaf: m.urssaf, carpimko: m.carpimko })));
       setTableLoading(false);
-    }).catch(() => setTableLoading(false));
-  }, [year]);
+
+      // L'estimation annuelle ne dépend que de l'année en cours (CA YTD).
+      if (year === currentYear) {
+        const totalCA = months.reduce((s, m) => s + m.income, 0);
+        if (totalCA > 0) {
+          const est = await getCotisationsEstimate(totalCA);
+          if (est) setEstimate(est);
+        }
+      }
+      setCardsLoading(false);
+    })().catch(() => { setTableLoading(false); setCardsLoading(false); });
+  }, [year, currentYear]);
 
   // Totals réels (déjà versés) pour l'année sélectionnée
   const { totalUrssafReel, totalCarpimkoReel } = useMemo(() => {
@@ -663,7 +651,7 @@ function ContributionsTab() {
         <YearSelector year={year} setYear={setYear} maxYear={currentYear} />
       </div>
       {/* Cards */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* URSSAF */}
         <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
           <div className="flex items-center gap-4 mb-6">
@@ -763,7 +751,8 @@ function ContributionsTab() {
             <div className="h-32 bg-gray-100 rounded animate-pulse" />
           </div>
         ) : (
-          <div className="border-t border-gray-100 text-xs">
+          <div className="border-t border-gray-100 text-xs overflow-x-auto">
+            <div className="min-w-[900px]">
             {/* Header */}
             <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
               <div className="px-3 py-3.5" />
@@ -827,6 +816,7 @@ function ContributionsTab() {
                 }
                 return <div key={i} className="py-3.5 text-center font-semibold text-gray-300">—</div>;
               })}
+            </div>
             </div>
           </div>
         )}
@@ -1198,7 +1188,7 @@ function TaxesTab() {
       />
       <YearSelector year={year} setYear={setYear} maxYear={currentYear} />
     </div>
-    <div className="grid grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Ma situation fiscale */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
         <div className="mb-5">
@@ -1447,7 +1437,7 @@ function TaxesTab() {
 
 function SummaryTab() {
   const hp = usePractitioner();
-  const { facturationSummary, accounts, transactionsLoading } = useData();
+  const { accounts, transactionsLoading } = useData();
   const currentYear = new Date().getFullYear();
   const prevYear = currentYear - 1;
   const irYear = prevYear; // IR de N (déclaré et soldé en N+1)
@@ -1456,6 +1446,7 @@ function SummaryTab() {
   const [loading, setLoading] = useState(true);
   const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
   const [monthlyData, setMonthlyData] = useState<{
+    income: number;
     urssaf: number; carpimko: number; autresDepenses: number; chargesPro: number;
     retrocession: number; madelin: number;
   }[]>([]);
@@ -1468,26 +1459,31 @@ function SummaryTab() {
   } | null>(null);
   const [includeRegul, setIncludeRegul] = useState(true);
 
-  const totalCA = facturationSummary?.byStatus.paye.total ?? 0;
-
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setLoading(true);
-    Promise.all([
-      getCotisationsEstimate(totalCA),
-      getMonthlyActivityAction(currentYear),
-      getMonthlyActivityAction(prevYear),
-      getFiscalSituationAction(prevYear),
-    ]).then(([est, currentMonthly, prevMonthly, prevFiscal]) => {
-      setEstimate(est);
-      setMonthlyData(currentMonthly.months.map((m) => ({
+    (async () => {
+      const [currentMonthly, prevMonthly, prevFiscal] = await Promise.all([
+        getMonthlyActivityAction(currentYear),
+        getMonthlyActivityAction(prevYear),
+        getFiscalSituationAction(prevYear),
+      ]);
+      const monthly = currentMonthly.months.map((m) => ({
+        income: m.income,
         urssaf: m.urssaf,
         carpimko: m.carpimko,
         autresDepenses: m.autresDepenses,
         chargesPro: m.chargesPro,
         retrocession: m.retrocession,
         madelin: m.madelin,
-      })));
+      }));
+      // CA dérivé des bank_transactions catégorisées "income" — cohérent avec
+      // l'onglet Mon activité. Avant, on utilisait facturationSummary (bordereaux
+      // Ozzen) qui renvoyait 0 quand aucun bordereau n'avait été importé.
+      const totalCAFromBank = monthly.reduce((s, m) => s + m.income, 0);
+      const est = await getCotisationsEstimate(totalCAFromBank);
+      setMonthlyData(monthly);
+      setEstimate(est);
       setPrevYearCA(prevMonthly.months.reduce((s, m) => s + m.income, 0));
       if (prevFiscal) {
         setPrevYearFiscal({
@@ -1498,8 +1494,8 @@ function SummaryTab() {
         });
       }
       setLoading(false);
-    }).catch(() => setLoading(false));
-  }, [totalCA, currentYear, prevYear]);
+    })().catch(() => setLoading(false));
+  }, [currentYear, prevYear]);
 
   // 1. Trésorerie actuelle = balance du compte par défaut
   const defaultBalance = useMemo(() => {
@@ -1634,7 +1630,7 @@ function SummaryTab() {
   const isLoading = loading || transactionsLoading;
 
   return (
-    <div className="grid grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Trésorerie prévisionnelle */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
         <div className="flex items-center justify-between mb-4 gap-3">
@@ -1777,6 +1773,239 @@ function SummaryTab() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Simulation Tab ──
+
+function SimulationTab() {
+  const hp = usePractitioner();
+  const currentYear = new Date().getFullYear();
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  const [baselineCA, setBaselineCA] = useState(0);
+  const [baseline, setBaseline] = useState<SimulationResult | null>(null);
+  const [simulatedCA, setSimulatedCA] = useState(0);
+  const [simulated, setSimulated] = useState<SimulationResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [simLoading, setSimLoading] = useState(false);
+
+  // Baseline = CA annualisé courant simulé via la même fonction que la valeur
+  // "Simulé". Évite la confusion N-2/forfaitaire — comparaison apples-to-apples.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
+    setLoading(true);
+    (async () => {
+      const monthly = await getMonthlyActivityAction(currentYear);
+      const totalCAYTD = monthly.months.reduce((s, m) => s + m.income, 0);
+      const est = totalCAYTD > 0 ? await getCotisationsEstimate(totalCAYTD) : null;
+      const annualCA = est?.revenuAnnualise ?? 0;
+      const baseSim = annualCA > 0 ? await simulateCotisations(annualCA) : null;
+      setBaselineCA(annualCA);
+      setBaseline(baseSim);
+      setSimulatedCA(annualCA);
+      setSimulated(baseSim);
+      setLoading(false);
+    })().catch(() => setLoading(false));
+  }, [currentYear]);
+
+  // Recalcul simulé (debounced sur 300 ms)
+  useEffect(() => {
+    if (simulatedCA <= 0) return;
+    if (simulatedCA === baselineCA && baseline) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- évite un appel OpenFisca quand le slider revient sur le CA actuel
+      setSimulated(baseline);
+      return;
+    }
+    setSimLoading(true);
+    const handle = setTimeout(() => {
+      simulateCotisations(simulatedCA)
+        .then((res) => { if (res) setSimulated(res); })
+        .catch(() => {})
+        .finally(() => setSimLoading(false));
+    }, 300);
+    return () => { clearTimeout(handle); setSimLoading(false); };
+  }, [simulatedCA, baselineCA, baseline]);
+
+  const sliderMax = useMemo(() => Math.max(150_000, Math.round(baselineCA * 1.5 / 10_000) * 10_000), [baselineCA]);
+
+  const setPreset = useCallback((mult: number) => {
+    if (baselineCA <= 0) return;
+    setSimulatedCA(Math.round(baselineCA * mult / 1000) * 1000);
+  }, [baselineCA]);
+
+  const chartData = useMemo(() => {
+    if (!baseline || !simulated) return [];
+    return [
+      { name: "URSSAF", actuel: baseline.urssafAnnuel, simule: simulated.urssafAnnuel },
+      { name: "CARPIMKO", actuel: baseline.carpimkoAnnuel, simule: simulated.carpimkoAnnuel },
+      { name: "PAS", actuel: baseline.pasAnnuel, simule: simulated.pasAnnuel },
+      { name: "Solde", actuel: baseline.remunerationNette, simule: simulated.remunerationNette },
+    ];
+  }, [baseline, simulated]);
+
+  const handleExportCsv = useCallback(() => {
+    if (!baseline || !simulated) return;
+    const headers = ["Catégorie", "Actuel (€)", "Simulé (€)", "Différence (€)"];
+    const rows: (string | number)[][] = [
+      ["URSSAF", baseline.urssafAnnuel, simulated.urssafAnnuel, simulated.urssafAnnuel - baseline.urssafAnnuel],
+      ["CARPIMKO", baseline.carpimkoAnnuel, simulated.carpimkoAnnuel, simulated.carpimkoAnnuel - baseline.carpimkoAnnuel],
+      ["PAS (impôt sur le revenu)", baseline.pasAnnuel, simulated.pasAnnuel, simulated.pasAnnuel - baseline.pasAnnuel],
+      ["Total cotisations + impôt", baseline.totalCotisations, simulated.totalCotisations, simulated.totalCotisations - baseline.totalCotisations],
+      ["Solde avant charges pro", baseline.remunerationNette, simulated.remunerationNette, simulated.remunerationNette - baseline.remunerationNette],
+      ["CA annuel", baseline.revenuAnnuel, simulated.revenuAnnuel, simulated.revenuAnnuel - baseline.revenuAnnuel],
+    ];
+    downloadCSV(`simulation_cotisations_${currentYear}`, headers, rows);
+  }, [baseline, simulated, currentYear]);
+
+  const handleExportPdf = useCallback(async () => {
+    if (!baseline || !simulated) return;
+    const fmt = (n: number) => formatCurrency(n);
+    const fmtSigned = (n: number) => `${n > 0 ? "+" : ""}${formatCurrency(n)}`;
+    const headers = ["Catégorie", "Actuel", "Simulé", "Différence"];
+    const rows: (string | number)[][] = [
+      ["URSSAF", fmt(baseline.urssafAnnuel), fmt(simulated.urssafAnnuel), fmtSigned(simulated.urssafAnnuel - baseline.urssafAnnuel)],
+      ["CARPIMKO", fmt(baseline.carpimkoAnnuel), fmt(simulated.carpimkoAnnuel), fmtSigned(simulated.carpimkoAnnuel - baseline.carpimkoAnnuel)],
+      ["PAS (impôt sur le revenu)", fmt(baseline.pasAnnuel), fmt(simulated.pasAnnuel), fmtSigned(simulated.pasAnnuel - baseline.pasAnnuel)],
+      ["Total cotisations + impôt", fmt(baseline.totalCotisations), fmt(simulated.totalCotisations), fmtSigned(simulated.totalCotisations - baseline.totalCotisations)],
+      ["Solde avant charges pro", fmt(baseline.remunerationNette), fmt(simulated.remunerationNette), fmtSigned(simulated.remunerationNette - baseline.remunerationNette)],
+    ];
+    const chartImage = (await getChartImage(chartRef.current)) ?? undefined;
+    downloadPDF(`simulation_cotisations_${currentYear}`, `Simulation de cotisations ${currentYear}`, headers, rows, {
+      subtitle: `CA actuel ${formatCurrency(baselineCA)} → CA simulé ${formatCurrency(simulatedCA)}`,
+      chartImage,
+      summary: [
+        { label: "CA simulé", value: formatCurrency(simulatedCA) },
+        { label: "Total à régler", value: formatCurrency(simulated.totalCotisations) },
+        { label: "Solde avant charges pro", value: formatCurrency(simulated.remunerationNette) },
+      ],
+    });
+  }, [baseline, simulated, baselineCA, simulatedCA, currentYear]);
+
+  const diffPct = baselineCA > 0 && simulatedCA !== baselineCA
+    ? Math.round((simulatedCA - baselineCA) / baselineCA * 100)
+    : 0;
+
+  const cards: { label: string; before: number; after: number; isReward?: boolean }[] = [
+    { label: "URSSAF", before: baseline?.urssafAnnuel ?? 0, after: simulated?.urssafAnnuel ?? 0 },
+    { label: "CARPIMKO", before: baseline?.carpimkoAnnuel ?? 0, after: simulated?.carpimkoAnnuel ?? 0 },
+    { label: "PAS (impôt)", before: baseline?.pasAnnuel ?? 0, after: simulated?.pasAnnuel ?? 0 },
+    { label: "Total à régler", before: baseline?.totalCotisations ?? 0, after: simulated?.totalCotisations ?? 0 },
+    { label: "Solde avant charges pro", before: baseline?.remunerationNette ?? 0, after: simulated?.remunerationNette ?? 0, isReward: true },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-gray-900">Simulation de cotisations</h2>
+          <InfoTooltip text="Calcul via OpenFisca (régime PAMC IDEL) + barème CARPIMKO. À titre indicatif : en pratique, l'URSSAF est calculée sur le revenu N-2 ; cette simulation suppose que le revenu indiqué est celui de l'année en cours." />
+        </div>
+        <ExportButtons onCsv={handleExportCsv} onPdf={handleExportPdf} disabled={!baseline || !simulated} />
+      </div>
+
+      {/* Slider compact */}
+      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4 space-y-3">
+        <div className="flex items-end justify-between gap-4 flex-wrap">
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <p className="text-2xl font-bold text-gray-900">{formatCurrency(simulatedCA)}</p>
+            {baselineCA > 0 && simulatedCA !== baselineCA && (
+              <p className={`text-xs font-medium ${simulatedCA > baselineCA ? "text-emerald-600" : "text-rose-600"}`}>
+                {simulatedCA > baselineCA ? "+" : ""}{diffPct} % vs actuel ({formatCurrency(baselineCA)})
+              </p>
+            )}
+            {baselineCA > 0 && simulatedCA === baselineCA && (
+              <p className="text-xs text-gray-500">CA actuel projeté</p>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[0.8, 0.9, 1, 1.1, 1.2].map((m) => {
+              const isActive = baselineCA > 0 && Math.abs(simulatedCA - baselineCA * m) < 600;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPreset(m)}
+                  disabled={baselineCA <= 0}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors disabled:opacity-30 ${
+                    isActive
+                      ? "bg-brand-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {m === 1 ? "Actuel" : `${m > 1 ? "+" : ""}${Math.round((m - 1) * 100)} %`}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={sliderMax}
+          step={1000}
+          value={simulatedCA}
+          onChange={(e) => setSimulatedCA(Number(e.target.value))}
+          disabled={baselineCA <= 0}
+          className="w-full accent-brand-600 disabled:opacity-30"
+        />
+      </div>
+
+      {/* KPI list + chart side-by-side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] divide-y divide-gray-100">
+          {cards.map((c) => {
+            const diff = c.after - c.before;
+            const isUp = diff > 0;
+            const isGood = c.isReward ? isUp : !isUp;
+            return (
+              <div key={c.label} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <p className="text-xs uppercase tracking-wide text-gray-500">{c.label}</p>
+                <div className="flex items-baseline gap-2 text-right">
+                  <p className="text-sm font-bold text-gray-900">{formatCurrency(c.after)}</p>
+                  {Math.abs(diff) >= 1 ? (
+                    <p className={`text-xs font-medium tabular-nums ${isGood ? "text-emerald-600" : "text-rose-600"}`}>
+                      {diff > 0 ? "+" : ""}{formatCurrency(diff)}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-400">—</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+          <div ref={chartRef} className="w-full h-60">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis tickFormatter={(v) => `${Math.round(v / 1000)} k`} tick={{ fontSize: 11 }} width={36} />
+                <Tooltip formatter={(v) => formatCurrency(Number(v ?? 0))} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="actuel" name="Actuel" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="simule" name="Simulé" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {(loading || (baseline === null && !loading)) && (
+        <p className="text-xs text-gray-500 text-center">
+          {loading ? "Chargement…" : "Pas encore de CA encaissé cette année — aucune base de comparaison."}
+        </p>
+      )}
+      {simLoading && <p className="text-sm text-gray-400 text-center">Recalcul…</p>}
+      {hp?.taxRegime === "micro_bnc" && (
+        <p className="text-xs text-gray-500 text-center">
+          Régime micro-BNC : abattement forfaitaire de 34 % appliqué automatiquement sur le CA pour le calcul des cotisations.
+        </p>
+      )}
     </div>
   );
 }

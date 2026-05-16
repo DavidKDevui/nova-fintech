@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { updateProfileAction, updateNotificationsAction } from "@/actions/profile";
 import { changePasswordAction, deleteAccountAction, logoutAction } from "@/actions/auth";
+import { exportMyDataAction } from "@/actions/data-export";
 import { Modal } from "@/components/modal";
 
 const INPUT_CLASS = "w-full border border-gray-200 bg-transparent px-3 py-2 rounded-md text-[0.9rem] transition-all placeholder:text-gray-400 hover:border-gray-400 focus:border-gray-900 focus:outline-none";
@@ -67,10 +68,36 @@ export function ProfileClient() {
   const [carpimkoPayDay, setCarpimkoPayDay] = useState<string>(hp?.carpimkoPayDay ?? "10");
   const [daysPerWeekWorked, setDaysPerWeekWorked] = useState<number>(hp?.daysPerWeekWorked ?? 5);
 
-  const [tab, setTab] = useState<"profile" | "payments" | "account">("profile");
+  const [tab, setTab] = useState<"profile" | "payments" | "notifications" | "account">("profile");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [exportPending, setExportPending] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const router = useRouter();
+
+  async function handleExportData() {
+    setExportPending(true);
+    setExportError(null);
+    try {
+      const result = await exportMyDataAction();
+      if ("error" in result) {
+        setExportError(result.error);
+        return;
+      }
+      const blob = new Blob([JSON.stringify(result.payload, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportError("Erreur réseau lors de l'export.");
+    } finally {
+      setExportPending(false);
+    }
+  }
+
   const [state, action, pending] = useActionState(updateProfileAction, null);
 
   const hasChanges = hp ? (
@@ -127,6 +154,15 @@ export function ProfileClient() {
           }`}
         >
           Préférences de paiement
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("notifications")}
+          className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
+            tab === "notifications" ? "border-brand-600 text-brand-600" : "border-transparent text-gray-400 hover:text-gray-600"
+          }`}
+        >
+          Notifications
         </button>
         <button
           type="button"
@@ -436,14 +472,15 @@ export function ProfileClient() {
         )}
       </form>
 
+      {/* Tab: Notifications */}
+      {tab === "notifications" && (
+        <NotificationsForm />
+      )}
+
       {/* Tab: Compte */}
       {tab === "account" && (
         <div className="space-y-6">
-          <NotificationsForm />
-
-          <div className="border-t border-gray-200 pt-6">
-            <ChangePasswordForm />
-          </div>
+          <ChangePasswordForm />
 
           <div className="border-t border-gray-200 pt-6">
             <h3 className="text-sm font-medium text-gray-900 mb-1">Déconnexion</h3>
@@ -459,6 +496,25 @@ export function ProfileClient() {
                 Se déconnecter
               </button>
             </form>
+          </div>
+
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="text-sm font-medium text-gray-900 mb-1">Exporter mes données</h3>
+            <p className="text-sm text-gray-500 mb-3">
+              Récupérez toutes les données personnelles qu&apos;Actidec traite à votre sujet, au format JSON (RGPD&nbsp;Art.&nbsp;20).
+            </p>
+            <button
+              type="button"
+              onClick={handleExportData}
+              disabled={exportPending}
+              className="inline-flex items-center gap-2 border-2 border-gray-300 rounded-lg px-5 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 hover:border-gray-400 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-300"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              {exportPending ? "Génération en cours…" : "Télécharger mes données"}
+            </button>
+            {exportError && (
+              <p className="bg-red-50 mt-3 p-3 rounded-md text-sm text-red-600">{exportError}</p>
+            )}
           </div>
 
           <div className="border-t border-red-200 pt-6">

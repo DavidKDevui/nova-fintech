@@ -6,6 +6,7 @@ import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { practitioners, bankAccounts, bankTransactions } from "@/lib/db/schema";
 import * as bridge from "@/lib/services/bridge.service";
+import { reconcileIncomingForPractitioner } from "@/lib/services/reconciliation-runner";
 
 export async function connectBankAction() {
   const session = await getSession();
@@ -286,6 +287,15 @@ export async function initialSyncAction(itemId?: number) {
     } catch (txErr) {
       // Transactions may not be available yet — accounts are still synced successfully
       console.warn("[BRIDGE] Transactions not yet available:", txErr);
+    }
+
+    // Best-effort : tente un rapprochement automatique avec les bordereaux existants.
+    if (transactionCount > 0) {
+      try {
+        await reconcileIncomingForPractitioner(hp.id);
+      } catch (recErr) {
+        console.error("[BRIDGE] reconciliation failed after initial sync:", recErr);
+      }
     }
 
     return { success: true, accountCount: accounts.length, transactionCount };

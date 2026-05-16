@@ -55,7 +55,7 @@ export default function ForgotPasswordPage() {
           )}
           <div className="animate-fade-up" style={{ animationDelay: "0.2s" }}>
             <div className="relative group">
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-300 transition-colors group-focus-within:text-gray-900">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 transition-colors group-focus-within:text-gray-900">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
               </div>
               <input
@@ -64,7 +64,7 @@ export default function ForgotPasswordPage() {
                 type="email"
                 required
                 placeholder="Adresse email"
-                className="w-full border border-gray-200 bg-transparent pl-8 pr-3 py-2 rounded-md text-[0.9rem] transition-all placeholder:text-gray-400 placeholder:font-medium hover:border-gray-400 focus:border-gray-900 focus:outline-none"
+                className="w-full border border-gray-200 bg-transparent pl-10 pr-3 py-2 rounded-md text-[0.9rem] transition-all placeholder:text-gray-400 placeholder:font-medium hover:border-gray-400 focus:border-gray-900 focus:outline-none"
               />
             </div>
           </div>

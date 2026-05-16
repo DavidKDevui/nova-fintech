@@ -1,11 +1,20 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
-import { Sora } from "next/font/google";
+import localFont from "next/font/local";
 import { ToastProvider } from "@/providers/toast-provider";
 import "./globals.css";
 
-const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
-const sora = Sora({ variable: "--font-sora", subsets: ["latin"] });
+const geist = localFont({
+  src: "./fonts/Geist-Variable.woff2",
+  variable: "--font-geist",
+  display: "swap",
+  weight: "100 900",
+});
+const sora = localFont({
+  src: "./fonts/Sora-Variable.woff2",
+  variable: "--font-sora",
+  display: "swap",
+  weight: "100 800",
+});
 
 export const metadata: Metadata = {
   title: "Actidec",
