@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import * as adminService from "@/lib/services/admin.service";
 import * as practiceService from "@/lib/services/practice.service";
 
+
 export async function createUserAction(_prevState: unknown, formData: FormData) {
   const session = await getSession();
   if (!session || session.accountType !== "admin") {
