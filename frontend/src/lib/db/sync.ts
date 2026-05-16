@@ -30,6 +30,7 @@ function colToSQL(col: PgColumn): string {
   if (ct === "PgReal") return "real";
   if (ct === "PgDoublePrecision") return "double precision";
   if (ct === "PgDate") return "date";
+  if (ct === "PgDateString") return "date";
   if (ct === "PgTime") return "time";
   if (ct === "PgTimestamp") return "timestamp";
   if (ct === "PgVarchar") return c.length ? `varchar(${c.length})` : "varchar";
@@ -105,7 +106,8 @@ export async function syncDatabase(pool: pg.Pool) {
       );
 
       if (tableExists.length === 0) {
-        // ── Create table ──
+        // ── Create table (sans FK : on les ajoutera en pass 2 quand toutes
+        //    les tables referencees existent) ──
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const colDefs = columns.map((col: any) => {
           let def = `"${col.name}" ${colToSQL(col)}`;
@@ -126,19 +128,7 @@ export async function syncDatabase(pool: pg.Pool) {
         await client.query(createSQL);
         changes.push(`+ table "${tableName}" (${columns.length} colonnes)`);
 
-        // Foreign keys
-        for (const fk of config.foreignKeys) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const ref = fk.reference() as any;
-          const localCols = ref.columns.map((c: { name: string }) => `"${c.name}"`).join(", ");
-          const foreignTable = getTableConfig(ref.foreignTable).name;
-          const foreignCols = ref.foreignColumns.map((c: { name: string }) => `"${c.name}"`).join(", ");
-          let fkSQL = `ALTER TABLE "${tableName}" ADD FOREIGN KEY (${localCols}) REFERENCES "${foreignTable}"(${foreignCols})`;
-          if (ref.deleteAction) fkSQL += ` ON DELETE ${String(ref.deleteAction).toUpperCase()}`;
-          await client.query(`DO $$ BEGIN ${fkSQL}; EXCEPTION WHEN duplicate_object THEN null; END $$`);
-        }
-
-        // Indexes
+        // Indexes (pas de dependance entre tables)
         for (const idx of config.indexes) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const ic = idx.config as any;
@@ -186,6 +176,26 @@ export async function syncDatabase(pool: pg.Pool) {
             changes.push(`+ index "${ic.name}"`);
           }
         }
+      }
+    }
+
+    // 2bis — Foreign keys (pass 2 : toutes les tables existent maintenant)
+    // Idempotent : DO $$ EXCEPTION attrape les FK deja existantes.
+    for (const tableObj of drizzleTables) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const config = getTableConfig(tableObj as any);
+      const tableName = config.name;
+
+      for (const fk of config.foreignKeys) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ref = fk.reference() as any;
+        const localCols = ref.columns.map((c: { name: string }) => `"${c.name}"`).join(", ");
+        const foreignTable = getTableConfig(ref.foreignTable).name;
+        const foreignCols = ref.foreignColumns.map((c: { name: string }) => `"${c.name}"`).join(", ");
+        let fkSQL = `ALTER TABLE "${tableName}" ADD FOREIGN KEY (${localCols}) REFERENCES "${foreignTable}"(${foreignCols})`;
+        if (ref.deleteAction) fkSQL += ` ON DELETE ${String(ref.deleteAction).toUpperCase()}`;
+        // duplicate_object : la FK existe deja (re-run) -> ignore
+        await client.query(`DO $$ BEGIN ${fkSQL}; EXCEPTION WHEN duplicate_object THEN null; END $$`);
       }
     }
 
