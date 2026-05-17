@@ -28,6 +28,7 @@ jobs:
       contents: read
       packages: write
       security-events: write   # upload des resultats Trivy dans l'onglet Security
+      actions: read            # lecture du workflow run pour fingerprints SARIF
     steps:
       - uses: actions/checkout@v4
 
