@@ -27,8 +27,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      security-events: write   # upload des resultats Trivy dans l'onglet Security
-      actions: read            # lecture du workflow run pour fingerprints SARIF
     steps:
       - uses: actions/checkout@v4
 
@@ -63,24 +61,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      # Scan de vulnerabilites sur l'image qu'on vient de pousser.
-      # On scan par digest (immutable) plutot que par tag.
-      # exit-code=0 -> le scan ne fait pas echouer le build : les findings
-      # sont remontes dans l'onglet Security via SARIF.
-      - name: Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
-          format: sarif
-          output: trivy-results.sarif
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: '0'
-
-      - name: Upload Trivy results to GitHub Security
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-results.sarif
-          category: trivy
