@@ -188,7 +188,10 @@
       "Bash(node *)",
       "Bash(git -C \"C:/Users/utils/Documents/IT Projects/nova-fintech\" log --all --pretty=format:'%H %s' -- .ssh)",
       "Bash(git -C \"C:/Users/utils/Documents/IT Projects/nova-fintech\" log --all -S \"actidec@\" --pretty=format:'%H %s')",
-      "Bash(nslookup *)"
+      "Bash(nslookup *)",
+      "Bash(gh release *)",
+      "PowerShell(gh release *)",
+      "WebFetch(domain:api.github.com)"
     ]
   }
 }
