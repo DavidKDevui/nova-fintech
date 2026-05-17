@@ -17,6 +17,7 @@ import {
 } from "@/lib/data/fiscal-calendar";
 import { downloadCSV, downloadPDF } from "@/lib/export";
 import { ExportButtons } from "@/components/export-buttons";
+import { DataMissingOverlay } from "@/components/data-missing-overlay";
 
 const DAY_NAMES = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -93,6 +94,9 @@ export function DeadlinesClient() {
   const currentMonth = now.getMonth();
   const currentDay = now.getDate();
   const currentYear = now.getFullYear();
+
+  const bankConnected = !!hp?.bridgeUserUuid;
+  const hasPassages = !!facturationSummary && facturationSummary.passageCount > 0;
 
   // Build calendar from practitioner preferences
   const prefs: PaymentPreferences = useMemo(() => {
@@ -275,7 +279,8 @@ export function DeadlinesClient() {
       </div>
 
       {/* Upcoming + Calendar side by side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <DataMissingOverlay bankConnected={bankConnected} hasPassages={hasPassages} />
 
       {/* Upcoming list */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden flex flex-col lg:max-h-[540px]">

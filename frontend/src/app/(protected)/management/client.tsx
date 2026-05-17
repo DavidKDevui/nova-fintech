@@ -9,6 +9,7 @@ import { getFiscalSituationAction, upsertFiscalSituationAction } from "@/actions
 import { getVacationsAction, upsertVacationDayAction } from "@/actions/vacations";
 import { useData } from "@/providers/data-provider";
 import { usePractitioner } from "@/providers/practitioner-provider";
+import { DataMissingOverlay } from "@/components/data-missing-overlay";
 import { buildCalendar, type PaymentPreferences, DEFAULT_PREFERENCES } from "@/lib/data/fiscal-calendar";
 import { countWorkingDays, countRemainingWorkingDays } from "@/lib/data/fr-holidays";
 import { computeIR, computeParts, getBareme } from "@/lib/data/fr-tax";
@@ -70,6 +71,9 @@ export function ManagementClient() {
 
 function ActivityTab() {
   const hp = usePractitioner();
+  const { facturationSummary } = useData();
+  const bankConnected = !!hp?.bridgeUserUuid;
+  const hasPassages = !!facturationSummary && facturationSummary.passageCount > 0;
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
   const [year, setYear] = useState(currentYear);
@@ -199,7 +203,8 @@ function ActivityTab() {
       </div>
 
       {/* Chart + monthly breakdown (aligned) */}
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
+      <div className="relative bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
+        <DataMissingOverlay bankConnected={bankConnected} hasPassages={hasPassages} />
         <div className="pb-2 flex">
           {/* KPI cards stacked vertically */}
           <div style={{ width: 260 }} className="flex flex-col items-center px-2 py-1 shrink-0">

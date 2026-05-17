@@ -6,6 +6,7 @@ import { usePractitioner } from "@/providers/practitioner-provider";
 import { updateProfileAction, updateNotificationsAction } from "@/actions/profile";
 import { changePasswordAction, deleteAccountAction, logoutAction } from "@/actions/auth";
 import { exportMyDataAction } from "@/actions/data-export";
+import { getBankAlertAction } from "@/actions/bank-alert";
 import { Modal } from "@/components/modal";
 
 const INPUT_CLASS = "w-full border border-gray-200 bg-transparent px-3 py-2 rounded-md text-[0.9rem] transition-all placeholder:text-gray-400 hover:border-gray-400 focus:border-gray-900 focus:outline-none";
@@ -451,7 +452,7 @@ export function ProfileClient() {
           </div>
         )}
 
-        {tab !== "account" && (
+        {(tab === "profile" || tab === "payments") && (
           <>
             {state?.error && (
               <p className="bg-red-50 p-3 text-sm text-red-600">{state.error}</p>
@@ -480,7 +481,7 @@ export function ProfileClient() {
       {/* Tab: Compte */}
       {tab === "account" && (
         <div className="space-y-6">
-          <ChangePasswordForm />
+          <ChangePasswordSection />
 
           <div className="border-t border-gray-200 pt-6">
             <h3 className="text-sm font-medium text-gray-900 mb-1">Déconnexion</h3>
@@ -590,25 +591,84 @@ export function ProfileClient() {
 const RECAP_FREQUENCIES = [
   { value: "monthly", label: "Mensuel" },
   { value: "quarterly", label: "Trimestriel" },
-  { value: "none", label: "Désactivé" },
 ] as const;
+
+function Switch({ checked, onChange, disabled = false }: { checked: boolean; onChange: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={onChange}
+      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${checked ? "bg-brand-600" : "bg-gray-200"} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+    >
+      <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0"}`} />
+    </button>
+  );
+}
 
 function NotificationsForm() {
   const hp = usePractitioner();
   const router = useRouter();
-  const [recapFrequency, setRecapFrequency] = useState<string>(hp?.recapFrequency ?? "monthly");
+
+  const initialRecap = hp?.recapFrequency ?? "monthly";
+  const [recapEnabled, setRecapEnabled] = useState<boolean>(initialRecap !== "none");
+  const [recapFrequency, setRecapFrequency] = useState<"monthly" | "quarterly">(
+    initialRecap === "quarterly" ? "quarterly" : "monthly",
+  );
+
   const [deadlinesReminderEnabled, setDeadlinesReminderEnabled] = useState<boolean>(hp?.deadlinesReminderEnabled ?? true);
+
+  const [rejectionEnabled, setRejectionEnabled] = useState<boolean>(hp?.rejectionAlertEnabled ?? false);
+  const [rejectionThreshold, setRejectionThreshold] = useState<string>(
+    String(Number(hp?.rejectionAlertThreshold ?? "5")),
+  );
+
+  const hasDefaultBank = !!hp?.defaultBankAccountId;
+  const [treasuryEnabled, setTreasuryEnabled] = useState<boolean>(false);
+  const [treasuryThreshold, setTreasuryThreshold] = useState<string>("");
+  const [savedTreasury, setSavedTreasury] = useState<{ enabled: boolean; threshold: string }>({ enabled: false, threshold: "" });
+  const [treasuryLoaded, setTreasuryLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!hasDefaultBank || treasuryLoaded) return;
+    getBankAlertAction().then(({ alert }) => {
+      if (alert) {
+        const t = String(Number(alert.threshold));
+        setTreasuryEnabled(alert.enabled);
+        setTreasuryThreshold(t);
+        setSavedTreasury({ enabled: alert.enabled, threshold: t });
+      }
+      setTreasuryLoaded(true);
+    });
+  }, [hasDefaultBank, treasuryLoaded]);
+
   const [state, action, pending] = useActionState(updateNotificationsAction, null);
 
+  const rejectionNum = parseFloat(rejectionThreshold);
+  const rejectionInvalid = rejectionEnabled && (isNaN(rejectionNum) || rejectionNum < 0.5 || rejectionNum > 50);
+  const treasuryNum = parseFloat(treasuryThreshold);
+  const treasuryInvalid = treasuryEnabled && (isNaN(treasuryNum) || treasuryNum < 0);
+  const formValid = !rejectionInvalid && !treasuryInvalid;
+
+  const effectiveRecap: "none" | "monthly" | "quarterly" = recapEnabled ? recapFrequency : "none";
+
   const hasChanges =
-    (hp?.recapFrequency ?? "monthly") !== recapFrequency ||
-    (hp?.deadlinesReminderEnabled ?? true) !== deadlinesReminderEnabled;
+    effectiveRecap !== (hp?.recapFrequency ?? "monthly") ||
+    deadlinesReminderEnabled !== (hp?.deadlinesReminderEnabled ?? true) ||
+    rejectionEnabled !== (hp?.rejectionAlertEnabled ?? false) ||
+    (rejectionEnabled && Number(rejectionThreshold || 0) !== Number(hp?.rejectionAlertThreshold ?? "5")) ||
+    treasuryEnabled !== savedTreasury.enabled ||
+    (treasuryEnabled && Number(treasuryThreshold || 0) !== Number(savedTreasury.threshold || 0));
 
   useEffect(() => {
     if (state?.success) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync saved snapshot for the bank-alert side (not in hp)
+      setSavedTreasury({ enabled: treasuryEnabled, threshold: treasuryThreshold });
       router.refresh();
     }
-  }, [state?.success, router]);
+  }, [state?.success]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div>
@@ -616,37 +676,115 @@ function NotificationsForm() {
       <p className="text-sm text-gray-500 mb-4">
         Choisissez les emails que vous souhaitez recevoir.
       </p>
-      <form action={action} className="space-y-4 max-w-sm">
-        <div>
-          <label className="block text-sm text-gray-500 mb-1.5">Récapitulatif d&apos;activité</label>
-          <select
-            name="recapFrequency"
-            value={recapFrequency}
-            onChange={(e) => setRecapFrequency(e.target.value)}
-            className={INPUT_CLASS + " appearance-none cursor-pointer"}
-          >
-            {RECAP_FREQUENCIES.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
-          </select>
-        </div>
-
+      <form action={action} className="space-y-5 max-w-sm">
+        {/* Récapitulatif d'activité */}
         <div>
           <label className="flex items-center gap-3 cursor-pointer">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={deadlinesReminderEnabled}
-              onClick={() => setDeadlinesReminderEnabled((v) => !v)}
-              className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${deadlinesReminderEnabled ? "bg-brand-600" : "bg-gray-200"}`}
-            >
-              <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${deadlinesReminderEnabled ? "translate-x-4" : "translate-x-0"}`} />
-            </button>
+            <Switch checked={recapEnabled} onChange={() => setRecapEnabled((v) => !v)} />
+            <span className="text-sm text-gray-500">Récapitulatif d&apos;activité</span>
+          </label>
+          <input type="hidden" name="recapEnabled" value={recapEnabled ? "on" : "off"} />
+          <input type="hidden" name="recapFrequency" value={recapFrequency} />
+          {recapEnabled && (
+            <div className="mt-2">
+              <select
+                value={recapFrequency}
+                onChange={(e) => setRecapFrequency(e.target.value as "monthly" | "quarterly")}
+                className={INPUT_CLASS + " appearance-none cursor-pointer"}
+              >
+                {RECAP_FREQUENCIES.map((f) => (
+                  <option key={f.value} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <p className="mt-1.5 text-xs text-gray-400">
+            Email synthétique de votre activité sur la période choisie.
+          </p>
+        </div>
+
+        {/* Échéances */}
+        <div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <Switch checked={deadlinesReminderEnabled} onChange={() => setDeadlinesReminderEnabled((v) => !v)} />
             <span className="text-sm text-gray-500">Rappel hebdomadaire des échéances à venir</span>
           </label>
           <input type="hidden" name="deadlinesReminderEnabled" value={deadlinesReminderEnabled ? "on" : "off"} />
           <p className="mt-1.5 text-xs text-gray-400">
             Email envoyé chaque lundi listant les échéances des 2 prochaines semaines.
+          </p>
+        </div>
+
+        {/* Trésorerie */}
+        <div>
+          <label className={`flex items-center gap-3 ${hasDefaultBank ? "cursor-pointer" : "cursor-not-allowed"}`}>
+            <Switch
+              checked={treasuryEnabled}
+              disabled={!hasDefaultBank}
+              onChange={() => setTreasuryEnabled((v) => !v)}
+            />
+            <span className={`text-sm ${hasDefaultBank ? "text-gray-500" : "text-gray-300"}`}>
+              Alerte de seuil de trésorerie
+            </span>
+          </label>
+          <input type="hidden" name="treasuryAlertEnabled" value={treasuryEnabled ? "on" : "off"} />
+          <input type="hidden" name="treasuryAlertThreshold" value={treasuryThreshold} />
+          {treasuryEnabled && (
+            <div className="mt-2">
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="50"
+                  value={treasuryThreshold}
+                  onChange={(e) => setTreasuryThreshold(e.target.value)}
+                  placeholder="Ex : 1500"
+                  className={INPUT_CLASS + " pr-8"}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">€</span>
+              </div>
+              {treasuryInvalid && (
+                <p className="mt-1 text-xs text-red-500">Le seuil doit être un nombre positif.</p>
+              )}
+            </div>
+          )}
+          <p className="mt-1.5 text-xs text-gray-400">
+            {hasDefaultBank
+              ? "Email envoyé quand le solde de votre compte par défaut passe sous ce seuil."
+              : "Connectez d'abord un compte bancaire dans Transactions pour activer cette alerte."}
+          </p>
+        </div>
+
+        {/* Taux de rejet */}
+        <div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <Switch checked={rejectionEnabled} onChange={() => setRejectionEnabled((v) => !v)} />
+            <span className="text-sm text-gray-500">Alerte de taux de rejet trop élevé</span>
+          </label>
+          <input type="hidden" name="rejectionAlertEnabled" value={rejectionEnabled ? "on" : "off"} />
+          <input type="hidden" name="rejectionAlertThreshold" value={rejectionThreshold} />
+          {rejectionEnabled && (
+            <div className="mt-2">
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0.5"
+                  max="50"
+                  step="0.5"
+                  value={rejectionThreshold}
+                  onChange={(e) => setRejectionThreshold(e.target.value)}
+                  placeholder="Ex : 5"
+                  className={INPUT_CLASS + " pr-8"}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">%</span>
+              </div>
+              {rejectionInvalid && (
+                <p className="mt-1 text-xs text-red-500">Le seuil doit être compris entre 0,5 et 50 %.</p>
+              )}
+            </div>
+          )}
+          <p className="mt-1.5 text-xs text-gray-400">
+            Email envoyé quand votre taux de rejet mensuel dépasse ce seuil.
           </p>
         </div>
 
@@ -659,7 +797,7 @@ function NotificationsForm() {
 
         <button
           type="submit"
-          disabled={pending || !hasChanges}
+          disabled={pending || !hasChanges || !formValid}
           className="flex items-center gap-2 bg-gray-900 px-5 py-3 rounded-md text-sm font-medium text-white transition-all hover:bg-black active:scale-[0.98] disabled:bg-gray-300 disabled:opacity-60 disabled:hover:bg-gray-300 disabled:active:scale-100 disabled:cursor-not-allowed"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -672,7 +810,31 @@ function NotificationsForm() {
 
 const PASSWORD_INPUT_CLASS = "w-full border border-gray-200 bg-transparent px-3 py-2 rounded-md text-[0.9rem] transition-all placeholder:text-gray-400 hover:border-gray-400 focus:border-gray-900 focus:outline-none";
 
-function ChangePasswordForm() {
+function ChangePasswordSection() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <h3 className="text-sm font-medium text-gray-900 mb-1">Mot de passe</h3>
+      <p className="text-sm text-gray-500 mb-3">
+        Vous pouvez modifier votre mot de passe à tout moment.
+      </p>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-2 border-2 border-gray-300 rounded-lg px-5 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 hover:border-gray-400 active:scale-[0.98]"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Modifier le mot de passe
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)}>
+        <ChangePasswordModal onClose={() => setOpen(false)} />
+      </Modal>
+    </div>
+  );
+}
+
+function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   const [pwState, pwAction, pwPending] = useActionState(changePasswordAction, null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -689,20 +851,23 @@ function ChangePasswordForm() {
 
   useEffect(() => {
     if (pwState?.success) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear form fields on action success
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      const t = setTimeout(onClose, 1200);
+      return () => clearTimeout(t);
     }
-  }, [pwState?.success]);
+  }, [pwState?.success, onClose]);
 
   return (
-    <div>
-      <h3 className="text-sm font-medium text-gray-900 mb-1">Modifier le mot de passe</h3>
+    <>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-700"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h3 className="text-lg font-bold text-gray-900">Modifier le mot de passe</h3>
+      </div>
       <p className="text-sm text-gray-500 mb-4">
         Minimum 8 caractères, avec au moins une majuscule, une minuscule et un chiffre.
       </p>
-      <form action={pwAction} className="space-y-3 max-w-sm">
+      <form action={pwAction} className="space-y-3">
         <div>
           <label className="block text-sm text-gray-500 mb-1.5">Mot de passe actuel</label>
           <input
@@ -761,16 +926,25 @@ function ChangePasswordForm() {
           <p className="bg-green-50 p-3 rounded-md text-sm text-green-600">Mot de passe modifié avec succès.</p>
         )}
 
-        <button
-          type="submit"
-          disabled={pwPending || !canSubmit}
-          className="flex items-center gap-2 bg-gray-900 px-5 py-3 rounded-md text-sm font-medium text-white transition-all hover:bg-black active:scale-[0.98] disabled:bg-gray-300 disabled:opacity-60 disabled:hover:bg-gray-300 disabled:active:scale-100 disabled:cursor-not-allowed"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          {pwPending ? "Modification..." : "Modifier le mot de passe"}
-        </button>
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pwPending}
+            className="border-2 border-gray-200 rounded-md px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Annuler
+          </button>
+          <button
+            type="submit"
+            disabled={pwPending || !canSubmit}
+            className="flex items-center justify-center gap-2 bg-gray-900 rounded-md px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-black active:scale-[0.98] disabled:bg-gray-300 disabled:opacity-60 disabled:hover:bg-gray-300 disabled:active:scale-100 disabled:cursor-not-allowed"
+          >
+            {pwPending ? "Modification..." : "Modifier"}
+          </button>
+        </div>
       </form>
-    </div>
+    </>
   );
 }
 

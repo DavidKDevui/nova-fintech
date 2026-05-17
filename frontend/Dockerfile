@@ -21,6 +21,11 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Validation (typecheck + lint) avant build : fail fast sur erreur de code,
+# evite un build inutile qui prend plus de temps.
+RUN npm run typecheck && npm run lint
+
 RUN npm run build
 
 # ============================================================

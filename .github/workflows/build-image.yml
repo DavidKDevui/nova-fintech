@@ -19,38 +19,15 @@ env:
   IMAGE_NAME: ghcr.io/davidkdevui/actidec-app
 
 jobs:
-  # ── Job 1 : validation rapide (typecheck + lint) ──
-  # Si ca foire, on saute le build (qui prend 5x plus de temps).
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm ci --no-audit --no-fund
-
-      - name: Typecheck
-        working-directory: frontend
-        run: npm run typecheck
-
-      - name: Lint
-        working-directory: frontend
-        run: npm run lint
-
-  # ── Job 2 : build + push de l'image Docker ──
+  # Build + push de l'image Docker.
+  # La validation (typecheck + lint) est faite DANS le Dockerfile (stage builder)
+  # avant `npm run build` -> un seul `npm ci`, pas de duplication host/Docker.
   publish:
-    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      security-events: write   # upload des resultats Trivy dans l'onglet Security
     steps:
       - uses: actions/checkout@v4
 
@@ -77,6 +54,7 @@ jobs:
             type=semver,pattern={{major}}
 
       - uses: docker/build-push-action@v5
+        id: build
         with:
           context: frontend
           push: true
@@ -84,3 +62,24 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Scan de vulnerabilites sur l'image qu'on vient de pousser.
+      # On scan par digest (immutable) plutot que par tag.
+      # exit-code=0 -> le scan ne fait pas echouer le build : les findings
+      # sont remontes dans l'onglet Security via SARIF.
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Upload Trivy results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy

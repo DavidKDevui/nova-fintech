@@ -1,9 +1,9 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { practitioners } from "@/lib/db/schema";
+import { bankAlerts, practitioners } from "@/lib/db/schema";
 
 export async function updateProfileAction(_prevState: unknown, formData: FormData) {
   const session = await getSession();
@@ -68,17 +68,86 @@ export async function updateNotificationsAction(_prevState: unknown, formData: F
     return { error: "Non autorisé" };
   }
 
-  const raw = formData.get("recapFrequency") as string | null;
-  const recapFrequency: "none" | "monthly" | "quarterly" =
-    raw === "none" || raw === "quarterly" || raw === "monthly" ? raw : "monthly";
+  const recapEnabled = formData.get("recapEnabled") === "on";
+  const recapFreqRaw = formData.get("recapFrequency") as string | null;
+  const recapFrequency: "none" | "monthly" | "quarterly" = !recapEnabled
+    ? "none"
+    : recapFreqRaw === "quarterly"
+      ? "quarterly"
+      : "monthly";
 
   const deadlinesReminderEnabled = formData.get("deadlinesReminderEnabled") === "on";
 
+  const rejectionEnabled = formData.get("rejectionAlertEnabled") === "on";
+  const rejectionRaw = (formData.get("rejectionAlertThreshold") as string | null)?.trim();
+  let rejectionThreshold: number | null = null;
+  if (rejectionEnabled) {
+    const n = parseFloat(rejectionRaw ?? "");
+    if (!Number.isFinite(n) || n < 0.5 || n > 50) {
+      return { error: "Le seuil du taux de rejet doit être compris entre 0,5 et 50 %." };
+    }
+    rejectionThreshold = n;
+  }
+
+  const treasuryEnabled = formData.get("treasuryAlertEnabled") === "on";
+  const treasuryRaw = (formData.get("treasuryAlertThreshold") as string | null)?.trim();
+  let treasuryThreshold: number | null = null;
+  if (treasuryEnabled) {
+    const n = parseFloat(treasuryRaw ?? "");
+    if (!Number.isFinite(n) || n < 0) {
+      return { error: "Le seuil de trésorerie doit être un nombre positif." };
+    }
+    treasuryThreshold = n;
+  }
+
   try {
-    await db
-      .update(practitioners)
-      .set({ recapFrequency, deadlinesReminderEnabled, updatedAt: new Date() })
+    const [p] = await db
+      .select({ id: practitioners.id, defaultBankAccountId: practitioners.defaultBankAccountId })
+      .from(practitioners)
       .where(eq(practitioners.userId, session.id));
+    if (!p) return { error: "Profil introuvable" };
+
+    const practitionerUpdate: Record<string, unknown> = {
+      recapFrequency,
+      deadlinesReminderEnabled,
+      rejectionAlertEnabled: rejectionEnabled,
+      rejectionAlertLastSentAt: null,
+      updatedAt: new Date(),
+    };
+    if (rejectionThreshold !== null) {
+      practitionerUpdate.rejectionAlertThreshold = rejectionThreshold.toFixed(2);
+    }
+
+    await db.update(practitioners).set(practitionerUpdate).where(eq(practitioners.id, p.id));
+
+    if (p.defaultBankAccountId) {
+      const [existing] = await db
+        .select({ id: bankAlerts.id })
+        .from(bankAlerts)
+        .where(and(
+          eq(bankAlerts.practitionerId, p.id),
+          eq(bankAlerts.bankAccountId, p.defaultBankAccountId),
+        ));
+
+      if (existing) {
+        const bankUpdate: Record<string, unknown> = {
+          enabled: treasuryEnabled,
+          lastTriggeredAt: null,
+        };
+        if (treasuryThreshold !== null) {
+          bankUpdate.threshold = String(treasuryThreshold);
+        }
+        await db.update(bankAlerts).set(bankUpdate).where(eq(bankAlerts.id, existing.id));
+      } else if (treasuryEnabled && treasuryThreshold !== null) {
+        await db.insert(bankAlerts).values({
+          practitionerId: p.id,
+          bankAccountId: p.defaultBankAccountId,
+          threshold: String(treasuryThreshold),
+          enabled: true,
+        });
+      }
+    }
+
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Erreur lors de la mise à jour";

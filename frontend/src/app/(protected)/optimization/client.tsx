@@ -13,6 +13,7 @@ import { calculerCotisationsCarpimko } from "@/lib/services/carpimko.service";
 import { downloadPDF } from "@/lib/export";
 import { ExportButtons } from "@/components/export-buttons";
 import { FloatingChat } from "@/components/floating-chat";
+import { DataMissingOverlay } from "@/components/data-missing-overlay";
 
 const formatEur = (n: number) =>
   new Intl.NumberFormat("fr-FR", {
@@ -123,6 +124,8 @@ export function OptimizationClient() {
 
   const currentYear = new Date().getFullYear();
   const totalCA = facturationSummary?.byStatus.paye.total ?? 0;
+  const bankConnected = !!hp?.bridgeUserUuid;
+  const hasPassages = !!facturationSummary && facturationSummary.passageCount > 0;
 
   useEffect(() => {
     if (totalCA <= 0) return;
@@ -286,7 +289,9 @@ export function OptimizationClient() {
         <ExportButtons onPdf={exportPdf} disabled={!estimate} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="relative space-y-8">
+        <DataMissingOverlay bankConnected={bankConnected} hasPassages={hasPassages} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {cards.filter((c) => c.available).map((card) => {
@@ -473,7 +478,8 @@ export function OptimizationClient() {
         </aside>
       </div>
 
-      <RecommendationsSection />
+        <RecommendationsSection />
+      </div>
 
       <FloatingChat
         suggestions={[

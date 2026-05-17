@@ -185,7 +185,10 @@
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('total:', d.get\\('total'\\)\\)\")",
       "Read(//tmp/**)",
       "Bash(chmod +x *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(git -C \"C:/Users/utils/Documents/IT Projects/nova-fintech\" log --all --pretty=format:'%H %s' -- .ssh)",
+      "Bash(git -C \"C:/Users/utils/Documents/IT Projects/nova-fintech\" log --all -S \"actidec@\" --pretty=format:'%H %s')",
+      "Bash(nslookup *)"
     ]
   }
 }
