@@ -68,7 +68,7 @@ jobs:
       # exit-code=0 -> le scan ne fait pas echouer le build : les findings
       # sont remontes dans l'onglet Security via SARIF.
       - name: Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           format: sarif

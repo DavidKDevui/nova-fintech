@@ -191,7 +191,8 @@
       "Bash(nslookup *)",
       "Bash(gh release *)",
       "PowerShell(gh release *)",
-      "WebFetch(domain:api.github.com)"
+      "WebFetch(domain:api.github.com)",
+      "Bash(gh api *)"
     ]
   }
 }
