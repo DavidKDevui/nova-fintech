@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { useData } from "@/providers/data-provider";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
+import { getEffectiveCAAction, type EffectiveCA } from "@/actions/effective-ca";
 import { getFiscalSituationAction } from "@/actions/fiscal-situation";
 import { getOptimizationContextAction, type OptimizationContext } from "@/actions/optimization-context";
 import { getRecommendationsAction, type Recommendation } from "@/actions/recommendations";
@@ -14,6 +14,7 @@ import { downloadPDF } from "@/lib/export";
 import { ExportButtons } from "@/components/export-buttons";
 import { FloatingChat } from "@/components/floating-chat";
 import { DataMissingOverlay } from "@/components/data-missing-overlay";
+import { CASourceIndicator } from "@/components/ca-source-indicator";
 
 const formatEur = (n: number) =>
   new Intl.NumberFormat("fr-FR", {
@@ -113,7 +114,6 @@ const cards: OptimCard[] = [
 
 export function OptimizationClient() {
   const hp = usePractitioner();
-  const { facturationSummary } = useData();
   const [selected, setSelected] = useState<Set<OptimKey>>(new Set());
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
@@ -121,10 +121,15 @@ export function OptimizationClient() {
   const [ctx, setCtx] = useState<OptimizationContext | null>(null);
   const [urssafAfter, setUrssafAfter] = useState<number | null>(null);
   const [urssafLoading, setUrssafLoading] = useState(false);
+  const [effectiveCA, setEffectiveCA] = useState<EffectiveCA>({ ca: 0, source: "none" });
 
   const currentYear = new Date().getFullYear();
-  const totalCA = facturationSummary?.byStatus.paye.total ?? 0;
+  const totalCA = effectiveCA.ca;
   const bankConnected = !!hp?.bridgeUserUuid;
+
+  useEffect(() => {
+    getEffectiveCAAction(currentYear, "bordereaux").then(setEffectiveCA).catch(() => {});
+  }, [currentYear]);
 
   useEffect(() => {
     if (totalCA <= 0) return;
@@ -405,7 +410,14 @@ export function OptimizationClient() {
         </section>
 
         <aside className="space-y-4">
-          <ImpactSection title={`Impact sur mes cotisations sociales ${currentYear}`}>
+          <ImpactSection
+            title={
+              <span className="inline-flex items-center gap-1.5">
+                Impact sur mes cotisations sociales {currentYear}
+                <CASourceIndicator source={effectiveCA.source} />
+              </span>
+            }
+          >
             <ImpactRow
               label="Montant d'Urssaf"
               before={estimate ? formatEur(estimate.urssafAnnuel) : "—"}
@@ -433,7 +445,14 @@ export function OptimizationClient() {
             />
           </ImpactSection>
 
-          <ImpactSection title={`Impact sur ma fiscalité ${currentYear}`}>
+          <ImpactSection
+            title={
+              <span className="inline-flex items-center gap-1.5">
+                Impact sur ma fiscalité {currentYear}
+                <CASourceIndicator source={effectiveCA.source} />
+              </span>
+            }
+          >
             <ImpactRow
               label="Montant de l'imposition"
               before={estimate ? formatEur(fiscalBefore.impot) : "—"}
@@ -515,7 +534,7 @@ function computeFiscal(
   return { impot: r.impot, trancheIndex: r.currentTrancheIndex };
 }
 
-function ImpactSection({ title, children }: { title: string; children: React.ReactNode }) {
+function ImpactSection({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-4">
       <h3 className="text-base font-semibold text-gray-900 mb-4">{title}</h3>

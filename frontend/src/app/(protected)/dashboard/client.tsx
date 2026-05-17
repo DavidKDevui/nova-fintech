@@ -10,7 +10,9 @@ import { DataMissingOverlay } from "@/components/data-missing-overlay";
 import { getTransactionKpisAction } from "@/actions/transaction";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
 import { getHealthScoreAction, type HealthScore } from "@/actions/health-score";
+import { getEffectiveCAAction, type EffectiveCA, type EffectiveCASource } from "@/actions/effective-ca";
 import { HealthScoreCard } from "@/components/health-score-card";
+import { CASourceIndicator } from "@/components/ca-source-indicator";
 import {
   buildCalendar,
   MONTH_NAMES,
@@ -54,6 +56,7 @@ export function DashboardClient() {
   const [kpiNbDepenses, setKpiNbDepenses] = useState(0);
   const [kpiLoading, setKpiLoading] = useState(true);
   const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
+  const [effectiveCA, setEffectiveCA] = useState<EffectiveCA>({ ca: 0, source: "none" });
   const [healthScore, setHealthScore] = useState<HealthScore | null>(null);
   const [healthScoreLoading, setHealthScoreLoading] = useState(true);
 
@@ -80,25 +83,27 @@ export function DashboardClient() {
 
   // CA et nb factures de l'année courante (cohérent avec les autres KPIs du dashboard)
   const currentYear = new Date().getFullYear();
-  const { caCurrentYear, nbFacturesCurrentYear } = useMemo(() => {
-    let ca = 0;
+  const nbFacturesCurrentYear = useMemo(() => {
     let count = 0;
     for (const p of passages) {
       if (p.status !== "paye") continue;
       if (parseInt(p.careDate.split("-")[0]!, 10) !== currentYear) continue;
-      ca += parseFloat(p.totalAmount);
       count++;
     }
-    return { caCurrentYear: ca, nbFacturesCurrentYear: count };
+    return count;
   }, [passages, currentYear]);
+
+  useEffect(() => {
+    getEffectiveCAAction(currentYear, "bordereaux").then(setEffectiveCA).catch(() => {});
+  }, [currentYear]);
 
   // Cotisations estimate (annual URSSAF + CARPIMKO projected from YTD CA) — used by EcheancesCard.
   useEffect(() => {
-    if (caCurrentYear <= 0) return;
-    getCotisationsEstimate(caCurrentYear).then((res) => {
+    if (effectiveCA.ca <= 0) return;
+    getCotisationsEstimate(effectiveCA.ca).then((res) => {
       if (res) setEstimate(res);
     }).catch(() => {});
-  }, [caCurrentYear]);
+  }, [effectiveCA.ca]);
 
   // Profile completion
   const profileCompletion = useMemo(() => {
@@ -211,7 +216,8 @@ export function DashboardClient() {
           soldePrevMonth={soldePrevMonth}
           encaissement={kpiEncaissement}
           decaissement={kpiDecaissement}
-          ca={caCurrentYear}
+          ca={effectiveCA.ca}
+          caSource={effectiveCA.source}
           nbFactures={nbFacturesCurrentYear}
           nbTransactionsDepenses={kpiNbDepenses}
         />
@@ -271,10 +277,10 @@ function FacturationCard({ loading, summary }: { loading: boolean; summary: Retu
 
 /* ─── 0b. Trésorerie (row de 4 KPIs) ─── */
 function TresorerieCard({
-  bankLoading, bankConnected, solde, soldePrevMonth, encaissement, decaissement, ca, nbFactures, nbTransactionsDepenses,
+  bankLoading, bankConnected, solde, soldePrevMonth, encaissement, decaissement, ca, caSource, nbFactures, nbTransactionsDepenses,
 }: {
   bankLoading: boolean; bankConnected: boolean; solde: number | null; soldePrevMonth: number | null;
-  encaissement: number; decaissement: number; ca: number; nbFactures: number; nbTransactionsDepenses: number;
+  encaissement: number; decaissement: number; ca: number; caSource: EffectiveCASource; nbFactures: number; nbTransactionsDepenses: number;
 }) {
   if (bankLoading) return <SkeletonCard />;
   const remuneration = encaissement - decaissement;
@@ -300,7 +306,13 @@ function TresorerieCard({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
         <KpiTile label="Trésorerie" value={solde !== null ? formatCurrencyRounded(solde) : "—"} sub={evolTreso} icon={<KpiWalletIcon />} iconColor="text-blue-400" />
-        <KpiTile label="Chiffre d&apos;affaires" value={formatCurrencyRounded(ca)} sub={`${nbFactures} facture${nbFactures > 1 ? "s" : ""}`} icon={<KpiChartIcon />} iconColor="text-green-400" />
+        <KpiTile
+          label={<>Chiffre d&apos;affaires <CASourceIndicator source={caSource} /></>}
+          value={formatCurrencyRounded(ca)}
+          sub={caSource === "bordereaux" ? `${nbFactures} facture${nbFactures > 1 ? "s" : ""}` : null}
+          icon={<KpiChartIcon />}
+          iconColor="text-green-400"
+        />
         <KpiTile label="Dépenses" value={formatCurrencyRounded(decaissement)} sub={`${nbTransactionsDepenses} transaction${nbTransactionsDepenses > 1 ? "s" : ""}`} icon={<KpiExpenseIcon />} iconColor="text-red-400" />
         <KpiTile label="Rémunération" value={formatCurrencyRounded(remuneration)} sub={`~${formatCurrencyRounded(remunerationMensuelle)}/mois`} icon={<KpiCoinIcon />} iconColor="text-amber-400" />
       </div>
@@ -308,7 +320,7 @@ function TresorerieCard({
   );
 }
 
-function KpiTile({ label, value, sub, icon, iconColor = "text-gray-300" }: { label: string; value: string; sub?: string | null; icon: React.ReactNode; iconColor?: string }) {
+function KpiTile({ label, value, sub, icon, iconColor = "text-gray-300" }: { label: React.ReactNode; value: string; sub?: string | null; icon: React.ReactNode; iconColor?: string }) {
   return (
     <div className="flex flex-col items-center py-2 px-1.5">
       <p className="text-xs font-medium text-gray-400 mb-1 flex items-center gap-1.5">

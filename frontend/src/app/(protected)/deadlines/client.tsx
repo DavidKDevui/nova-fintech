@@ -18,6 +18,8 @@ import {
 import { downloadCSV, downloadPDF } from "@/lib/export";
 import { ExportButtons } from "@/components/export-buttons";
 import { DataMissingOverlay } from "@/components/data-missing-overlay";
+import { CASourceIndicator } from "@/components/ca-source-indicator";
+import { getEffectiveCAAction, type EffectiveCA } from "@/actions/effective-ca";
 
 const DAY_NAMES = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -77,11 +79,13 @@ export function DeadlinesClient() {
     }
   }
 
-  // Fetch cotisations estimate — use total CA (payé + en attente) for better estimation
-  const totalCAForEstimate = useMemo(() => {
-    if (!facturationSummary) return 0;
-    return facturationSummary.byStatus.paye.total;
-  }, [facturationSummary]);
+  const [effectiveCA, setEffectiveCA] = useState<EffectiveCA>({ ca: 0, source: "none" });
+  const totalCAForEstimate = effectiveCA.ca;
+
+  useEffect(() => {
+    const year = new Date().getFullYear();
+    getEffectiveCAAction(year, "bordereaux").then(setEffectiveCA).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (totalCAForEstimate <= 0) return;
@@ -233,7 +237,10 @@ export function DeadlinesClient() {
           <p className="text-xs text-gray-500 mt-1">{passedThisMonth} passée{passedThisMonth > 1 ? "s" : ""} / {totalThisMonth} au total</p>
         </div>
         <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-3.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Cotisations annuelles estimées</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1 inline-flex items-center gap-1.5">
+            Cotisations annuelles estimées
+            <CASourceIndicator source={effectiveCA.source} />
+          </p>
           {estimate ? (
             <>
               <p className="text-2xl font-bold text-gray-900">~{formatCurrency(estimate.urssafAnnuel + estimate.carpimkoAnnuel + estimate.pasAnnuel)}</p>

@@ -9,7 +9,9 @@ import { getFiscalSituationAction, upsertFiscalSituationAction } from "@/actions
 import { getVacationsAction, upsertVacationDayAction } from "@/actions/vacations";
 import { useData } from "@/providers/data-provider";
 import { usePractitioner } from "@/providers/practitioner-provider";
+import { getEffectiveCAAction, type EffectiveCA } from "@/actions/effective-ca";
 import { DataMissingOverlay } from "@/components/data-missing-overlay";
+import { CASourceIndicator } from "@/components/ca-source-indicator";
 import { buildCalendar, type PaymentPreferences, DEFAULT_PREFERENCES } from "@/lib/data/fiscal-calendar";
 import { countWorkingDays, countRemainingWorkingDays } from "@/lib/data/fr-holidays";
 import { computeIR, computeParts, getBareme } from "@/lib/data/fr-tax";
@@ -77,6 +79,7 @@ function ActivityTab() {
   const [year, setYear] = useState(currentYear);
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState({ encaissement: 0, decaissement: 0, cotisations: 0, remuneration: 0 });
+  const [effectiveCA, setEffectiveCA] = useState<EffectiveCA>({ ca: 0, source: "none" });
   type MonthData = { name: string; revenus: number; cotisations: number; autresDepenses: number; urssaf: number; carpimko: number; chargesPro: number; retrocession: number; madelin: number; impots: number; remuneration: number };
   const [chartData, setChartData] = useState<MonthData[]>([]);
   const [vacations, setVacations] = useState<number[]>(Array(12).fill(0));
@@ -85,12 +88,14 @@ function ActivityTab() {
 
   const fetchData = useCallback(async (y: number) => {
     setLoading(true);
-    const [kpiResult, monthlyResult, vacationsResult] = await Promise.all([
+    const [kpiResult, monthlyResult, vacationsResult, effectiveCAResult] = await Promise.all([
       getTransactionKpisAction(null, y),
       getMonthlyActivityAction(y),
       getVacationsAction(y),
+      getEffectiveCAAction(y, "transactions"),
     ]);
     setKpis({ encaissement: kpiResult.encaissement, decaissement: kpiResult.decaissement, cotisations: kpiResult.cotisations ?? 0, remuneration: kpiResult.remuneration ?? 0 });
+    setEffectiveCA(effectiveCAResult);
     setChartData(
       monthlyResult.months.map((m) => ({
         name: MONTH_LABELS[m.month - 1]!,
@@ -213,12 +218,15 @@ function ActivityTab() {
                   <path d="M12 16V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
                   <path d="M8 12l4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
                 </svg>
-                <p className="text-xs font-medium text-gray-500 truncate">Chiffre d&apos;affaires</p>
+                <p className="text-xs font-medium text-gray-500 truncate inline-flex items-center gap-1.5">
+                  Chiffre d&apos;affaires
+                  <CASourceIndicator source={effectiveCA.source} primary="transactions" />
+                </p>
               </div>
               {loading ? (
                 <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
               ) : (
-                <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(kpis.encaissement)}</p>
+                <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(effectiveCA.ca)}</p>
               )}
             </div>
 
