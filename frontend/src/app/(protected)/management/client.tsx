@@ -71,9 +71,7 @@ export function ManagementClient() {
 
 function ActivityTab() {
   const hp = usePractitioner();
-  const { facturationSummary } = useData();
   const bankConnected = !!hp?.bridgeUserUuid;
-  const hasPassages = !!facturationSummary && facturationSummary.passageCount > 0;
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
   const [year, setYear] = useState(currentYear);
@@ -204,7 +202,7 @@ function ActivityTab() {
 
       {/* Chart + monthly breakdown (aligned) */}
       <div className="relative bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
-        <DataMissingOverlay bankConnected={bankConnected} hasPassages={hasPassages} />
+        <DataMissingOverlay bankConnected={bankConnected} />
         <div className="pb-2 flex">
           {/* KPI cards stacked vertically */}
           <div style={{ width: 260 }} className="flex flex-col items-center px-2 py-1 shrink-0">

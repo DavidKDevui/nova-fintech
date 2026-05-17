@@ -207,7 +207,6 @@ export function DashboardClient() {
         <TresorerieCard
           bankLoading={bankLoading || kpiLoading}
           bankConnected={bankConnected}
-          hasPassages={!!summary && summary.passageCount > 0}
           solde={solde}
           soldePrevMonth={soldePrevMonth}
           encaissement={kpiEncaissement}
@@ -272,9 +271,9 @@ function FacturationCard({ loading, summary }: { loading: boolean; summary: Retu
 
 /* ─── 0b. Trésorerie (row de 4 KPIs) ─── */
 function TresorerieCard({
-  bankLoading, bankConnected, hasPassages, solde, soldePrevMonth, encaissement, decaissement, ca, nbFactures, nbTransactionsDepenses,
+  bankLoading, bankConnected, solde, soldePrevMonth, encaissement, decaissement, ca, nbFactures, nbTransactionsDepenses,
 }: {
-  bankLoading: boolean; bankConnected: boolean; hasPassages: boolean; solde: number | null; soldePrevMonth: number | null;
+  bankLoading: boolean; bankConnected: boolean; solde: number | null; soldePrevMonth: number | null;
   encaissement: number; decaissement: number; ca: number; nbFactures: number; nbTransactionsDepenses: number;
 }) {
   if (bankLoading) return <SkeletonCard />;
@@ -291,7 +290,7 @@ function TresorerieCard({
 
   return (
     <Card className="relative overflow-hidden">
-      <DataMissingOverlay bankConnected={bankConnected} hasPassages={hasPassages} />
+      <DataMissingOverlay bankConnected={bankConnected} />
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Vue financière</h2>

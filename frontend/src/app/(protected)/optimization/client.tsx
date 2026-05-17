@@ -125,7 +125,6 @@ export function OptimizationClient() {
   const currentYear = new Date().getFullYear();
   const totalCA = facturationSummary?.byStatus.paye.total ?? 0;
   const bankConnected = !!hp?.bridgeUserUuid;
-  const hasPassages = !!facturationSummary && facturationSummary.passageCount > 0;
 
   useEffect(() => {
     if (totalCA <= 0) return;
@@ -290,7 +289,7 @@ export function OptimizationClient() {
       </div>
 
       <div className="relative space-y-8">
-        <DataMissingOverlay bankConnected={bankConnected} hasPassages={hasPassages} />
+        <DataMissingOverlay bankConnected={bankConnected} />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

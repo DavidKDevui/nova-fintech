@@ -96,7 +96,6 @@ export function DeadlinesClient() {
   const currentYear = now.getFullYear();
 
   const bankConnected = !!hp?.bridgeUserUuid;
-  const hasPassages = !!facturationSummary && facturationSummary.passageCount > 0;
 
   // Build calendar from practitioner preferences
   const prefs: PaymentPreferences = useMemo(() => {
@@ -280,7 +279,7 @@ export function DeadlinesClient() {
 
       {/* Upcoming + Calendar side by side */}
       <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <DataMissingOverlay bankConnected={bankConnected} hasPassages={hasPassages} />
+        <DataMissingOverlay bankConnected={bankConnected} />
 
       {/* Upcoming list */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden flex flex-col lg:max-h-[540px]">
