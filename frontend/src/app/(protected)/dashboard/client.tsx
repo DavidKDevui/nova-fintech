@@ -105,22 +105,6 @@ export function DashboardClient() {
     }).catch(() => {});
   }, [effectiveCA.ca]);
 
-  // Profile completion
-  const profileCompletion = useMemo(() => {
-    if (!hp) return 0;
-    const fields = [
-      hp.firstName,
-      hp.lastName,
-      hp.profession,
-      hp.activityStartDate,
-      hp.taxRegime,
-      hp.rppsNumber,
-      hp.bridgeUserUuid,
-    ];
-    const filled = fields.filter(Boolean).length;
-    return Math.round((filled / fields.length) * 100);
-  }, [hp]);
-
   const hasWarnings = !bankConnected || uncategorizedCount > 0;
 
   // Évolution trésorerie vs mois dernier
@@ -143,21 +127,6 @@ export function DashboardClient() {
         <p className="text-sm text-gray-400 mb-4">On fait le point ensemble ?</p>
 
         <HealthScoreCard loading={healthScoreLoading} data={healthScore} />
-
-        {profileCompletion < 100 && (
-          <div className="rounded-lg bg-white backdrop-blur-xl border border-gray-200/70 px-3.5 py-3 mb-2">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-600">Profil complété</span>
-              <span className="text-sm font-semibold text-gray-900">{profileCompletion}%</span>
-            </div>
-            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-brand-600 rounded-full transition-all" style={{ width: `${profileCompletion}%` }} />
-            </div>
-            <Link href="/profile" className="text-xs text-gray-400 hover:text-gray-600 mt-1.5 inline-block transition-colors">
-              Compléter mon profil
-            </Link>
-          </div>
-        )}
 
         {hasWarnings && (
           <div className="flex flex-col gap-1.5">

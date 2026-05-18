@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, varchar, boolean, timestamp, date, integer, numeric, bigint, smallint, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, uuid, varchar, boolean, timestamp, date, integer, numeric, bigint, smallint, index, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 export const accountTypeEnum = pgEnum("account_type", ["practitioner", "admin"]);
 export const professionEnum = pgEnum("profession", ["nurse"]);
@@ -59,7 +59,7 @@ export const practitioners = pgTable("practitioners", {
   retrocessionValue: numeric("retrocession_value", { precision: 10, scale: 2 }),
   rppsNumber: varchar("rpps_number", { length: 11 }).unique(),
   bridgeUserUuid: varchar("bridge_user_uuid", { length: 255 }),
-  defaultBankAccountId: uuid("default_bank_account_id"),
+  defaultBankAccountId: uuid("default_bank_account_id").references((): AnyPgColumn => bankAccounts.id, { onDelete: "set null" }),
   daysPerWeekWorked: integer("days_per_week_worked").notNull().default(5),
   recapFrequency: recapFrequencyEnum("recap_frequency").notNull().default("monthly"),
   deadlinesReminderEnabled: boolean("deadlines_reminder_enabled").notNull().default(true),

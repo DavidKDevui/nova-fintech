@@ -1,11 +1,5 @@
-- Table des synchronisations
-- Transactions
-- Impositions
-- Bordereaux
-
-
-Question:
-- Inscription Cabinet
+ma synthese => reste a vivre
+optimisation et gestion => ne pas dépendre du compte bancaire
 
 
 

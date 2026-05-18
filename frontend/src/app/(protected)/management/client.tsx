@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback, useMemo, useRef, useActionState, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, ReferenceLine, LabelList } from "recharts";
 import { getMonthlyActivityAction, getTransactionKpisAction, getCategoryTransactionsAction, type MonthlyActivityMonth, type CategoryTransaction } from "@/actions/transaction";
@@ -10,8 +11,10 @@ import { getVacationsAction, upsertVacationDayAction } from "@/actions/vacations
 import { useData } from "@/providers/data-provider";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { getEffectiveCAAction, type EffectiveCA } from "@/actions/effective-ca";
+import { getMonthlyActivityFromBordereauxAction } from "@/actions/monthly-activity-bordereaux";
 import { DataMissingOverlay } from "@/components/data-missing-overlay";
 import { CASourceIndicator } from "@/components/ca-source-indicator";
+import { EstimationBadge } from "@/components/estimation-badge";
 import { buildCalendar, type PaymentPreferences, DEFAULT_PREFERENCES } from "@/lib/data/fiscal-calendar";
 import { countWorkingDays, countRemainingWorkingDays } from "@/lib/data/fr-holidays";
 import { computeIR, computeParts, getBareme } from "@/lib/data/fr-tax";
@@ -23,6 +26,7 @@ const TABS = [
   { key: "contributions", label: "Mes cotisations sociales" },
   { key: "taxes", label: "Mes impôts" },
   { key: "summary", label: "Ma synthèse" },
+  { key: "remainder", label: "Reste à vivre" },
   { key: "simulation", label: "Simulation" },
 ] as const;
 
@@ -64,6 +68,8 @@ export function ManagementClient() {
 
       {tab === "summary" && <SummaryTab />}
 
+      {tab === "remainder" && <RemainderTab />}
+
       {tab === "simulation" && <SimulationTab />}
     </div>
   );
@@ -85,14 +91,56 @@ function ActivityTab() {
   const [vacations, setVacations] = useState<number[]>(Array(12).fill(0));
   const [depensesOpen, setDepensesOpen] = useState(false);
   const [remOpen, setRemOpen] = useState(false);
+  // `isEstimated` = on est en mode fallback bordereaux : CA réel issu des passages
+  // mais URSSAF/CARPIMKO/PAS estimés via getCotisationsEstimate. Sert à afficher
+  // les badges "estim." et le bandeau d'incitation à connecter la banque.
+  const [isEstimated, setIsEstimated] = useState(false);
 
   const fetchData = useCallback(async (y: number) => {
     setLoading(true);
-    const [kpiResult, monthlyResult, vacationsResult, effectiveCAResult] = await Promise.all([
-      getTransactionKpisAction(null, y),
-      getMonthlyActivityAction(y),
+    const [vacationsResult, effectiveCAResult] = await Promise.all([
       getVacationsAction(y),
       getEffectiveCAAction(y, "transactions"),
+    ]);
+
+    // Fallback dès que le CA effectif provient des bordereaux : on dérive le CA
+    // mensuel depuis les passages et on n'estime *rien d'autre* — dépenses,
+    // cotisations sociales et provision d'impôt restent à 0 (affichées "—").
+    // Le forfaitaire URSSAF/CARPIMKO début d'activité produisait des montants
+    // disproportionnés par rapport au CA réel des bordereaux, donc on les masque
+    // ici. Les autres tabs (Cotisations, Impôts, Synthèse) gardent l'estimation
+    // car elle a du sens en projection annuelle complète.
+    const useFallback = effectiveCAResult.source === "bordereaux";
+    if (useFallback) {
+      const monthlyResult = await getMonthlyActivityFromBordereauxAction(y);
+      const totalCA = monthlyResult.months.reduce((s, m) => s + m.income, 0);
+      setKpis({ encaissement: totalCA, decaissement: 0, cotisations: 0, remuneration: 0 });
+      setEffectiveCA(effectiveCAResult);
+      setChartData(
+        monthlyResult.months.map((m) => ({
+          name: MONTH_LABELS[m.month - 1]!,
+          revenus: m.income,
+          cotisations: m.cotisations,
+          autresDepenses: m.autresDepenses,
+          urssaf: m.urssaf,
+          carpimko: m.carpimko,
+          chargesPro: m.chargesPro,
+          retrocession: m.retrocession,
+          madelin: m.madelin,
+          impots: m.impots,
+          remuneration: m.remuneration,
+        })),
+      );
+      setVacations(vacationsResult);
+      setIsEstimated(true);
+      setLoading(false);
+      return;
+    }
+
+    // Flux normal : transactions bancaires.
+    const [kpiResult, monthlyResult] = await Promise.all([
+      getTransactionKpisAction(null, y),
+      getMonthlyActivityAction(y),
     ]);
     setKpis({ encaissement: kpiResult.encaissement, decaissement: kpiResult.decaissement, cotisations: kpiResult.cotisations ?? 0, remuneration: kpiResult.remuneration ?? 0 });
     setEffectiveCA(effectiveCAResult);
@@ -112,8 +160,9 @@ function ActivityTab() {
       })),
     );
     setVacations(vacationsResult);
+    setIsEstimated(false);
     setLoading(false);
-  }, []);
+  }, [bankConnected]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
@@ -168,8 +217,11 @@ function ActivityTab() {
         { label: "Dépenses", value: formatCurrency(Math.round(totalDepenses)) },
         { label: "Rém. avant impôt", value: formatCurrency(Math.round(totalRem)) },
       ],
+      footnote: isEstimated
+        ? "Chiffre d'affaires issu de vos bordereaux. Connectez votre banque pour voir vos dépenses, cotisations et rémunération."
+        : undefined,
     });
-  }, [exportData, chartData, year]);
+  }, [exportData, chartData, year, isEstimated]);
 
   // Daily rate computed from past months with CA > 0, neutralized of saved vacation days.
   // Used to simulate CA for current/future months in the selected year.
@@ -193,6 +245,44 @@ function ActivityTab() {
     return totalDays > 0 ? totalCA / totalDays : 0;
   }, [chartData, vacations, year, daysPerWeek]);
 
+  // CA mensuel projeté (mois passé = réel ; mois courant = réel + projection sur
+  // les jours restants ; mois futur = dailyRate × jours travaillables). Sert à
+  // afficher la ligne "Rém. avant impôt" en miroir du CA en mode fallback —
+  // les charges étant inconnues, rem = CA, projeté comme le CA.
+  const projectedCAByMonth = useMemo<number[]>(() => {
+    if (!chartData.length) return [];
+    const now = new Date();
+    const isPastYear = year < now.getFullYear();
+    const isFutureYear = year > now.getFullYear();
+    const currentMonthIdx = now.getMonth();
+    return chartData.map((m, i) => {
+      const isPastMonth = isPastYear || (year === now.getFullYear() && i < currentMonthIdx);
+      const isCurrentMonth = year === now.getFullYear() && i === currentMonthIdx;
+      const isFutureMonth = isFutureYear || (year === now.getFullYear() && i > currentMonthIdx);
+      if (isPastMonth) return Math.round(m.revenus);
+      if (dailyRate <= 0) return Math.round(m.revenus);
+      if (isFutureMonth) {
+        const wd = countWorkingDays(year, i + 1, daysPerWeek);
+        const worked = Math.max(0, wd - (vacations[i] || 0));
+        return Math.round(dailyRate * worked);
+      }
+      if (isCurrentMonth) {
+        const totalWd = countWorkingDays(year, i + 1, daysPerWeek);
+        const remainingWd = countRemainingWorkingDays(year, i + 1, now.getDate() + 1, daysPerWeek);
+        const ratioRemaining = totalWd > 0 ? remainingWd / totalWd : 0;
+        const remainingVac = (vacations[i] || 0) * ratioRemaining;
+        const workedRemaining = Math.max(0, remainingWd - remainingVac);
+        return Math.round(m.revenus) + Math.round(dailyRate * workedRemaining);
+      }
+      return 0;
+    });
+  }, [chartData, dailyRate, year, daysPerWeek, vacations]);
+
+  const projectedAnnualCA = useMemo(
+    () => projectedCAByMonth.reduce((s, v) => s + v, 0),
+    [projectedCAByMonth],
+  );
+
   return (
     <div className="space-y-6">
       {/* Sélecteur d'année global du tab (au-dessus, comme dans "Mes cotisations sociales") */}
@@ -207,7 +297,26 @@ function ActivityTab() {
 
       {/* Chart + monthly breakdown (aligned) */}
       <div className="relative bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
-        <DataMissingOverlay bankConnected={bankConnected} />
+        {/* Overlay uniquement si pas de banque ET pas de bordereaux exploitables.
+            Pendant le chargement initial on l'inhibe pour éviter un flash : les
+            skeletons en dessous suffisent à indiquer l'attente. */}
+        <DataMissingOverlay bankConnected={bankConnected || isEstimated || loading} />
+        {isEstimated && (
+          <div className="px-4 py-1.5 text-[11px] text-gray-400 border-b border-gray-100/80 flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4" />
+              <path d="M12 8h.01" />
+            </svg>
+            <span>
+              CA issu de vos bordereaux.{" "}
+              <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600">
+                Connecter ma banque
+              </Link>{" "}
+              pour voir vos dépenses et votre rémunération.
+            </span>
+          </div>
+        )}
         <div className="pb-2 flex">
           {/* KPI cards stacked vertically */}
           <div style={{ width: 260 }} className="flex flex-col items-center px-2 py-1 shrink-0">
@@ -243,7 +352,9 @@ function ActivityTab() {
                 {loading ? (
                   <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
                 ) : (
-                  <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(kpis.decaissement)}</p>
+                  <p className="text-lg font-bold text-gray-900 mt-0.5">
+                    {isEstimated ? "—" : formatCurrency(kpis.decaissement)}
+                  </p>
                 )}
               </div>
               <div className="border-t border-gray-100 my-2" />
@@ -259,7 +370,9 @@ function ActivityTab() {
                 {loading ? (
                   <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
                 ) : (
-                  <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(kpis.cotisations)}</p>
+                  <p className="text-lg font-bold text-gray-900 mt-0.5">
+                    {isEstimated ? "—" : formatCurrency(kpis.cotisations)}
+                  </p>
                 )}
               </div>
             </div>
@@ -271,14 +384,23 @@ function ActivityTab() {
                   <path d="M12 7v4l2.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
                   <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.5" />
                 </svg>
-                <p className="text-xs font-medium text-gray-500 truncate">Rém. avant impôt</p>
+                <p className="text-xs font-medium text-gray-500 truncate inline-flex items-center gap-1.5">
+                  Rém. avant impôt
+                  {isEstimated && <EstimationBadge tooltip="En l'absence de données bancaires, la rémunération avant impôt est affichée en miroir du CA (charges inconnues)." />}
+                </p>
               </div>
               {loading ? (
                 <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
+              ) : isEstimated ? (
+                <p className="text-lg font-bold text-gray-400 italic mt-0.5">
+                  {projectedAnnualCA > 0 ? `~${formatCurrency(projectedAnnualCA)}` : "—"}
+                </p>
               ) : (
-                <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(
-                  chartData.reduce((s, m) => s + m.revenus - m.urssaf - m.carpimko - m.chargesPro - m.retrocession - m.madelin, 0)
-                )}</p>
+                <p className="text-lg font-bold text-gray-900 mt-0.5">
+                  {formatCurrency(
+                    chartData.reduce((s, m) => s + m.revenus - m.urssaf - m.carpimko - m.chargesPro - m.retrocession - m.madelin, 0)
+                  )}
+                </p>
               )}
             </div>
           </div>
@@ -294,7 +416,11 @@ function ActivityTab() {
                   <Tooltip
                     contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
                     formatter={(value, name) => {
-                      const labels: Record<string, string> = { revenus: "Revenus", cotisations: "Cotisations sociales", autresDepenses: "Autres dépenses" };
+                      const labels: Record<string, string> = {
+                        revenus: isEstimated ? "Revenus (bordereaux)" : "Revenus",
+                        cotisations: "Cotisations sociales",
+                        autresDepenses: "Autres dépenses",
+                      };
                       const num = typeof value === "number" ? value : Number(value ?? 0);
                       const key = String(name ?? "");
                       return [formatCurrency(num), labels[key] ?? key];
@@ -306,7 +432,11 @@ function ActivityTab() {
                     iconSize={8}
                     wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
                     formatter={(value: string) => {
-                      const labels: Record<string, string> = { revenus: "Revenus", cotisations: "Cotisations sociales", autresDepenses: "Autres dépenses" };
+                      const labels: Record<string, string> = {
+                        revenus: isEstimated ? "Revenus (bordereaux)" : "Revenus",
+                        cotisations: "Cotisations sociales",
+                        autresDepenses: "Autres dépenses",
+                      };
                       return labels[value] ?? value;
                     }}
                   />
@@ -441,9 +571,20 @@ function ActivityTab() {
               >
                 <div className="px-3 py-3.5 text-sm font-semibold text-gray-700 flex items-center gap-1.5">
                   Rém. avant impôt
+                  {isEstimated && <EstimationBadge tooltip="En l'absence de données bancaires, la rémunération avant impôt est affichée en miroir du CA (charges inconnues). Connectez votre banque pour les charges réelles." />}
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform ${remOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
                 </div>
-                {chartData.map((m) => {
+                {chartData.map((m, i) => {
+                  // Fallback : rem = CA projeté (mêmes valeurs que la ligne CA),
+                  // affichées en italique gris + ~ pour signaler l'estimation.
+                  if (isEstimated) {
+                    const projected = projectedCAByMonth[i] ?? 0;
+                    return (
+                      <div key={m.name} className="py-3.5 text-center font-medium text-gray-400 italic">
+                        {projected > 0 ? `~${formatCurrency(projected)}` : "—"}
+                      </div>
+                    );
+                  }
                   const charges = m.urssaf + m.carpimko + m.chargesPro + m.retrocession + m.madelin;
                   const res = m.revenus - charges;
                   const empty = m.revenus === 0 && charges === 0;
@@ -469,6 +610,11 @@ function ActivityTab() {
                     <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-gray-500">Provision d&apos;impôt estimée</div>
                     {chartData.map((m, i) => {
                       const isFuture = year > currentYear || (year === currentYear && i >= currentMonth);
+                      // En fallback bordereaux : on n'estime rien dans Mon activité,
+                      // les charges déductibles ne sont pas connues → tiret partout.
+                      if (isEstimated) {
+                        return <div key={m.name} className="py-2.5 text-center text-xs font-medium text-gray-300">—</div>;
+                      }
                       // Past months: show real tax transactions
                       if (!isFuture) {
                         return (
@@ -532,10 +678,14 @@ function ActivityTab() {
 
 function ContributionsTab() {
   const hp = usePractitioner();
+  const bankConnected = !!hp?.bridgeUserUuid;
   const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
   const [cardsLoading, setCardsLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(true);
   const [monthlyData, setMonthlyData] = useState<{ urssaf: number; carpimko: number }[]>(Array(12).fill({ urssaf: 0, carpimko: 0 }));
+  // Fallback bordereaux activé quand pas de banque connectée mais des
+  // bordereaux exploitables. Tous les montants affichés deviennent estimés.
+  const [isEstimated, setIsEstimated] = useState(false);
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
@@ -556,29 +706,39 @@ function ContributionsTab() {
   const calendar = useMemo(() => buildCalendar(prefs), [prefs]);
 
   // Load monthly data + estimate.
-  // totalCA dérivé des bank_transactions (cohérent avec Mon activité). Avant
-  // on utilisait facturationSummary (bordereaux Ozzen) → 0 si pas d'import.
+  // Source primaire = bank_transactions (cohérent avec Mon activité). Si le
+  // praticien n'a pas connecté sa banque mais a des bordereaux, on bascule sur
+  // un fallback : monthly data depuis les passages (urssaf/carpimko réels = 0)
+  // et estimation forcée pour l'année courante.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setTableLoading(true);
     setCardsLoading(true);
+    setEstimate(null);
     (async () => {
-      const monthly = await getMonthlyActivityAction(year);
+      const effectiveCAResult = await getEffectiveCAAction(year, "transactions");
+      const useFallback = effectiveCAResult.source === "bordereaux";
+      setIsEstimated(useFallback);
+
+      const monthly = useFallback
+        ? await getMonthlyActivityFromBordereauxAction(year)
+        : await getMonthlyActivityAction(year);
       const months = monthly.months ?? [];
       setMonthlyData(months.map((m) => ({ urssaf: m.urssaf, carpimko: m.carpimko })));
       setTableLoading(false);
 
-      // L'estimation annuelle ne dépend que de l'année en cours (CA YTD).
-      if (year === currentYear) {
-        const totalCA = months.reduce((s, m) => s + m.income, 0);
-        if (totalCA > 0) {
-          const est = await getCotisationsEstimate(totalCA);
-          if (est) setEstimate(est);
-        }
+      // Estimation calée sur l'année sélectionnée : getCotisationsEstimate
+      // utilise désormais le paramètre `year` pour PASS, annualisation, début
+      // d'activité et N-2 — fonctionne donc aussi sur les années passées (où
+      // le CA passé est déjà la valeur annuelle complète, pas d'extrapolation).
+      const totalCA = months.reduce((s, m) => s + m.income, 0);
+      if (totalCA > 0) {
+        const est = await getCotisationsEstimate(totalCA, 0, year);
+        if (est) setEstimate(est);
       }
       setCardsLoading(false);
     })().catch(() => { setTableLoading(false); setCardsLoading(false); });
-  }, [year, currentYear]);
+  }, [year, currentYear, bankConnected]);
 
   // Totals réels (déjà versés) pour l'année sélectionnée
   const { totalUrssafReel, totalCarpimkoReel } = useMemo(() => {
@@ -588,6 +748,8 @@ function ContributionsTab() {
   }, [monthlyData]);
 
   const isPastYear = year < currentYear;
+  // En fallback bordereaux, aucun "réel" n'est observable même sur années passées.
+  const showReel = isPastYear && !isEstimated;
 
   // Estimated amounts per month based on calendar events
   const estimatedMonths = useMemo(() => {
@@ -608,7 +770,7 @@ function ContributionsTab() {
     const rows = MONTH_LABELS.map((m, i) => {
       const reelUrssaf = monthlyData[i]?.urssaf ?? 0;
       const reelCarpimko = monthlyData[i]?.carpimko ?? 0;
-      const canEstimate = year > currentYear || (year === currentYear && i >= new Date().getMonth());
+      const canEstimate = isEstimated || year > currentYear || (year === currentYear && i >= new Date().getMonth());
       const estUrssaf = canEstimate ? (estimatedMonths[i]?.urssaf ?? 0) : 0;
       const estCarpimko = canEstimate ? (estimatedMonths[i]?.carpimko ?? 0) : 0;
       const urssaf = reelUrssaf > 0 ? reelUrssaf : estUrssaf;
@@ -617,14 +779,14 @@ function ContributionsTab() {
       return [m, Math.round(urssaf), Math.round(carpimko), Math.round(urssaf + carpimko), isReel ? "Réel" : (urssaf + carpimko > 0 ? "Estimé" : "—")];
     });
     downloadCSV(`cotisations_${year}`, headers, rows);
-  }, [monthlyData, estimatedMonths, year, currentYear]);
+  }, [monthlyData, estimatedMonths, year, currentYear, isEstimated]);
 
   const handleExportCotisationsPdf = useCallback(() => {
     const headers = ["Mois", "URSSAF", "CARPIMKO", "Total", "Type"];
     const rows = MONTH_LABELS.map((m, i) => {
       const reelUrssaf = monthlyData[i]?.urssaf ?? 0;
       const reelCarpimko = monthlyData[i]?.carpimko ?? 0;
-      const canEstimate = year > currentYear || (year === currentYear && i >= new Date().getMonth());
+      const canEstimate = isEstimated || year > currentYear || (year === currentYear && i >= new Date().getMonth());
       const estUrssaf = canEstimate ? (estimatedMonths[i]?.urssaf ?? 0) : 0;
       const estCarpimko = canEstimate ? (estimatedMonths[i]?.carpimko ?? 0) : 0;
       const urssaf = reelUrssaf > 0 ? reelUrssaf : estUrssaf;
@@ -638,17 +800,20 @@ function ContributionsTab() {
         isReel ? "Réel" : (urssaf + carpimko > 0 ? "Estimé" : "—"),
       ];
     });
-    const totalUrssaf = totalUrssafReel || (estimate?.urssafAnnuel ?? 0);
-    const totalCarpimko = totalCarpimkoReel || (estimate?.carpimkoAnnuel ?? 0);
+    const totalUrssaf = showReel ? totalUrssafReel : (estimate?.urssafAnnuel ?? 0);
+    const totalCarpimko = showReel ? totalCarpimkoReel : (estimate?.carpimkoAnnuel ?? 0);
     downloadPDF(`cotisations_${year}`, `Mes cotisations sociales ${year}`, headers, rows, {
-      subtitle: isPastYear ? `Cotisations versées en ${year}` : `Estimation des cotisations ${year}`,
+      subtitle: showReel ? `Cotisations versées en ${year}` : `Estimation des cotisations ${year}`,
       summary: [
-        { label: "URSSAF", value: `${isPastYear ? "" : "~"}${formatCurrency(Math.round(totalUrssaf))}` },
-        { label: "CARPIMKO", value: `${isPastYear ? "" : "~"}${formatCurrency(Math.round(totalCarpimko))}` },
-        { label: "Total", value: `${isPastYear ? "" : "~"}${formatCurrency(Math.round(totalUrssaf + totalCarpimko))}` },
+        { label: "URSSAF", value: `${showReel ? "" : "~"}${formatCurrency(Math.round(totalUrssaf))}` },
+        { label: "CARPIMKO", value: `${showReel ? "" : "~"}${formatCurrency(Math.round(totalCarpimko))}` },
+        { label: "Total", value: `${showReel ? "" : "~"}${formatCurrency(Math.round(totalUrssaf + totalCarpimko))}` },
       ],
+      footnote: isEstimated
+        ? "Cotisations URSSAF et CARPIMKO estimées à partir du chiffre d'affaires issu de vos bordereaux. Connectez votre banque pour obtenir les montants réellement prélevés."
+        : undefined,
     });
-  }, [monthlyData, estimatedMonths, year, currentYear, isPastYear, totalUrssafReel, totalCarpimkoReel, estimate]);
+  }, [monthlyData, estimatedMonths, year, currentYear, showReel, totalUrssafReel, totalCarpimkoReel, estimate, isEstimated]);
 
   return (
     <div className="space-y-6">
@@ -661,6 +826,22 @@ function ContributionsTab() {
         />
         <YearSelector year={year} setYear={setYear} maxYear={currentYear} />
       </div>
+      {isEstimated && (
+        <div className="px-4 py-1.5 text-[11px] text-gray-400 flex items-center gap-1.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
+          </svg>
+          <span>
+            Cotisations estimées à partir de vos bordereaux.{" "}
+            <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600">
+              Connecter ma banque
+            </Link>{" "}
+            pour les montants réels.
+          </span>
+        </div>
+      )}
       {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* URSSAF */}
@@ -668,37 +849,38 @@ function ContributionsTab() {
           <div className="flex items-center gap-4 mb-6">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-urssaf.svg" alt="URSSAF" className="h-8" />
+            {isEstimated && <EstimationBadge tooltip="Cotisations URSSAF estimées à partir du CA issu de vos bordereaux. Connectez votre banque pour les montants réellement prélevés." />}
           </div>
           <div className="flex items-center gap-1.5 mb-1">
             <p className="text-xs text-gray-400">
-              {isPastYear ? `Cotisations versées en ${year}` : `Montant total estimé des cotisations ${year}`}
+              {showReel ? `Cotisations versées en ${year}` : `Montant total estimé des cotisations ${year}`}
             </p>
-            <InfoTooltip text={isPastYear
+            <InfoTooltip text={showReel
               ? `Somme des prélèvements Urssaf effectivement débités sur vos comptes en ${year}.`
               : `Montant total estimé de vos cotisations Urssaf à payer en ${year}, réduit du remboursement estimé (régularisation négative) au titre de ${year - 1}.`}
             />
           </div>
-          {(isPastYear ? tableLoading : cardsLoading) ? (
+          {(showReel ? tableLoading : cardsLoading) ? (
             <div className="h-8 bg-gray-200 rounded w-28 animate-pulse mb-4" />
           ) : (
             <p className="text-2xl font-bold text-gray-900 mb-4">
-              {isPastYear
+              {showReel
                 ? (totalUrssafReel > 0 ? formatCurrency(totalUrssafReel) : "—")
                 : (estimate ? `~${formatCurrency(estimate.urssafAnnuel)}` : "—")}
             </p>
           )}
           <div className="flex items-center gap-1.5 mb-1">
-            <p className="text-xs text-gray-400">{isPastYear ? "Nombre de prélèvements" : "Montant par échéance"}</p>
-            <InfoTooltip text={isPastYear
+            <p className="text-xs text-gray-400">{showReel ? "Nombre de prélèvements" : "Montant par échéance"}</p>
+            <InfoTooltip text={showReel
               ? `Nombre de prélèvements Urssaf passés sur vos comptes en ${year}.`
               : `Estimation du montant prélevé à chaque échéance Urssaf en ${year}.`}
             />
           </div>
-          {(isPastYear ? tableLoading : cardsLoading) ? (
+          {(showReel ? tableLoading : cardsLoading) ? (
             <div className="h-8 bg-gray-200 rounded w-28 animate-pulse" />
           ) : (
             <p className="text-2xl font-bold text-gray-900">
-              {isPastYear
+              {showReel
                 ? (monthlyData.filter((m) => m.urssaf > 0).length > 0
                     ? `${monthlyData.filter((m) => m.urssaf > 0).length} prélèvements`
                     : "—")
@@ -712,37 +894,38 @@ function ContributionsTab() {
           <div className="flex items-center gap-4 mb-6">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-carpimko.png" alt="CARPIMKO" className="h-8" />
+            {isEstimated && <EstimationBadge tooltip="Cotisations CARPIMKO estimées à partir du CA issu de vos bordereaux. Connectez votre banque pour les montants réellement prélevés." />}
           </div>
           <div className="flex items-center gap-1.5 mb-1">
             <p className="text-xs text-gray-400">
-              {isPastYear ? `Cotisations versées en ${year}` : `Montant total estimé des cotisations ${year}`}
+              {showReel ? `Cotisations versées en ${year}` : `Montant total estimé des cotisations ${year}`}
             </p>
-            <InfoTooltip text={isPastYear
+            <InfoTooltip text={showReel
               ? `Somme des prélèvements Carpimko effectivement débités sur vos comptes en ${year}.`
               : `Montant total estimé de vos cotisations Carpimko à payer en ${year}, intégrant la régularisation estimée au titre de ${year - 1}.`}
             />
           </div>
-          {(isPastYear ? tableLoading : cardsLoading) ? (
+          {(showReel ? tableLoading : cardsLoading) ? (
             <div className="h-8 bg-gray-200 rounded w-28 animate-pulse mb-4" />
           ) : (
             <p className="text-2xl font-bold text-gray-900 mb-4">
-              {isPastYear
+              {showReel
                 ? (totalCarpimkoReel > 0 ? formatCurrency(totalCarpimkoReel) : "—")
                 : (estimate ? `~${formatCurrency(estimate.carpimkoAnnuel)}` : "—")}
             </p>
           )}
           <div className="flex items-center gap-1.5 mb-1">
-            <p className="text-xs text-gray-400">{isPastYear ? "Nombre de prélèvements" : "Montant par échéance"}</p>
-            <InfoTooltip text={isPastYear
+            <p className="text-xs text-gray-400">{showReel ? "Nombre de prélèvements" : "Montant par échéance"}</p>
+            <InfoTooltip text={showReel
               ? `Nombre de prélèvements Carpimko passés sur vos comptes en ${year}.`
               : `Estimation du montant prélevé à chaque échéance Carpimko en ${year}.`}
             />
           </div>
-          {(isPastYear ? tableLoading : cardsLoading) ? (
+          {(showReel ? tableLoading : cardsLoading) ? (
             <div className="h-8 bg-gray-200 rounded w-28 animate-pulse" />
           ) : (
             <p className="text-2xl font-bold text-gray-900">
-              {isPastYear
+              {showReel
                 ? (monthlyData.filter((m) => m.carpimko > 0).length > 0
                     ? `${monthlyData.filter((m) => m.carpimko > 0).length} prélèvements`
                     : "—")
@@ -773,13 +956,16 @@ function ContributionsTab() {
             </div>
             {/* URSSAF */}
             <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-              <div className="px-3 py-3.5 flex items-center">
+              <div className="px-3 py-3.5 flex items-center gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo-urssaf.svg" alt="URSSAF" className="h-5" />
+                {isEstimated && <EstimationBadge />}
               </div>
               {monthlyData.map((m, i) => {
                 const reel = m.urssaf;
-                const canEstimate = year > currentYear || (year === currentYear && i >= new Date().getMonth());
+                // En fallback bordereaux : aucun réel n'existe sur les mois écoulés,
+                // donc on autorise l'estimation pour tous les mois de l'année.
+                const canEstimate = isEstimated || year > currentYear || (year === currentYear && i >= new Date().getMonth());
                 const est = canEstimate ? (estimatedMonths[i]?.urssaf ?? 0) : 0;
                 if (reel > 0) {
                   return <div key={i} className="py-3.5 text-center font-medium text-gray-700">{formatCurrency(reel)}</div>;
@@ -792,13 +978,14 @@ function ContributionsTab() {
             </div>
             {/* CARPIMKO */}
             <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-              <div className="px-3 py-3.5 flex items-center">
+              <div className="px-3 py-3.5 flex items-center gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo-carpimko.png" alt="CARPIMKO" className="h-5" />
+                {isEstimated && <EstimationBadge />}
               </div>
               {monthlyData.map((m, i) => {
                 const reel = m.carpimko;
-                const canEstimate = year > currentYear || (year === currentYear && i >= new Date().getMonth());
+                const canEstimate = isEstimated || year > currentYear || (year === currentYear && i >= new Date().getMonth());
                 const est = canEstimate ? (estimatedMonths[i]?.carpimko ?? 0) : 0;
                 if (reel > 0) {
                   return <div key={i} className="py-3.5 text-center font-medium text-gray-700">{formatCurrency(reel)}</div>;
@@ -814,7 +1001,7 @@ function ContributionsTab() {
               <div className="px-3 py-3.5 text-sm font-semibold text-gray-900">Total</div>
               {monthlyData.map((m, i) => {
                 const reelTotal = m.urssaf + m.carpimko;
-                const canEstimate = year > currentYear || (year === currentYear && i >= new Date().getMonth());
+                const canEstimate = isEstimated || year > currentYear || (year === currentYear && i >= new Date().getMonth());
                 const estTotal = canEstimate ? ((estimatedMonths[i]?.urssaf ?? 0) + (estimatedMonths[i]?.carpimko ?? 0)) : 0;
                 const hasReel = reelTotal > 0;
                 const value = hasReel ? reelTotal : estTotal;
@@ -975,6 +1162,7 @@ function TransactionsList({
 
 function TaxesTab() {
   const hp = usePractitioner();
+  const bankConnected = !!hp?.bridgeUserUuid;
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
 
@@ -993,6 +1181,8 @@ function TaxesTab() {
   const [vacations, setVacations] = useState<number[]>(Array(12).fill(0));
   // Past-year monthly used as a fallback to derive a daily rate for future-year projection
   const [pastReference, setPastReference] = useState<MonthlyActivityMonth[] | null>(null);
+  // Fallback bordereaux : revenuBNC dérivé du CA des passages + cotisations estimées.
+  const [isEstimated, setIsEstimated] = useState(false);
 
   // Load fiscal situation from DB when year changes
   useEffect(() => {
@@ -1018,27 +1208,63 @@ function TaxesTab() {
     });
   }, [year]);
 
-  // Load monthly activity + vacations for the selected year
+  // Load monthly activity + vacations for the selected year.
+  // En fallback (pas de banque, bordereaux présents) : on lit les passages et on
+  // injecte URSSAF/CARPIMKO estimés au prorata du CA mensuel pour que le calcul
+  // BNC réel reste correct (BNC = CA − charges déductibles).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setMonthlyLoading(true);
-    Promise.all([getMonthlyActivityAction(year), getVacationsAction(year)])
-      .then(([m, v]) => {
-        setMonthly(m.months);
-        setVacations(v);
-        setMonthlyLoading(false);
-      })
-      .catch(() => setMonthlyLoading(false));
-  }, [year]);
+    (async () => {
+      const effectiveCAResult = await getEffectiveCAAction(year, "transactions");
+      const useFallback = effectiveCAResult.source === "bordereaux";
+      setIsEstimated(useFallback);
 
-  // For future years with no data yet, fall back on the current year as reference for daily rate
+      const [m, v] = await Promise.all([
+        useFallback ? getMonthlyActivityFromBordereauxAction(year) : getMonthlyActivityAction(year),
+        getVacationsAction(year),
+      ]);
+      let months = m.months;
+
+      // Enrichit avec URSSAF/CARPIMKO estimés en fallback (calage sur le
+      // sélecteur d'année — getCotisationsEstimate est désormais year-aware).
+      if (useFallback) {
+        const totalCA = months.reduce((s, mm) => s + mm.income, 0);
+        if (totalCA > 0) {
+          const est = await getCotisationsEstimate(totalCA, 0, year);
+          if (est) {
+            months = months.map((mm) => {
+              const ratio = mm.income / totalCA;
+              const urssaf = Math.round(est.urssafAnnuel * ratio);
+              const carpimko = Math.round(est.carpimkoAnnuel * ratio);
+              return { ...mm, urssaf, carpimko };
+            });
+          }
+        }
+      }
+
+      setMonthly(months);
+      setVacations(v);
+      setMonthlyLoading(false);
+    })().catch(() => setMonthlyLoading(false));
+  }, [year, bankConnected, currentYear]);
+
+  // For future years with no data yet, fall back on the current year as reference for daily rate.
+  // Source alignée sur effectiveCA pour rester cohérent avec le flux principal.
   useEffect(() => {
     if (year <= currentYear) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset when no projection is needed
       setPastReference(null);
       return;
     }
-    getMonthlyActivityAction(currentYear).then((m) => setPastReference(m.months)).catch(() => {});
+    (async () => {
+      const eff = await getEffectiveCAAction(currentYear, "transactions");
+      const loader = eff.source === "bordereaux"
+        ? getMonthlyActivityFromBordereauxAction(currentYear)
+        : getMonthlyActivityAction(currentYear);
+      const m = await loader;
+      setPastReference(m.months);
+    })().catch(() => {});
   }, [year, currentYear]);
 
   const { parts, partsDeReference } = useMemo(
@@ -1186,8 +1412,11 @@ function TaxesTab() {
     downloadPDF(`imposition_${year}`, `Mon imposition estimée ${year}`, headers, rows, {
       subtitle: `Estimation basée sur le barème ${year} (loi de finances ${year + 1})`,
       summary,
+      footnote: isEstimated
+        ? "BNC dérivé du CA issu de vos bordereaux ; charges déductibles (URSSAF/CARPIMKO) estimées à partir du CA. Aucun PAS prélevé n'est observable sans connexion bancaire — la régularisation correspond à l'intégralité du PAS estimé."
+        : undefined,
     });
-  }, [situation, enfants, isSingleParent, autresRevenus, parts, hp, isProjected, revenuBNC, revenuImposable, currentTranche, ir, pasAnnuel, regularisation, year, declaredIr]);
+  }, [situation, enfants, isSingleParent, autresRevenus, parts, hp, isProjected, revenuBNC, revenuImposable, currentTranche, ir, pasAnnuel, regularisation, year, declaredIr, isEstimated]);
 
   return (
     <div className="space-y-6">
@@ -1199,6 +1428,22 @@ function TaxesTab() {
       />
       <YearSelector year={year} setYear={setYear} maxYear={currentYear} />
     </div>
+    {isEstimated && (
+      <div className="px-4 py-1.5 text-[11px] text-gray-400 flex items-center gap-1.5">
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </svg>
+        <span>
+          BNC et PAS estimés à partir de vos bordereaux.{" "}
+          <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600">
+            Connecter ma banque
+          </Link>{" "}
+          pour intégrer vos prélèvements réels.
+        </span>
+      </div>
+    )}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Ma situation fiscale */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
@@ -1299,9 +1544,10 @@ function TaxesTab() {
                 <InfoTooltip text={hp?.taxRegime === "micro_bnc"
                   ? "Régime micro-BNC : les recettes annuelles sont diminuées d'un abattement forfaitaire de 34 %."
                   : "Régime déclaration contrôlée : bénéfice = recettes encaissées - charges déductibles (URSSAF, CARPIMKO, charges pro, rétrocession, Madelin)."} />
+                {isEstimated && <EstimationBadge tooltip="Bénéfice BNC dérivé du CA de vos bordereaux. En régime déclaration contrôlée, les charges déductibles (URSSAF/CARPIMKO) sont estimées à partir du CA." />}
               </div>
-              <span className={`font-semibold ${isProjected ? "text-gray-500 italic" : "text-gray-900"}`}>
-                {monthlyLoading ? "…" : `${isProjected ? "~" : ""}${formatCurrency(revenuBNC)}`}
+              <span className={`font-semibold ${isProjected || isEstimated ? "text-gray-500 italic" : "text-gray-900"}`}>
+                {monthlyLoading ? "…" : `${(isProjected || isEstimated) ? "~" : ""}${formatCurrency(revenuBNC)}`}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
@@ -1338,6 +1584,7 @@ function TaxesTab() {
             <div className="flex items-center gap-1.5 mb-1">
               <p className="text-xs text-gray-400">Impôt estimé sur les revenus {year}</p>
               <InfoTooltip text={`Estimation de l'impôt sur le revenu calculée avec le barème progressif applicable aux revenus ${year} (loi de finances ${year + 1}), votre situation familiale et le quotient familial${ir.plafonneQf ? " (plafonné)" : ""}.`} />
+              {isEstimated && <EstimationBadge tooltip="IR calculé à partir du BNC dérivé de vos bordereaux. Connectez votre banque pour des charges déductibles réelles." />}
             </div>
             <p className="text-2xl font-bold text-gray-900">{monthlyLoading ? "…" : formatCurrency(ir.impot)}</p>
             {ir.plafonneQf && (
@@ -1347,7 +1594,10 @@ function TaxesTab() {
           <div>
             <div className="flex items-center gap-1.5 mb-1">
               <p className="text-xs text-gray-400">Régularisation {year} payée en {year + 1}</p>
-              <InfoTooltip text={`Différence entre l'impôt estimé et le PAS prélevé. PAS BNC : acomptes réellement prélevés (transactions catégorisées « Impôts » : ${formatCurrency(pasYtdReel)} à date)${year >= currentYear ? ` + projection au taux ${(pasRate * 100).toFixed(1)} % pour les mois restants` : ""}. PAS conjoint : approximation au même taux. Positif = complément à payer (sept-déc ${year + 1}), négatif = remboursement (été ${year + 1}).`} />
+              <InfoTooltip text={isEstimated
+                ? `Sans connexion bancaire, aucun PAS prélevé n'est observable : la régularisation correspond à l'intégralité du PAS estimé. Connectez votre banque pour retrancher les acomptes déjà débités.`
+                : `Différence entre l'impôt estimé et le PAS prélevé. PAS BNC : acomptes réellement prélevés (transactions catégorisées « Impôts » : ${formatCurrency(pasYtdReel)} à date)${year >= currentYear ? ` + projection au taux ${(pasRate * 100).toFixed(1)} % pour les mois restants` : ""}. PAS conjoint : approximation au même taux. Positif = complément à payer (sept-déc ${year + 1}), négatif = remboursement (été ${year + 1}).`} />
+              {isEstimated && <EstimationBadge />}
             </div>
             <p className={`text-2xl font-bold ${regularisation >= 0 ? "text-red-500" : "text-green-600"}`}>
               {monthlyLoading ? "…" : `${regularisation >= 0 ? "+" : ""}${formatCurrency(regularisation)}`}
@@ -1355,6 +1605,7 @@ function TaxesTab() {
             <p className="text-xs text-gray-400 mt-1">
               IR estimé {formatCurrency(ir.impot)} − PAS {formatCurrency(pasAnnuel)}
               {pasYtdReel > 0 && ` (dont ${formatCurrency(pasYtdReel)} déjà prélevés)`}
+              {isEstimated && " · aucun prélèvement observé"}
             </p>
           </div>
 
@@ -1448,6 +1699,7 @@ function TaxesTab() {
 
 function SummaryTab() {
   const hp = usePractitioner();
+  const bankConnected = !!hp?.bridgeUserUuid;
   const { accounts, transactionsLoading } = useData();
   const currentYear = new Date().getFullYear();
   const prevYear = currentYear - 1;
@@ -1469,14 +1721,23 @@ function SummaryTab() {
     otherIncome: string;
   } | null>(null);
   const [includeRegul, setIncludeRegul] = useState(true);
+  // Fallback bordereaux : CA mensuel + CA N-1 issus des passages, cotisations
+  // estimées via getCotisationsEstimate. La carte "Trésorerie prévisionnelle"
+  // reste indisponible (besoin du solde bancaire).
+  const [isEstimated, setIsEstimated] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setLoading(true);
     (async () => {
+      const effectiveCAResult = await getEffectiveCAAction(currentYear, "transactions");
+      const useFallback = effectiveCAResult.source === "bordereaux";
+      setIsEstimated(useFallback);
+
+      const monthlyLoader = useFallback ? getMonthlyActivityFromBordereauxAction : getMonthlyActivityAction;
       const [currentMonthly, prevMonthly, prevFiscal] = await Promise.all([
-        getMonthlyActivityAction(currentYear),
-        getMonthlyActivityAction(prevYear),
+        monthlyLoader(currentYear),
+        monthlyLoader(prevYear),
         getFiscalSituationAction(prevYear),
       ]);
       const monthly = currentMonthly.months.map((m) => ({
@@ -1488,11 +1749,8 @@ function SummaryTab() {
         retrocession: m.retrocession,
         madelin: m.madelin,
       }));
-      // CA dérivé des bank_transactions catégorisées "income" — cohérent avec
-      // l'onglet Mon activité. Avant, on utilisait facturationSummary (bordereaux
-      // Ozzen) qui renvoyait 0 quand aucun bordereau n'avait été importé.
       const totalCAFromBank = monthly.reduce((s, m) => s + m.income, 0);
-      const est = await getCotisationsEstimate(totalCAFromBank);
+      const est = await getCotisationsEstimate(totalCAFromBank, 0, currentYear);
       setMonthlyData(monthly);
       setEstimate(est);
       setPrevYearCA(prevMonthly.months.reduce((s, m) => s + m.income, 0));
@@ -1506,7 +1764,7 @@ function SummaryTab() {
       }
       setLoading(false);
     })().catch(() => setLoading(false));
-  }, [currentYear, prevYear]);
+  }, [currentYear, prevYear, bankConnected]);
 
   // 1. Trésorerie actuelle = balance du compte par défaut
   const defaultBalance = useMemo(() => {
@@ -1631,7 +1889,9 @@ function SummaryTab() {
     },
   ];
 
-  const chartData = [
+  // En fallback bordereaux : pas de solde bancaire réel → on ne rend aucune
+  // donnée dans le chart pour ne pas afficher des bars trompeuses sous l'overlay.
+  const chartData = isEstimated ? [] : [
     { key: "treso", name: "Trésorerie actuelle", value: Math.round(defaultBalance) },
     ...(includeRegul ? [{ key: "regul", name: `Régularisation ${currentYear}`, value: Math.round(regulImpact) }] : []),
     { key: "antic", name: "Anticipation 3 mois", value: Math.round(anticipation) },
@@ -1642,8 +1902,11 @@ function SummaryTab() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Trésorerie prévisionnelle */}
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+      {/* Trésorerie prévisionnelle — nécessite des vraies transactions bancaires
+          (pas juste un bridgeUserUuid posé). En fallback bordereaux on n'a pas
+          de solde de compte exploitable → on garde l'overlay affiché. */}
+      <div className="relative bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+        <DataMissingOverlay bankConnected={(bankConnected && !isEstimated) || isLoading} />
         <div className="flex items-center justify-between mb-4 gap-3">
           <h3 className="text-base font-semibold text-gray-900">Trésorerie prévisionnelle</h3>
           <div className="inline-flex rounded-lg bg-gray-100 p-0.5 text-[11px] font-medium">
@@ -1718,8 +1981,8 @@ function SummaryTab() {
                   ? `Solde hypothétique après avoir anticipé votre régularisation d'Urssaf et de Carpimko ${currentYear} (ajustée en ${currentYear + 1}) ainsi que 3 mois de vos frais professionnels.`
                   : `Solde hypothétique après avoir anticipé 3 mois de vos frais professionnels (sans tenir compte de la régularisation ${currentYear}).`} />
               </div>
-              <p className={`text-3xl font-bold ${solde >= 0 ? "text-gray-900" : "text-red-500"}`}>
-                {formatSigned(solde)}
+              <p className={`text-3xl font-bold ${isEstimated ? "text-gray-300" : solde >= 0 ? "text-gray-900" : "text-red-500"}`}>
+                {isEstimated ? "—" : formatSigned(solde)}
               </p>
             </div>
 
@@ -1737,6 +2000,22 @@ function SummaryTab() {
 
       {/* Métriques annuelles N vs N-1 */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+        {isEstimated && (
+          <div className="mb-3 text-[11px] text-gray-400 flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4" />
+              <path d="M12 8h.01" />
+            </svg>
+            <span>
+              Estimations à partir de vos bordereaux.{" "}
+              <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600">
+                Connecter ma banque
+              </Link>
+              .
+            </span>
+          </div>
+        )}
         {isLoading ? (
           <div className="h-96 bg-gray-100 rounded animate-pulse" />
         ) : (
@@ -1788,10 +2067,292 @@ function SummaryTab() {
   );
 }
 
+// ── Remainder Tab ──
+//
+// "Reste à vivre" : trésorerie projetée à 3 horizons (fin du mois, fin du
+// trimestre, fin de l'année). Part du solde du compte par défaut, ajoute les
+// encaissements estimés (moyenne mensuelle des mois écoulés × mois restants
+// jusqu'à l'horizon), soustrait les échéances fiscales/sociales lues dans le
+// calendrier × montant par échéance issu de getCotisationsEstimate, et
+// soustrait les charges pro projetées (moyenne YTD × mois restants). Vue
+// purement indicative — pas de prise en compte de régul ou dépenses ponctuelles.
+
+function RemainderTab() {
+  const hp = usePractitioner();
+  const bankConnected = !!hp?.bridgeUserUuid;
+  const { accounts, transactionsLoading, defaultBankAccountMissing } = useData();
+  const currentYear = new Date().getFullYear();
+  // "Solde disponible" = banque liée + compte par défaut choisi + compte
+  // effectivement présent dans la liste synchronisée. Sans ça, defaultBalance
+  // retombait à 0 et on affichait "0 €" au lieu d'un message explicite.
+  const hasBalance = bankConnected && !!hp?.defaultBankAccountId && !defaultBankAccountMissing;
+
+  const [loading, setLoading] = useState(true);
+  const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
+  const [monthlyData, setMonthlyData] = useState<{
+    income: number;
+    urssaf: number;
+    carpimko: number;
+    autresDepenses: number;
+    chargesPro: number;
+    retrocession: number;
+    madelin: number;
+  }[]>([]);
+  const [isEstimated, setIsEstimated] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
+    setLoading(true);
+    (async () => {
+      const effectiveCAResult = await getEffectiveCAAction(currentYear, "transactions");
+      const useFallback = effectiveCAResult.source === "bordereaux";
+      setIsEstimated(useFallback);
+      const monthlyLoader = useFallback ? getMonthlyActivityFromBordereauxAction : getMonthlyActivityAction;
+      const monthly = await monthlyLoader(currentYear);
+      const months = monthly.months.map((m) => ({
+        income: m.income,
+        urssaf: m.urssaf,
+        carpimko: m.carpimko,
+        autresDepenses: m.autresDepenses,
+        chargesPro: m.chargesPro,
+        retrocession: m.retrocession,
+        madelin: m.madelin,
+      }));
+      const totalCA = months.reduce((s, m) => s + m.income, 0);
+      const est = totalCA > 0 ? await getCotisationsEstimate(totalCA, 0, currentYear) : null;
+      setMonthlyData(months);
+      setEstimate(est);
+      setLoading(false);
+    })().catch(() => setLoading(false));
+  }, [currentYear, bankConnected]);
+
+  const prefs: PaymentPreferences = useMemo(() => {
+    if (!hp) return DEFAULT_PREFERENCES;
+    return {
+      urssafFrequency: hp.urssafFrequency,
+      urssafPayDay: hp.urssafPayDay,
+      pasFrequency: hp.pasFrequency,
+      carpimkoFrequency: hp.carpimkoFrequency,
+      carpimkoPayDay: hp.carpimkoPayDay,
+      activityStartDate: hp.activityStartDate,
+    };
+  }, [hp]);
+  const calendar = useMemo(() => buildCalendar(prefs), [prefs]);
+
+  const defaultBalance = useMemo(() => {
+    if (!hp?.defaultBankAccountId) return 0;
+    const acc = accounts.find((a) => a.id === hp.defaultBankAccountId);
+    return acc ? parseFloat(acc.balance) : 0;
+  }, [accounts, hp]);
+
+  type Breakdown = {
+    key: string;
+    label: string;
+    horizonDate: string;
+    projIncome: number;
+    urssafDue: number;
+    carpimkoDue: number;
+    pasDue: number;
+    projChargesPro: number;
+    projAutres: number;
+    projRetroMadelin: number;
+    totalCharges: number;
+    remainder: number;
+  };
+
+  const MONTHS_LONG = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+  const breakdowns = useMemo<Breakdown[]>(() => {
+    const now = new Date();
+    const currentMonthIdx = now.getMonth();
+    const dayOfMonth = now.getDate();
+    const daysInMonth = new Date(currentYear, currentMonthIdx + 1, 0).getDate();
+    const fractionRemainingCurrentMonth = Math.max(0, (daysInMonth - dayOfMonth) / daysInMonth);
+
+    // Moyennes sur les mois écoulés (hors mois courant). Si on est en janvier
+    // ou qu'on n'a aucun historique, on prend le mois courant comme proxy.
+    const pastMonths = monthlyData.slice(0, currentMonthIdx);
+    const sample = pastMonths.length > 0 ? pastMonths : monthlyData.slice(0, 1);
+    const avg = (sel: (m: typeof monthlyData[number]) => number) =>
+      sample.length ? sample.reduce((s, m) => s + sel(m), 0) / sample.length : 0;
+    const avgIncome = avg((m) => m.income);
+    const avgChargesPro = avg((m) => m.chargesPro);
+    const avgAutres = avg((m) => m.autresDepenses);
+    const avgRetroMadelin = avg((m) => m.retrocession + m.madelin);
+
+    const eomIdx = currentMonthIdx;
+    const eoqIdx = Math.min(11, Math.floor(currentMonthIdx / 3) * 3 + 2);
+    const eoyIdx = 11;
+
+    const compute = (key: string, label: string, targetIdx: number): Breakdown => {
+      const lastDay = new Date(currentYear, targetIdx + 1, 0).getDate();
+      const horizonDate = `${lastDay} ${MONTHS_LONG[targetIdx]} ${currentYear}`;
+
+      const monthsBetween = targetIdx > currentMonthIdx
+        ? fractionRemainingCurrentMonth + (targetIdx - currentMonthIdx)
+        : fractionRemainingCurrentMonth;
+
+      const projIncome = avgIncome * monthsBetween;
+      const projChargesPro = avgChargesPro * monthsBetween;
+      const projAutres = avgAutres * monthsBetween;
+      const projRetroMadelin = avgRetroMadelin * monthsBetween;
+
+      let urssafDue = 0;
+      let carpimkoDue = 0;
+      let pasDue = 0;
+      for (let m = currentMonthIdx; m <= targetIdx; m++) {
+        for (const e of calendar[m] || []) {
+          // Échéance du mois en cours déjà passée → on ne la compte pas
+          // (elle apparaîtra dans monthlyData une fois prélevée).
+          if (m === currentMonthIdx && e.day < dayOfMonth) continue;
+          if (e.type === "urssaf") urssafDue += estimate?.urssafParEcheance ?? 0;
+          else if (e.type === "carpimko") carpimkoDue += estimate?.carpimkoParEcheance ?? 0;
+          else if (e.type === "ir") pasDue += estimate?.pasParEcheance ?? 0;
+        }
+      }
+
+      const totalCharges = urssafDue + carpimkoDue + pasDue + projChargesPro + projAutres + projRetroMadelin;
+      const remainder = defaultBalance + projIncome - totalCharges;
+
+      return {
+        key, label, horizonDate,
+        projIncome, urssafDue, carpimkoDue, pasDue,
+        projChargesPro, projAutres, projRetroMadelin,
+        totalCharges, remainder,
+      };
+    };
+
+    const out: Breakdown[] = [];
+    out.push(compute("eom", "Fin du mois", eomIdx));
+    if (eoqIdx !== eomIdx) out.push(compute("eoq", "Fin du trimestre", eoqIdx));
+    if (eoyIdx !== eoqIdx && eoyIdx !== eomIdx) out.push(compute("eoy", "Fin de l'année", eoyIdx));
+    return out;
+  }, [calendar, estimate, monthlyData, defaultBalance, currentYear]);
+
+  const isLoading = loading || transactionsLoading;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-900">Reste à vivre</h2>
+        <InfoTooltip text="Trésorerie projetée à différents horizons : on part de votre solde bancaire, on y ajoute vos encaissements estimés (moyenne mensuelle des mois écoulés) et on déduit les échéances fiscales/sociales à venir ainsi qu'une moyenne de vos charges pro. Indicatif — ne tient pas compte de régularisations ou de dépenses ponctuelles." />
+      </div>
+
+      {isEstimated && (
+        <div className="text-[11px] text-gray-400 flex items-center gap-1.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
+          </svg>
+          <span>
+            Estimations à partir de vos bordereaux.{" "}
+            <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600">
+              Connecter ma banque
+            </Link>
+            .
+          </span>
+        </div>
+      )}
+
+      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5">
+        <p className="text-xs text-gray-400 mb-1">Trésorerie actuelle (compte par défaut)</p>
+        {isLoading ? (
+          <div className="h-8 w-32 bg-gray-100 rounded animate-pulse" />
+        ) : (
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <p className={`text-3xl font-bold ${!hasBalance ? "text-gray-300" : defaultBalance >= 0 ? "text-gray-900" : "text-rose-600"}`}>
+              {formatCurrency(hasBalance ? defaultBalance : 0)}
+            </p>
+            {!hasBalance && (
+              <p className="text-xs text-gray-500">
+                {!bankConnected ? "Banque non connectée" : !hp?.defaultBankAccountId ? "Aucun compte par défaut configuré" : "Compte par défaut introuvable"}
+                {" — "}
+                <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-700">
+                  {!bankConnected ? "connecter ma banque" : "configurer un compte par défaut"}
+                </Link>{" "}
+                pour afficher le solde.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {breakdowns.map((b) => {
+          const rows: { label: string; value: number; isCredit?: boolean }[] = [
+            { label: "Encaissements estimés", value: b.projIncome, isCredit: true },
+            { label: "URSSAF", value: b.urssafDue },
+            { label: "CARPIMKO", value: b.carpimkoDue },
+            { label: "Impôt sur le revenu (PAS)", value: b.pasDue },
+            { label: "Charges pro.", value: b.projChargesPro },
+            { label: "Autres dépenses pro.", value: b.projAutres },
+            { label: "Rétrocession + Madelin", value: b.projRetroMadelin },
+          ].filter((r) => Math.abs(r.value) > 0.5);
+          return (
+            <div key={b.key} className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5">
+              <div className="mb-4">
+                <p className="text-sm font-semibold text-gray-900">{b.label}</p>
+                <p className="text-[11px] text-gray-400">au {b.horizonDate}</p>
+              </div>
+              {isLoading ? (
+                <div className="h-48 bg-gray-100 rounded animate-pulse" />
+              ) : (
+                <>
+                  <div className="flex items-baseline justify-between pb-3 border-b border-gray-100">
+                    <p className="text-xs text-gray-500">Trésorerie de départ</p>
+                    <p className={`text-sm font-medium tabular-nums ${hasBalance ? "text-gray-900" : "text-gray-300"}`}>
+                      {formatCurrency(hasBalance ? defaultBalance : 0)}
+                    </p>
+                  </div>
+                  {rows.length === 0 ? (
+                    <p className="py-4 text-xs text-gray-400 italic">Aucune charge ni encaissement projeté sur la période.</p>
+                  ) : (
+                    <div className="py-3 space-y-1.5">
+                      {rows.map((r) => (
+                        <div key={r.label} className="flex items-baseline justify-between text-xs">
+                          <span className="text-gray-600">{r.label}</span>
+                          <span className={`tabular-nums ${r.isCredit ? "text-emerald-600" : "text-gray-700"}`}>
+                            {r.isCredit ? "+" : "−"}{formatCurrency(r.value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="pt-3 border-t border-gray-100">
+                    <p className="text-[11px] text-gray-400 mb-0.5">Reste à vivre estimé</p>
+                    <p className={`text-2xl font-bold tabular-nums ${b.remainder >= 0 ? "text-gray-900" : "text-rose-600"}`}>
+                      {formatCurrency(b.remainder)}
+                    </p>
+                    {!hasBalance && (
+                      <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                        Calcul partant d&apos;une trésorerie à 0 € : {!bankConnected ? "banque non connectée" : !hp?.defaultBankAccountId ? "aucun compte par défaut configuré" : "compte par défaut introuvable"}.{" "}
+                        <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-700">
+                          {!bankConnected ? "Connecter ma banque" : "Configurer un compte"}
+                        </Link>{" "}
+                        pour partir d&apos;un solde réel.
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-[11px] text-gray-400 leading-relaxed">
+        Estimation indicative. Encaissements et charges pro. extrapolés à partir de la moyenne mensuelle des mois écoulés ; cotisations sociales et impôts pris sur le calendrier d&apos;échéances avec votre estimation annualisée. Ne tient pas compte d&apos;éventuelles régularisations URSSAF/CARPIMKO ni de dépenses ponctuelles.
+      </p>
+    </div>
+  );
+}
+
 // ── Simulation Tab ──
 
 function SimulationTab() {
   const hp = usePractitioner();
+  const bankConnected = !!hp?.bridgeUserUuid;
   const currentYear = new Date().getFullYear();
   const chartRef = useRef<HTMLDivElement>(null);
 
@@ -1801,6 +2362,9 @@ function SimulationTab() {
   const [simulated, setSimulated] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [simLoading, setSimLoading] = useState(false);
+  // Fallback bordereaux : la baseline est issue des passages, pas des transactions
+  // bancaires. Sert à signaler la provenance de la simulation.
+  const [isEstimated, setIsEstimated] = useState(false);
 
   // Baseline = CA annualisé courant simulé via la même fonction que la valeur
   // "Simulé". Évite la confusion N-2/forfaitaire — comparaison apples-to-apples.
@@ -1808,9 +2372,14 @@ function SimulationTab() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setLoading(true);
     (async () => {
-      const monthly = await getMonthlyActivityAction(currentYear);
+      const effectiveCAResult = await getEffectiveCAAction(currentYear, "transactions");
+      const useFallback = effectiveCAResult.source === "bordereaux";
+      setIsEstimated(useFallback);
+      const monthly = useFallback
+        ? await getMonthlyActivityFromBordereauxAction(currentYear)
+        : await getMonthlyActivityAction(currentYear);
       const totalCAYTD = monthly.months.reduce((s, m) => s + m.income, 0);
-      const est = totalCAYTD > 0 ? await getCotisationsEstimate(totalCAYTD) : null;
+      const est = totalCAYTD > 0 ? await getCotisationsEstimate(totalCAYTD, 0, currentYear) : null;
       const annualCA = est?.revenuAnnualise ?? 0;
       const baseSim = annualCA > 0 ? await simulateCotisations(annualCA) : null;
       setBaselineCA(annualCA);
@@ -1819,7 +2388,7 @@ function SimulationTab() {
       setSimulated(baseSim);
       setLoading(false);
     })().catch(() => setLoading(false));
-  }, [currentYear]);
+  }, [currentYear, bankConnected]);
 
   // Recalcul simulé (debounced sur 300 ms)
   useEffect(() => {
@@ -1891,8 +2460,11 @@ function SimulationTab() {
         { label: "Total à régler", value: formatCurrency(simulated.totalCotisations) },
         { label: "Solde avant charges pro", value: formatCurrency(simulated.remunerationNette) },
       ],
+      footnote: isEstimated
+        ? "Baseline calculée à partir du chiffre d'affaires issu de vos bordereaux. Connectez votre banque pour caler la simulation sur vos encaissements réels."
+        : undefined,
     });
-  }, [baseline, simulated, baselineCA, simulatedCA, currentYear]);
+  }, [baseline, simulated, baselineCA, simulatedCA, currentYear, isEstimated]);
 
   const diffPct = baselineCA > 0 && simulatedCA !== baselineCA
     ? Math.round((simulatedCA - baselineCA) / baselineCA * 100)
@@ -1916,6 +2488,22 @@ function SimulationTab() {
         </div>
         <ExportButtons onCsv={handleExportCsv} onPdf={handleExportPdf} disabled={!baseline || !simulated} />
       </div>
+      {isEstimated && (
+        <div className="px-4 py-1.5 text-[11px] text-gray-400 flex items-center gap-1.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
+          </svg>
+          <span>
+            CA actuel calculé à partir de vos bordereaux.{" "}
+            <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600">
+              Connecter ma banque
+            </Link>{" "}
+            pour caler la simulation sur vos encaissements réels.
+          </span>
+        </div>
+      )}
 
       {/* Slider compact */}
       <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4 space-y-3">

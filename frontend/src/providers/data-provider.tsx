@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useCallback, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getPendingSuggestions, getPendingSuggestionsCount } from "@/actions/practice-links";
 import { getFacturationData, type FacturationSummary, type CarePassageRow } from "@/actions/facturation";
 import { fetchLocalAccountsAction } from "@/actions/bridge";
@@ -57,6 +57,7 @@ interface DataContextValue {
   transactionsError: string;
   uncategorizedCount: number;
   setUncategorizedCount: React.Dispatch<React.SetStateAction<number>>;
+  defaultBankAccountMissing: boolean;
 
   // Refresh
   refresh: () => Promise<void>;
@@ -78,6 +79,7 @@ const DataContext = createContext<DataContextValue>({
   transactionsError: "",
   uncategorizedCount: 0,
   setUncategorizedCount: () => {},
+  defaultBankAccountMissing: false,
   refresh: async () => {},
   refreshFacturation: async () => {},
   refreshTransactions: async () => {},
@@ -152,6 +154,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setSuggestionsLoading(false);
   }, [isAdmin, hp]);
 
+  const defaultBankAccountMissing = useMemo(() => {
+    if (transactionsLoading) return false;
+    if (!hp) return false;
+    return !accounts.some((a) => a.id === hp.defaultBankAccountId);
+  }, [transactionsLoading, hp, accounts]);
+
   // Initial load
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch
@@ -175,6 +183,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       transactionsError,
       uncategorizedCount,
       setUncategorizedCount,
+      defaultBankAccountMissing,
       refresh,
       refreshFacturation,
       refreshTransactions,

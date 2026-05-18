@@ -98,6 +98,7 @@ async function getCAForYear(
 export async function getCotisationsEstimate(
   totalCA: number,
   deductionSociale: number = 0,
+  year?: number,
 ): Promise<CotisationsEstimate | null> {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return null;
@@ -111,17 +112,28 @@ export async function getCotisationsEstimate(
   if (!hp) return null;
 
   const now = new Date();
-  const annee = now.getFullYear();
+  const currentYear = now.getFullYear();
+  // `annee` = année cible du calcul (sélecteur d'année côté UI). Si non
+  // précisée → année courante. C'est ce qui permet d'estimer rétroactivement
+  // les cotisations d'une année passée sans extrapolation faussée.
+  const annee = year ?? currentYear;
   const regime = hp.taxRegime;
 
   // ── CA annualisé : daily rate × jours travaillés sur l'année complète ──
   // On utilise le rythme de travail (daysPerWeekWorked) + les jours de vacances
   // saisis par le praticien pour obtenir une projection plus juste qu'une
   // simple extrapolation linéaire mois × 12.
-  const monthsElapsed = now.getMonth() + 1;
+  // Pour une année passée complète, monthsElapsed = 12 (pas d'extrapolation).
+  // Pour l'année courante, monthsElapsed = mois en cours. Pour une année future,
+  // monthsElapsed = 12 (on suppose le CA passé en argument déjà annualisé).
+  const monthsElapsed = annee < currentYear
+    ? 12
+    : annee > currentYear
+      ? 12
+      : now.getMonth() + 1;
   const daysPerWeek = hp.daysPerWeekWorked;
 
-  // Si activityStartDate est dans l'année en cours, on borne les jours
+  // Si activityStartDate est dans l'année cible, on borne les jours
   // travaillables à cette date (sinon on annualise sur 12 mois entiers même
   // pour quelqu'un démarré en septembre, ce qui surestime gravement le CA).
   const activityStartDate = new Date(hp.activityStartDate);
@@ -129,7 +141,7 @@ export async function getCotisationsEstimate(
     ? activityStartDate.getMonth() + 1
     : 1;
 
-  // Charger les jours de vacances saisis pour l'année en cours.
+  // Charger les jours de vacances saisis pour l'année cible.
   const vacationsRows = await db
     .select()
     .from(practitionerVacations)
@@ -165,6 +177,8 @@ export async function getCotisationsEstimate(
   // factures…) extrapole un revenu annuel artificiellement explosif. En dessous
   // de ce seuil, on utilise une moyenne mensuelle (plus stable) ou on renvoie
   // le CA brut si l'activité est trop récente.
+  // Pour une année passée complète, workedYTD === workedYear → caBrutAnnualise
+  // = totalCA (pas d'extrapolation).
   const MIN_WORKED_DAYS_FOR_DAILY_PROJECTION = 60;
   const dailyRate = workedYTD > 0 ? totalCA / workedYTD : 0;
   let caBrutAnnualise: number;

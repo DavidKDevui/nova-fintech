@@ -197,7 +197,14 @@
       "Bash(python -c ' *)",
       "Bash(python)",
       "Bash(python *)",
-      "Bash(rm test_parse_rattrapages.mjs)"
+      "Bash(rm test_parse_rattrapages.mjs)",
+      "Bash(echo \"Exit: $?\")",
+      "PowerShell(Set-Location frontend; npx tsc --noEmit; Write-Output \"Exit: $LASTEXITCODE\")",
+      "PowerShell(npx tsc --noEmit; Write-Output \"Exit: $LASTEXITCODE\")",
+      "PowerShell(protected *)",
+      "PowerShell(npx eslint \"src/app/\\(protected\\)/management/client.tsx\" \"src/actions/monthly-activity-bordereaux.ts\" \"src/components/estimation-badge.tsx\" \"src/lib/export.ts\" 2>&1 | Select-Object -First 80; Write-Output \"Exit: $LASTEXITCODE\")",
+      "PowerShell($env:DATABASE_URL = \"postgresql://KDMORZAYL451EOLX5UEORMCOB09ZP2W2:2lfcor2PA0dP51DcKu9COkRoQksrtghv@172.21.53.153:5432/dashboard-ozzen\"; Set-Location \"C:/Users/utils/Documents/IT Projects/nova-fintech/frontend\"; npx tsx scripts/find-practitioner.ts cossou)",
+      "PowerShell($env:DATABASE_URL = \"postgresql://KDMORZAYL451EOLX5UEORMCOB09ZP2W2:2lfcor2PA0dP51DcKu9COkRoQksrtghv@172.21.53.153:5432/dashboard-ozzen\"; Set-Location \"C:/Users/utils/Documents/IT Projects/nova-fintech/frontend\"; npx tsx scripts/count-cossou-tx.ts)"
     ]
   }
 }

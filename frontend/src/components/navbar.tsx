@@ -135,7 +135,7 @@ export function Navbar() {
   const pathname = usePathname();
   const isAdmin = user.accountType === "admin";
   const displayName = hp?.firstName || user.email;
-  const { pendingSuggestionsCount: pendingCount, uncategorizedCount } = useData();
+  const { pendingSuggestionsCount: pendingCount, uncategorizedCount, defaultBankAccountMissing } = useData();
   const [showMenu, setShowMenu] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -181,7 +181,7 @@ export function Navbar() {
         </span>
       );
     }
-    if (href === "/transactions" && hp && !hp.bridgeUserUuid) {
+    if (href === "/transactions" && defaultBankAccountMissing) {
       return (
         <span className="flex items-center justify-center w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full">
           !

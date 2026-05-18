@@ -23,6 +23,8 @@ export type PdfOptions = {
   chartImage?: string;
   /** Lignes d'en-tête (KPIs / résumé) affichées au-dessus du tableau, format clé/valeur. */
   summary?: Array<{ label: string; value: string }>;
+  /** Note en bas de page (ex : précision sur les valeurs estimées). */
+  footnote?: string;
 };
 
 /**
@@ -51,7 +53,7 @@ export function downloadPDF(
   rows: (string | number | null | undefined)[][],
   options: PdfOptions = {},
 ) {
-  const { subtitle, chartImage, summary } = options;
+  const { subtitle, chartImage, summary, footnote } = options;
 
   const summaryHtml = summary && summary.length > 0
     ? `<div class="summary">${summary
@@ -92,6 +94,7 @@ export function downloadPDF(
         th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e5e7eb; font-weight: 600; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
         td { padding: 7px 10px; border-bottom: 1px solid #f3f4f6; }
         tr:last-child td { border-bottom: none; }
+        .footnote { margin-top: 16px; font-size: 10px; color: #9ca3af; font-style: italic; }
         @media print {
           body { padding: 16px; }
           .chart { page-break-inside: avoid; }
@@ -107,6 +110,7 @@ export function downloadPDF(
       ${summaryHtml}
       ${chartHtml}
       ${tableHtml}
+      ${footnote ? `<p class="footnote">${footnote}</p>` : ""}
     </body>
     </html>
   `;
