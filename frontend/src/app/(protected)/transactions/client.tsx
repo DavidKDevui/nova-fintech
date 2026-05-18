@@ -273,7 +273,10 @@ export function TransactionsClient() {
     });
   };
 
-  if (!hp?.bridgeUserUuid) {
+  // Pas de bridgeUserUuid (jamais configuré) OU bridge posé mais aucun compte
+  // synchronisé → on affiche directement le bandeau d'ajout, plutôt qu'une page
+  // vide avec un sélecteur "Tous les comptes (0)".
+  if (!hp?.bridgeUserUuid || (!loading && accounts.length === 0)) {
     return <ConnectBankBanner />;
   }
 

@@ -280,7 +280,7 @@ function TresorerieCard({
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
         <KpiTile label="Trésorerie" value={solde !== null ? formatCurrencyRounded(solde) : "—"} sub={evolTreso} icon={<KpiWalletIcon />} iconColor="text-blue-400" />
         <KpiTile
-          label={<>Chiffre d&apos;affaires <CASourceIndicator source={caSource} /></>}
+          label={<>C.A. <CASourceIndicator source={caSource} /></>}
           value={formatCurrencyRounded(ca)}
           sub={caSource === "bordereaux" ? `${nbFactures} facture${nbFactures > 1 ? "s" : ""}` : null}
           icon={<KpiChartIcon />}
