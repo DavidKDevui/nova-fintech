@@ -252,6 +252,10 @@ function TresorerieCard({
   encaissement: number; decaissement: number; ca: number; caSource: EffectiveCASource; nbFactures: number; nbTransactionsDepenses: number;
 }) {
   if (bankLoading) return <SkeletonCard />;
+  // Fallback bordereaux : pas de transactions bancaires exploitables, on ne peut
+  // pas observer Dépenses / Rémunération. On affiche "—" plutôt que 0 € pour ne
+  // pas laisser croire qu'il n'y a aucune dépense.
+  const noBankData = caSource === "bordereaux";
   const remuneration = encaissement - decaissement;
   const monthsElapsed = Math.max(1, new Date().getMonth() + 1);
   const remunerationMensuelle = Math.round(remuneration / monthsElapsed);
@@ -282,8 +286,20 @@ function TresorerieCard({
           icon={<KpiChartIcon />}
           iconColor="text-green-400"
         />
-        <KpiTile label="Dépenses" value={formatCurrencyRounded(decaissement)} sub={`${nbTransactionsDepenses} transaction${nbTransactionsDepenses > 1 ? "s" : ""}`} icon={<KpiExpenseIcon />} iconColor="text-red-400" />
-        <KpiTile label="Rémunération" value={formatCurrencyRounded(remuneration)} sub={`~${formatCurrencyRounded(remunerationMensuelle)}/mois`} icon={<KpiCoinIcon />} iconColor="text-amber-400" />
+        <KpiTile
+          label="Dépenses"
+          value={noBankData ? "—" : formatCurrencyRounded(decaissement)}
+          sub={noBankData ? null : `${nbTransactionsDepenses} transaction${nbTransactionsDepenses > 1 ? "s" : ""}`}
+          icon={<KpiExpenseIcon />}
+          iconColor="text-red-400"
+        />
+        <KpiTile
+          label="Rémunération"
+          value={noBankData ? "—" : formatCurrencyRounded(remuneration)}
+          sub={noBankData ? null : `~${formatCurrencyRounded(remunerationMensuelle)}/mois`}
+          icon={<KpiCoinIcon />}
+          iconColor="text-amber-400"
+        />
       </div>
     </Card>
   );
