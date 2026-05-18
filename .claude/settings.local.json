@@ -192,7 +192,12 @@
       "Bash(gh release *)",
       "PowerShell(gh release *)",
       "WebFetch(domain:api.github.com)",
-      "Bash(gh api *)"
+      "Bash(gh api *)",
+      "Bash(pip install *)",
+      "Bash(python -c ' *)",
+      "Bash(python)",
+      "Bash(python *)",
+      "Bash(rm test_parse_rattrapages.mjs)"
     ]
   }
 }
