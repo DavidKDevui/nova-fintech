@@ -51,15 +51,9 @@ export async function proxy(request: NextRequest) {
   // Valid access token — proceed normally
   if (hasValidAccess) {
     if (isPublicPath) {
-      // Don't redirect to dashboard if we just came from there (prevents loop when DB is down)
-      const referer = request.headers.get("referer") || "";
-      if (referer.includes("/dashboard")) {
-        log("⚠️ valid access + public path + dashboard referer → CLEAR cookies (anti-loop)", { referer });
-        const response = NextResponse.next();
-        response.cookies.set("accessToken", "", { path: "/", maxAge: 0 });
-        response.cookies.set("refreshToken", "", { path: "/", maxAge: 0 });
-        return response;
-      }
+      // Accès valide mais on demande une page publique (ex : prefetch d'un
+      // <Link href="/login">) → on redirige vers le dashboard. On ne touche
+      // JAMAIS aux cookies ici : un token valide est valide, point.
       log("valid access + public path → redirect /dashboard");
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
