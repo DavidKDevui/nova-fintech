@@ -41,15 +41,15 @@ export function ImportHistory({ imports }: { imports: ImportRecord[] }) {
 
   return (
     <div className="bg-white/70 backdrop-blur-xl border border-white/50 rounded-lg p-4 md:p-6">
-      <h2 className="text-sm font-medium text-gray-700 mb-4">
+      <h2 className="text-sm font-medium text-ardoise-700 mb-4">
         Historique des imports
-        <span className="ml-2 text-xs text-gray-400">({imports.length})</span>
+        <span className="ml-2 text-xs text-ardoise-400">({imports.length})</span>
       </h2>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-200/50 text-left text-gray-500">
+            <tr className="border-b border-ardoise-200/50 text-left text-ardoise-500">
               <th className="px-3 py-3 font-medium">Date</th>
               <th className="px-3 py-3 font-medium">Cabinet</th>
               <th className="px-3 py-3 font-medium">Fichier</th>
@@ -61,8 +61,8 @@ export function ImportHistory({ imports }: { imports: ImportRecord[] }) {
           </thead>
           <tbody>
             {imports.map((imp) => (
-              <tr key={imp.id} className="border-b border-gray-100/50 last:border-0 hover:bg-white/40">
-                <td className="px-3 py-3 text-gray-500">
+              <tr key={imp.id} className="border-b border-ardoise-100/50 last:border-0 hover:bg-white/40">
+                <td className="px-3 py-3 text-ardoise-500">
                   {new Date(imp.createdAt).toLocaleDateString("fr-FR", {
                     day: "numeric",
                     month: "short",
@@ -71,10 +71,10 @@ export function ImportHistory({ imports }: { imports: ImportRecord[] }) {
                     minute: "2-digit",
                   })}
                 </td>
-                <td className="px-3 py-3 text-gray-900">{imp.practiceName}</td>
-                <td className="px-3 py-3 text-gray-500 max-w-[200px] truncate">{imp.fileName}</td>
+                <td className="px-3 py-3 text-ardoise-900">{imp.practiceName}</td>
+                <td className="px-3 py-3 text-ardoise-500 max-w-[200px] truncate">{imp.fileName}</td>
                 <td className="px-3 py-3">
-                  <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${imp.documentType === "noemie" ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"}`}>
+                  <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${imp.documentType === "noemie" ? "bg-menthe-100 text-menthe-700" : "bg-violet-100 text-violet-700"}`}>
                     {imp.documentType === "rattrapage" ? "Rattrapage" : imp.documentType === "noemie" ? "Retours Noemie" : imp.documentType}
                   </span>
                 </td>
@@ -88,7 +88,7 @@ export function ImportHistory({ imports }: { imports: ImportRecord[] }) {
                       <button
                         onClick={() => setConfirmId(null)}
                         disabled={deleting === imp.id}
-                        className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                        className="text-xs text-ardoise-500 hover:text-ardoise-700 transition-colors"
                       >
                         Annuler
                       </button>

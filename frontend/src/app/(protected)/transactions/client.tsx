@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { useData } from "@/providers/data-provider";
 import { Modal } from "@/components/modal";
+import { Button } from "@/components/button";
 import { ConnectBankBanner } from "@/components/connect-bank-banner";
 import { toast } from "sonner";
 import { connectBankAction } from "@/actions/bridge";
@@ -27,15 +28,15 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 const CATEGORIES: Record<string, { label: string; icon: React.ReactNode; sign: "+" | "-" | null }> = {
   income: {
     label: "Recettes", sign: "+",
-    icon: <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.25" /><path d="M12 16V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" /><path d="M8 12l4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" /></svg>,
+    icon: <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.25" /><path d="M12 16V8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" /><path d="M8 12l4-4 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" /></svg>,
   },
   professional_reimbursement: {
     label: "Rembours. pro", sign: "+",
-    icon: <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.25" /><path d="M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" /><path d="M12 8l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" /></svg>,
+    icon: <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.25" /><path d="M8 12h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" /><path d="M12 8l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" /></svg>,
   },
   retrocession: {
     label: "Rétrocession", sign: null,
-    icon: <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.25" /><path d="M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" /><path d="M12 16l-4-4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" /></svg>,
+    icon: <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.25" /><path d="M8 12h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" /><path d="M12 16l-4-4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" /></svg>,
   },
   compensation: {
     label: "Rémunération", sign: "-",
@@ -55,11 +56,11 @@ const CATEGORIES: Record<string, { label: string; icon: React.ReactNode; sign: "
   },
   professional_expenses: {
     label: "Charges pro", sign: "-",
-    icon: <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.25" /><path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" /><path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" /></svg>,
+    icon: <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.25" /><path d="M12 8v8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" /><path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" /></svg>,
   },
   madelin: {
     label: "Madelin", sign: "-",
-    icon: <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.25" /><path d="M12 7v4l2.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" /><circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.4" /></svg>,
+    icon: <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.25" /><path d="M12 7v4l2.5 2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" /><circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.4" /></svg>,
   },
   taxes: {
     label: "Impôts", sign: "-",
@@ -283,12 +284,12 @@ export function TransactionsClient() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5 animate-pulse">
-          <div className="h-3 bg-gray-200 rounded w-24 mb-3" />
-          <div className="h-6 bg-gray-200 rounded w-32" />
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5 animate-pulse">
+          <div className="h-3 bg-ardoise-200 rounded w-24 mb-3" />
+          <div className="h-6 bg-ardoise-200 rounded w-32" />
         </div>
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5 animate-pulse">
-          <div className="h-48 bg-gray-200 rounded" />
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5 animate-pulse">
+          <div className="h-48 bg-ardoise-200 rounded" />
         </div>
       </div>
     );
@@ -314,7 +315,7 @@ export function TransactionsClient() {
           <button
             type="button"
             onClick={() => setAccountDropdownOpen((v) => !v)}
-            className="flex items-center justify-between gap-3 bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] px-3 py-2 transition-all hover:bg-white/90 cursor-pointer"
+            className="flex items-center justify-between gap-3 bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 px-3 py-2 transition-all hover:bg-white/90 cursor-pointer"
           >
             <div className="flex items-center gap-2.5">
               <div className="flex items-center justify-center w-7 h-7 rounded-full bg-brand-100 text-brand-600">
@@ -323,40 +324,40 @@ export function TransactionsClient() {
                   <rect x="2" y="4" width="20" height="5" rx="3" fill="currentColor" opacity="0.7" />
                 </svg>
               </div>
-              <p className="text-xs font-medium text-gray-900">
+              <p className="text-xs font-medium text-ardoise-900">
                 {selectedAccount
                   ? accounts.find((a) => a.id === selectedAccount)?.name ?? "Compte"
                   : `Tous les comptes (${accounts.length})`}
               </p>
             </div>
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform ${accountDropdownOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`text-ardoise-400 transition-transform ${accountDropdownOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
           </button>
 
           {accountDropdownOpen && (
-            <div className="absolute z-50 top-full left-0 mt-1.5 w-[calc(100vw-2rem)] sm:w-auto sm:min-w-[280px] bg-white border border-gray-200 rounded-lg shadow-lg py-1 animate-fade-up-fast">
+            <div className="absolute z-50 top-full left-0 mt-1.5 w-[calc(100vw-2rem)] sm:w-auto sm:min-w-[280px] bg-white border border-ardoise-200 rounded-lg shadow-lg py-1 animate-fade-up-fast">
               <button
                 type="button"
                 onClick={() => { setSelectedAccount(null); setTxPage(1); setAccountDropdownOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${!selectedAccount ? "bg-brand-50" : "hover:bg-gray-50"}`}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${!selectedAccount ? "bg-brand-50" : "hover:bg-ardoise-50"}`}
               >
-                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-ardoise-100 text-ardoise-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
                 </div>
                 <div>
-                  <p className={`text-sm font-medium ${!selectedAccount ? "text-brand-700" : "text-gray-900"}`}>Tous les comptes</p>
-                  <p className="text-xs text-gray-400">{accounts.length} compte{accounts.length > 1 ? "s" : ""} connecté{accounts.length > 1 ? "s" : ""}</p>
+                  <p className={`text-sm font-medium ${!selectedAccount ? "text-brand-700" : "text-ardoise-900"}`}>Tous les comptes</p>
+                  <p className="text-xs text-ardoise-400">{accounts.length} compte{accounts.length > 1 ? "s" : ""} connecté{accounts.length > 1 ? "s" : ""}</p>
                 </div>
                 {!selectedAccount && (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-auto text-brand-600"><polyline points="20 6 9 17 4 12"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="ml-auto text-brand-600"><polyline points="20 6 9 17 4 12"/></svg>
                 )}
               </button>
 
-              {accounts.length > 0 && <div className="border-t border-gray-100 my-1" />}
+              {accounts.length > 0 && <div className="border-t border-ardoise-100 my-1" />}
 
               {accounts.map((acc) => (
                 <div
                   key={acc.id}
-                  className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${selectedAccount === acc.id ? "bg-brand-50" : "hover:bg-gray-50"}`}
+                  className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${selectedAccount === acc.id ? "bg-brand-50" : "hover:bg-ardoise-50"}`}
                 >
                   <button
                     type="button"
@@ -370,28 +371,28 @@ export function TransactionsClient() {
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${selectedAccount === acc.id ? "text-brand-700" : "text-gray-900"}`}>{acc.name}</p>
-                      <p className="text-xs text-gray-400">{ACCOUNT_TYPE_LABELS[acc.type] || acc.type}</p>
+                      <p className={`text-sm font-medium truncate ${selectedAccount === acc.id ? "text-brand-700" : "text-ardoise-900"}`}>{acc.name}</p>
+                      <p className="text-xs text-ardoise-400">{ACCOUNT_TYPE_LABELS[acc.type] || acc.type}</p>
                     </div>
-                    <span className="text-sm font-semibold text-gray-900 shrink-0">
+                    <span className="text-sm font-semibold text-ardoise-900 shrink-0 font-mono">
                       {acc.balance != null ? formatCurrency(Number(acc.balance)) : "—"}
                     </span>
                     {selectedAccount === acc.id && (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand-600 shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-brand-600 shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
                     )}
                   </button>
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setDeleteAccountId(acc.id); setAccountDropdownOpen(false); }}
-                    className="shrink-0 p-1.5 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    className="shrink-0 p-1.5 rounded-md text-ardoise-300 hover:text-red-500 hover:bg-red-50 transition-colors"
                     title="Supprimer ce compte"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                   </button>
                 </div>
               ))}
 
-              <div className="border-t border-gray-100 my-1" />
+              <div className="border-t border-ardoise-100 my-1" />
 
               <button
                 type="button"
@@ -403,7 +404,7 @@ export function TransactionsClient() {
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-brand-600 hover:bg-brand-50 transition-colors"
               >
                 <div className="flex items-center justify-center w-8 h-8 rounded-full border-2 border-dashed border-brand-300 text-brand-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 </div>
                 <p className="text-sm font-medium">Ajouter un compte</p>
               </button>
@@ -412,10 +413,10 @@ export function TransactionsClient() {
         </div>
 
         {lastSyncAt && (
-          <div className="flex flex-col text-[11px] text-gray-400">
-            <span>Dernière synchro : <span className="font-medium text-gray-500">{formatDateFr(lastSyncAt.toISOString().split("T")[0]!)}</span></span>
+          <div className="flex flex-col text-[11px] text-ardoise-400">
+            <span>Dernière synchro : <span className="font-medium text-ardoise-500 font-mono">{formatDateFr(lastSyncAt.toISOString().split("T")[0]!)}</span></span>
             {nextSyncAt && (
-              <span>Prochaine : <span className="font-medium text-gray-500">{formatDateFr(nextSyncAt.toISOString().split("T")[0]!)}</span></span>
+              <span>Prochaine : <span className="font-medium text-ardoise-500 font-mono">{formatDateFr(nextSyncAt.toISOString().split("T")[0]!)}</span></span>
             )}
           </div>
         )}
@@ -426,69 +427,69 @@ export function TransactionsClient() {
         <button
           type="button"
           onClick={() => { setKpiYear((y) => y - 1); setTxPage(1); }}
-          className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+          className="flex items-center justify-center w-8 h-8 rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-ardoise-100 transition-colors"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <span className="text-sm font-semibold text-gray-900 w-12 text-center">{kpiYear}</span>
+        <span className="text-sm font-semibold text-ardoise-900 w-12 text-center font-mono">{kpiYear}</span>
         <button
           type="button"
           onClick={() => { setKpiYear((y) => y + 1); setTxPage(1); }}
           disabled={kpiYear >= new Date().getFullYear()}
-          className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="flex items-center justify-center w-8 h-8 rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-ardoise-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {/* Solde de trésorerie — toujours visible */}
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-blue-600">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-violet-600">
                 <rect x="2" y="4" width="20" height="16" rx="3" fill="currentColor" opacity="0.4" />
                 <rect x="2" y="4" width="20" height="5" rx="3" fill="currentColor" opacity="0.6" />
                 <rect x="5" y="12" width="6" height="2" rx="1" fill="currentColor" opacity="0.2" />
                 <rect x="5" y="16" width="4" height="1.5" rx="0.75" fill="currentColor" opacity="0.15" />
               </svg>
-              <p className="text-xs font-medium text-gray-500">Solde de trésorerie</p>
+              <p className="text-[11px] font-mono uppercase tracking-wide text-ardoise-500">Solde de trésorerie</p>
             </div>
             <button
               type="button"
               onClick={() => setShowAlertModal(true)}
               className={`flex items-center justify-center w-6 h-6 rounded-md transition-all ${
-                alertConfigured ? "text-brand-600 hover:bg-brand-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                alertConfigured ? "text-brand-600 hover:bg-brand-50" : "text-ardoise-400 hover:text-ardoise-600 hover:bg-ardoise-100"
               }`}
               title="Alerte seuil"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill={alertConfigured ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill={alertConfigured ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
             </button>
           </div>
-          <p className="text-xl font-bold text-gray-900">{formatCurrencyRounded(totalBalance)}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">{filteredAccounts.length === 1 ? filteredAccounts[0]!.name : `${filteredAccounts.length} comptes`}</p>
+          <p className="text-xl font-bold text-ardoise-900 font-mono">{formatCurrencyRounded(totalBalance)}</p>
+          <p className="text-[10px] text-ardoise-400 mt-0.5">{filteredAccounts.length === 1 ? filteredAccounts[0]!.name : `${filteredAccounts.length} comptes`}</p>
         </div>
 
         {/* Solde estimé disponible (après cotisations URSSAF + CARPIMKO restantes) */}
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
           <div className="flex items-center gap-2 mb-1">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-indigo-600">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-violet-600">
               <rect x="2" y="4" width="20" height="16" rx="3" fill="currentColor" opacity="0.35" />
-              <path d="M7 12h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+              <path d="M7 12h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
               <circle cx="17" cy="15" r="1.5" fill="currentColor" opacity="0.5" />
             </svg>
-            <p className="text-xs font-medium text-gray-500">Solde estimé dispo</p>
+            <p className="text-[11px] font-mono uppercase tracking-wide text-ardoise-500">Solde estimé dispo</p>
           </div>
           {dispoLoading ? (
-            <div className="h-7 bg-gray-200 rounded w-24 animate-pulse" />
+            <div className="h-7 bg-ardoise-200 rounded w-24 animate-pulse" />
           ) : (
-            <p className={`text-xl font-bold ${soldeDispo < 0 ? "text-red-600" : "text-gray-900"}`}>
+            <p className={`text-xl font-bold font-mono ${soldeDispo < 0 ? "text-red-600" : "text-ardoise-900"}`}>
               {formatCurrencyRounded(soldeDispo)}
             </p>
           )}
           {dispoLoading ? (
-            <div className="h-2.5 bg-gray-100 rounded w-32 mt-1.5 animate-pulse" />
+            <div className="h-2.5 bg-ardoise-100 rounded w-32 mt-1.5 animate-pulse" />
           ) : (
-            <p className="text-[10px] text-gray-400 mt-0.5">
+            <p className="text-[10px] text-ardoise-400 mt-0.5">
               {estimate
                 ? `Après ~${formatCurrencyRounded(urssafRemaining + carpimkoRemaining)} de cotisations restantes`
                 : "Estimation indisponible"}
@@ -500,66 +501,66 @@ export function TransactionsClient() {
         {kpiLoading ? (
           <>
             {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4 animate-pulse">
+              <div key={i} className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4 animate-pulse">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-5 h-5 bg-gray-200 rounded" />
-                  <div className="h-3 bg-gray-200 rounded w-20" />
+                  <div className="w-5 h-5 bg-ardoise-200 rounded" />
+                  <div className="h-3 bg-ardoise-200 rounded w-20" />
                 </div>
-                <div className="h-6 bg-gray-200 rounded w-28" />
+                <div className="h-6 bg-ardoise-200 rounded w-28" />
               </div>
             ))}
           </>
         ) : (<>
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
           <div className="flex items-center gap-2 mb-1">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-green-600">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-menthe-600">
               <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
-              <path d="M12 16V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-              <path d="M8 12l4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+              <path d="M12 16V8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
+              <path d="M8 12l4-4 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
             </svg>
-            <p className="text-xs font-medium text-gray-500">Encaissement</p>
+            <p className="text-[11px] font-mono uppercase tracking-wide text-ardoise-500">Encaissement</p>
           </div>
-          <p className="text-xl font-bold text-gray-900">+{formatCurrencyRounded(kpiEncaissement)}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">Sur l&apos;année {kpiYear}</p>
+          <p className="text-xl font-bold text-ardoise-900 font-mono">+{formatCurrencyRounded(kpiEncaissement)}</p>
+          <p className="text-[10px] text-ardoise-400 mt-0.5">Sur l&apos;année {kpiYear}</p>
         </div>
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
           <div className="flex items-center gap-2 mb-1">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-red-500">
               <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
-              <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-              <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+              <path d="M12 8v8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
+              <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
             </svg>
-            <p className="text-xs font-medium text-gray-500">Décaissement</p>
+            <p className="text-[11px] font-mono uppercase tracking-wide text-ardoise-500">Décaissement</p>
           </div>
-          <p className="text-xl font-bold text-gray-900">-{formatCurrencyRounded(kpiDecaissement)}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">Sur l&apos;année {kpiYear}</p>
+          <p className="text-xl font-bold text-ardoise-900 font-mono">-{formatCurrencyRounded(kpiDecaissement)}</p>
+          <p className="text-[10px] text-ardoise-400 mt-0.5">Sur l&apos;année {kpiYear}</p>
         </div>
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
           <div className="flex items-center gap-2 mb-1">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-brand-600">
               <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.3" />
-              <path d="M12 7v4l2.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+              <path d="M12 7v4l2.5 2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
               <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.5" />
             </svg>
-            <p className="text-xs font-medium text-gray-500">Rémunération</p>
+            <p className="text-[11px] font-mono uppercase tracking-wide text-ardoise-500">Rémunération</p>
           </div>
-          <p className="text-xl font-bold text-gray-900">{kpiRemuneration > 0 ? "-" : ""}{formatCurrencyRounded(kpiRemuneration)}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">Sur l&apos;année {kpiYear}</p>
+          <p className="text-xl font-bold text-ardoise-900 font-mono">{kpiRemuneration > 0 ? "-" : ""}{formatCurrencyRounded(kpiRemuneration)}</p>
+          <p className="text-[10px] text-ardoise-400 mt-0.5">Sur l&apos;année {kpiYear}</p>
         </div>
         </>)}
       </div>
 
       {/* Transactions list */}
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] mt-6">
-        <div className="px-5 pt-4 pb-0 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 mt-6">
+        <div className="px-5 pt-4 pb-0 border-b border-ardoise-100 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-gray-900 mb-4">Transactions bancaires</h2>
+            <h2 className="text-base font-bold text-ardoise-900 mb-4">Transactions bancaires</h2>
             <div className="flex items-center gap-0">
               <button
                 type="button"
                 onClick={() => { setTxTab("all"); setTxPage(1); }}
                 className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
-                  txTab === "all" ? "border-brand-600 text-brand-600" : "border-transparent text-gray-400 hover:text-gray-600"
+                  txTab === "all" ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
                 }`}
               >
                 Toutes les transactions
@@ -568,7 +569,7 @@ export function TransactionsClient() {
                 type="button"
                 onClick={() => { setTxTab("uncategorized"); setTxPage(1); }}
                 className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
-                  txTab === "uncategorized" ? "border-brand-600 text-brand-600" : "border-transparent text-gray-400 hover:text-gray-600"
+                  txTab === "uncategorized" ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
                 }`}
               >
                 À catégoriser
@@ -583,7 +584,9 @@ export function TransactionsClient() {
           <div className="flex items-center gap-3">
             {paginatedTotal > 0 && (
               <>
-                <button
+                <Button
+                  variant="cta"
+                  size="compact"
                   type="button"
                   onClick={async () => {
                     const result = await fetchPaginatedTransactionsAction(1, 10000, selectedAccount, txSortBy, txSortDir, txTab === "uncategorized", searchDebounced || null, effectiveDateFrom, effectiveDateTo, categoryFilter || null);
@@ -598,12 +601,13 @@ export function TransactionsClient() {
                       downloadCSV("transactions", headers, rows);
                     }
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   CSV
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="cta"
+                  size="compact"
                   type="button"
                   onClick={async () => {
                     const result = await fetchPaginatedTransactionsAction(1, 10000, selectedAccount, txSortBy, txSortDir, txTab === "uncategorized", searchDebounced || null, effectiveDateFrom, effectiveDateTo, categoryFilter || null);
@@ -618,11 +622,10 @@ export function TransactionsClient() {
                       downloadPDF("transactions", "Transactions bancaires", headers, rows);
                     }
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                   PDF
-                </button>
+                </Button>
               </>
             )}
             {txTotalPages > 1 && (
@@ -631,18 +634,18 @@ export function TransactionsClient() {
                   type="button"
                   disabled={txPage <= 1 || paginatedLoading}
                   onClick={() => setTxPage((p) => Math.max(1, p - 1))}
-                  className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center w-8 h-8 rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-ardoise-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
-                <span className="text-sm font-medium text-gray-500 min-w-[3rem] text-center">{txPage} / {txTotalPages}</span>
+                <span className="text-sm font-medium text-ardoise-500 min-w-[3rem] text-center font-mono">{txPage} / {txTotalPages}</span>
                 <button
                   type="button"
                   disabled={txPage >= txTotalPages || paginatedLoading}
                   onClick={() => setTxPage((p) => Math.min(txTotalPages, p + 1))}
-                  className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center w-8 h-8 rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-ardoise-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
               </div>
             )}
@@ -650,56 +653,57 @@ export function TransactionsClient() {
         </div>
 
         {/* Filters */}
-        <div className="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
+        <div className="px-5 py-3 border-b border-ardoise-100 flex flex-wrap items-center gap-3">
           <div className="relative">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ardoise-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Rechercher..."
-              className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent w-full sm:w-44"
+              className="pl-8 pr-3 py-1.5 text-xs border border-ardoise-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent w-full sm:w-44"
             />
           </div>
           <CategoryFilterDropdown value={categoryFilter} onChange={(v) => { setCategoryFilter(v); setTxPage(1); }} />
           {(searchQuery || categoryFilter) && (
-            <button
+            <Button
+              variant="ghost"
+              size="compact"
               type="button"
               onClick={() => { setSearchQuery(""); setCategoryFilter(""); setTxPage(1); }}
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
             >
               Réinitialiser
-            </button>
+            </Button>
           )}
         </div>
 
         {paginatedLoading ? (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-ardoise-100">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-center justify-between px-5 py-3.5 animate-pulse">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-200 rounded" />
+                  <div className="w-8 h-8 bg-ardoise-200 rounded" />
                   <div>
-                    <div className="h-4 bg-gray-200 rounded w-40 mb-1" />
-                    <div className="h-3 bg-gray-200 rounded w-24" />
+                    <div className="h-4 bg-ardoise-200 rounded w-40 mb-1" />
+                    <div className="h-3 bg-ardoise-200 rounded w-24" />
                   </div>
                 </div>
-                <div className="h-4 bg-gray-200 rounded w-20" />
+                <div className="h-4 bg-ardoise-200 rounded w-20" />
               </div>
             ))}
           </div>
         ) : paginatedTx.length === 0 ? (
-          <div className="p-5 text-center text-sm text-gray-400">
+          <div className="p-5 text-center text-sm text-ardoise-400">
             Aucune transaction trouvée.
           </div>
         ) : (
           <div className="md:overflow-x-auto">
             <div className="md:min-w-[650px]">
             {/* Header — desktop uniquement */}
-            <div className="hidden md:grid md:grid-cols-[170px_1fr_200px_140px] border-b border-gray-200/60">
+            <div className="hidden md:grid md:grid-cols-[170px_1fr_200px_140px] border-b border-ardoise-200/60">
               <SortHeader label="Date" column="date" current={txSortBy} dir={txSortDir} onSort={(col, dir) => { setTxSortBy(col); setTxSortDir(dir); setTxPage(1); }} />
               <SortHeader label="Libellé" column="description" current={txSortBy} dir={txSortDir} onSort={(col, dir) => { setTxSortBy(col); setTxSortDir(dir); setTxPage(1); }} />
-              <div className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">Catégorie</div>
+              <div className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ardoise-400">Catégorie</div>
               <SortHeader label="Montant" column="amount" current={txSortBy} dir={txSortDir} onSort={(col, dir) => { setTxSortBy(col); setTxSortDir(dir); setTxPage(1); }} align="right" />
             </div>
 
@@ -709,10 +713,10 @@ export function TransactionsClient() {
               const txSign = Number(tx.amount) >= 0 ? "+" as const : "-" as const;
               const filteredCategories = CATEGORY_OPTIONS.filter(([, { sign }]) => sign === null || sign === txSign);
               return (
-                <div key={tx.id} className="border-b border-gray-200/60 last:border-b-0">
+                <div key={tx.id} className="border-b border-ardoise-200/60 last:border-b-0">
                   <div className="grid grid-cols-2 md:grid-cols-[170px_1fr_200px_140px] md:items-center gap-y-1.5 md:gap-y-0 px-4 py-3 md:p-0 hover:bg-white/50 transition-colors">
-                    <div className="order-1 text-xs text-gray-500 whitespace-nowrap md:text-sm md:px-5 md:py-3.5">{formatDateFr(tx.date)}</div>
-                    <div className="order-3 md:order-2 col-span-2 md:col-span-1 text-sm font-medium text-gray-900 break-words md:truncate md:px-5 md:py-3.5">{tx.cleanDescription || tx.description}</div>
+                    <div className="order-1 text-xs text-ardoise-500 whitespace-nowrap md:text-sm md:px-5 md:py-3.5 font-mono">{formatDateFr(tx.date)}</div>
+                    <div className="order-3 md:order-2 col-span-2 md:col-span-1 text-sm font-medium text-ardoise-900 break-words md:truncate md:px-5 md:py-3.5">{tx.cleanDescription || tx.description}</div>
                     <div className="order-4 md:order-3 col-span-2 md:col-span-1 md:px-5 md:py-3.5 md:text-sm">
                       <button
                         type="button"
@@ -720,7 +724,7 @@ export function TransactionsClient() {
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                           tx.category
                             ? "text-brand-700 bg-brand-50 hover:bg-brand-100"
-                            : "text-gray-500 bg-gray-100 hover:bg-gray-200"
+                            : "text-ardoise-500 bg-ardoise-100 hover:bg-ardoise-200"
                         }`}
                       >
                         {tx.category && CATEGORIES[tx.category]?.icon && (
@@ -728,17 +732,17 @@ export function TransactionsClient() {
                         )}
                         {tx.category ? (CATEGORIES[tx.category]?.label ?? tx.category) : "À catégoriser"}
                         {tx.category && tx.categorizationSource === "auto_similarity" && (
-                          <span title="Catégorisée automatiquement par similarité" className="text-gray-400">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z"/></svg>
+                          <span title="Catégorisée automatiquement par similarité" className="text-ardoise-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z"/></svg>
                           </span>
                         )}
                         {!tx.category && (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
                         )}
                       </button>
                     </div>
-                    <div className={`order-2 md:order-4 text-base font-semibold text-right whitespace-nowrap md:px-5 md:py-3.5 ${
-                      Number(tx.amount) >= 0 ? "text-green-600" : "text-gray-900"
+                    <div className={`order-2 md:order-4 text-base font-semibold text-right whitespace-nowrap md:px-5 md:py-3.5 font-mono ${
+                      Number(tx.amount) >= 0 ? "text-menthe-600" : "text-ardoise-900"
                     }`}>
                       {Number(tx.amount) >= 0 ? "+" : ""}{formatCurrency(Number(tx.amount))}
                     </div>
@@ -800,8 +804,8 @@ export function TransactionsClient() {
       <Modal open={!!needsDefaultAccount} onClose={() => {}}>
         <div className="flex flex-col gap-5">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Sélectionnez votre compte par défaut</h3>
-            <p className="text-sm text-gray-500 mt-1">
+            <h3 className="text-lg font-bold text-ardoise-900">Sélectionnez votre compte par défaut</h3>
+            <p className="text-sm text-ardoise-500 mt-1">
               Choisissez le compte professionnel qui sera utilisé par défaut pour le suivi de votre activité.
             </p>
           </div>
@@ -814,18 +818,19 @@ export function TransactionsClient() {
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border transition-all text-left ${
                   pendingDefaultId === acc.id
                     ? "border-brand-500 bg-brand-50 ring-2 ring-brand-200"
-                    : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                    : "border-ardoise-200 hover:border-ardoise-300 hover:bg-ardoise-50"
                 }`}
               >
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{acc.name}</p>
-                  <p className="text-xs text-gray-400">{ACCOUNT_TYPE_LABELS[acc.type] || acc.type}</p>
+                  <p className="text-sm font-medium text-ardoise-900">{acc.name}</p>
+                  <p className="text-xs text-ardoise-400">{ACCOUNT_TYPE_LABELS[acc.type] || acc.type}</p>
                 </div>
-                <span className="text-sm font-semibold text-gray-900">{acc.balance != null ? formatCurrency(Number(acc.balance)) : "En attente"}</span>
+                <span className="text-sm font-semibold text-ardoise-900">{acc.balance != null ? formatCurrency(Number(acc.balance)) : "En attente"}</span>
               </button>
             ))}
           </div>
-          <button
+          <Button
+            variant="cta"
             type="button"
             disabled={!pendingDefaultId || savingDefault}
             onClick={async () => {
@@ -835,10 +840,10 @@ export function TransactionsClient() {
               setSavingDefault(false);
               if (result.success) window.location.reload();
             }}
-            className="w-full bg-brand-600 text-white text-sm font-medium py-2.5 rounded-lg transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full"
           >
             {savingDefault ? "Enregistrement..." : "Confirmer le compte par défaut"}
-          </button>
+          </Button>
         </div>
       </Modal>
 
@@ -846,17 +851,17 @@ export function TransactionsClient() {
       <Modal open={showAlertModal} onClose={() => setShowAlertModal(false)}>
         <div className="flex flex-col gap-5">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Alerte de trésorerie</h3>
-            <p className="text-sm text-gray-500 mt-1">
+            <h3 className="text-lg font-bold text-ardoise-900">Alerte de trésorerie</h3>
+            <p className="text-sm text-ardoise-500 mt-1">
               Recevez un email si le solde de votre compte passe sous un seuil défini.
             </p>
           </div>
           {alertLoading ? (
-            <div className="py-6 text-center text-sm text-gray-400">Chargement...</div>
+            <div className="py-6 text-center text-sm text-ardoise-400">Chargement...</div>
           ) : (
             <>
               <div>
-                <label htmlFor="alert-threshold" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="alert-threshold" className="block text-sm font-medium text-ardoise-700 mb-1">
                   Seuil d&apos;alerte (€)
                 </label>
                 <input
@@ -867,9 +872,9 @@ export function TransactionsClient() {
                   value={alertThreshold}
                   onChange={(e) => setAlertThreshold(e.target.value)}
                   placeholder="Ex : 2000"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                  className="w-full border border-ardoise-200 rounded-lg px-3 py-2.5 text-sm text-ardoise-900 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent font-mono"
                 />
-                <p className="text-xs text-gray-400 mt-1.5">
+                <p className="text-xs text-ardoise-400 mt-1.5">
                   Vous serez notifié par email (maximum une fois tous les 7 jours).
                 </p>
               </div>
@@ -879,20 +884,21 @@ export function TransactionsClient() {
                   role="switch"
                   aria-checked={alertEnabled}
                   onClick={() => setAlertEnabled((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${alertEnabled ? "bg-brand-600" : "bg-gray-200"}`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${alertEnabled ? "bg-brand-600" : "bg-ardoise-200"}`}
                 >
                   <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${alertEnabled ? "translate-x-5" : "translate-x-0"}`} />
                 </button>
-                <span className="text-sm text-gray-700">Alerte activée</span>
+                <span className="text-sm text-ardoise-700">Alerte activée</span>
               </label>
-              <button
+              <Button
+                variant="cta"
                 type="button"
                 disabled={!alertThreshold || alertSaving}
                 onClick={saveAlert}
-                className="w-full bg-brand-600 text-white text-sm font-medium py-2.5 rounded-lg transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full"
               >
                 {alertSaving ? "Enregistrement..." : "Enregistrer l'alerte"}
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -902,20 +908,21 @@ export function TransactionsClient() {
       <Modal open={!!deleteAccountId} onClose={() => setDeleteAccountId(null)}>
         <div className="flex flex-col gap-4">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Supprimer ce compte ?</h3>
-            <p className="text-sm text-gray-500 mt-1">
+            <h3 className="text-lg font-bold text-ardoise-900">Supprimer ce compte ?</h3>
+            <p className="text-sm text-ardoise-500 mt-1">
               Toutes les transactions associées seront définitivement supprimées. Cette action est irréversible.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <button
+            <Button
+              variant="secondary"
               type="button"
               onClick={() => setDeleteAccountId(null)}
-              className="border-2 border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 rounded-lg transition-all hover:bg-gray-50"
             >
               Annuler
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="danger"
               type="button"
               disabled={deleting}
               onClick={async () => {
@@ -931,10 +938,9 @@ export function TransactionsClient() {
                   toast.error(result.error || "Erreur lors de la suppression");
                 }
               }}
-              className="border-2 border-red-600 bg-red-600 px-4 py-2.5 text-sm font-medium text-white rounded-lg transition-all hover:bg-red-700 hover:border-red-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {deleting ? "Suppression..." : "Supprimer"}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>
@@ -974,10 +980,10 @@ function CategoryPill({ label, icon, active, onClick }: {
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
         saving ? "opacity-50 cursor-wait" :
         active ? "text-brand-700 bg-brand-100 border border-brand-300 ring-1 ring-brand-200" :
-        "text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-gray-300"
+        "text-ardoise-600 bg-ardoise-50 hover:bg-ardoise-100 border border-ardoise-200 hover:border-ardoise-300"
       }`}
     >
-      {icon && <span className={active ? "text-brand-600" : "text-gray-400"}>{icon}</span>}
+      {icon && <span className={active ? "text-brand-600" : "text-ardoise-400"}>{icon}</span>}
       {saving ? "..." : label}
     </button>
   );
@@ -1005,30 +1011,30 @@ function CategoryFilterDropdown({ value, onChange }: { value: string; onChange: 
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-gray-200 rounded-md bg-white hover:bg-gray-50 transition-colors"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-ardoise-200 rounded-md bg-white hover:bg-ardoise-50 transition-colors"
       >
-        {selected?.icon && <span className="text-gray-400">{selected.icon}</span>}
-        <span className={value ? "text-gray-700 font-medium" : "text-gray-500"}>{selected?.label ?? "Catégorie"}</span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="m6 9 6 6 6-6"/></svg>
+        {selected?.icon && <span className="text-ardoise-400">{selected.icon}</span>}
+        <span className={value ? "text-ardoise-700 font-medium" : "text-ardoise-500"}>{selected?.label ?? "Catégorie"}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-ardoise-400"><path d="m6 9 6 6 6-6"/></svg>
       </button>
       {open && (
-        <div className="absolute z-50 top-full left-0 mt-1 w-52 bg-white border border-gray-200 rounded-lg shadow-lg py-1 max-h-64 overflow-y-auto">
+        <div className="absolute z-50 top-full left-0 mt-1 w-52 bg-white border border-ardoise-200 rounded-lg shadow-lg py-1 max-h-64 overflow-y-auto">
           <button
             type="button"
             onClick={() => { onChange(""); setOpen(false); }}
-            className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center gap-2 ${!value ? "bg-brand-50 text-brand-700" : "text-gray-600 hover:bg-gray-50"}`}
+            className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center gap-2 ${!value ? "bg-brand-50 text-brand-700" : "text-ardoise-600 hover:bg-ardoise-50"}`}
           >
             Toutes les catégories
           </button>
-          <div className="border-t border-gray-100 my-1" />
+          <div className="border-t border-ardoise-100 my-1" />
           {CATEGORY_OPTIONS.map(([key, { label, icon }]) => (
             <button
               key={key}
               type="button"
               onClick={() => { onChange(key); setOpen(false); }}
-              className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center gap-2 ${value === key ? "bg-brand-50 text-brand-700" : "text-gray-600 hover:bg-gray-50"}`}
+              className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center gap-2 ${value === key ? "bg-brand-50 text-brand-700" : "text-ardoise-600 hover:bg-ardoise-50"}`}
             >
-              <span className={value === key ? "text-brand-600" : "text-gray-400"}>{icon}</span>
+              <span className={value === key ? "text-brand-600" : "text-ardoise-400"}>{icon}</span>
               {label}
             </button>
           ))}
@@ -1053,13 +1059,13 @@ function SortHeader({ label, column, current, dir, onSort, align = "left" }: {
         type="button"
         onClick={() => onSort(column, active && dir === "desc" ? "asc" : "desc")}
         className={`inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider transition-colors ${
-          active ? "text-gray-700" : "text-gray-400 hover:text-gray-600"
+          active ? "text-ardoise-700" : "text-ardoise-400 hover:text-ardoise-600"
         }`}
       >
         {label}
         <span className="flex flex-col -space-y-1">
-          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={active && dir === "asc" ? "text-gray-700" : "text-gray-300"}><polyline points="18 15 12 9 6 15"/></svg>
-          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={active && dir === "desc" ? "text-gray-700" : "text-gray-300"}><polyline points="6 9 12 15 18 9"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={active && dir === "asc" ? "text-ardoise-700" : "text-ardoise-300"}><polyline points="18 15 12 9 6 15"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={active && dir === "desc" ? "text-ardoise-700" : "text-ardoise-300"}><polyline points="6 9 12 15 18 9"/></svg>
         </span>
       </button>
     </div>

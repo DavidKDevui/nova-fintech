@@ -28,7 +28,7 @@ export function HelpClient() {
       {/* ── Header ── */}
       <div>
         <h1 className="text-xl md:text-2xl font-bold mb-2">Aide — Comprendre vos charges</h1>
-        <p className="text-sm text-gray-500 leading-relaxed">
+        <p className="text-sm text-ardoise-500 leading-relaxed">
           En tant qu&apos;infirmier(e) libéral(e), vous êtes soumis(e) à plusieurs prélèvements obligatoires.
           Cette page vous explique simplement <strong>quoi</strong>, <strong>combien</strong> et <strong>quand</strong> vous payez.
         </p>
@@ -45,9 +45,9 @@ export function HelpClient() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: "Impôt sur le revenu", value: "7-11%", sub: "du CA", color: "bg-violet-100 text-violet-800" },
-            { label: "URSSAF", value: "14-17%", sub: "du CA", color: "bg-blue-100 text-blue-800" },
+            { label: "URSSAF", value: "14-17%", sub: "du CA", color: "bg-violet-100 text-violet-800" },
             { label: "Retraite CARPIMKO", value: "~14%", sub: "du CA", color: "bg-amber-100 text-amber-800" },
-            { label: "Impôts locaux", value: "0-2%", sub: "du CA", color: "bg-emerald-100 text-emerald-800" },
+            { label: "Impôts locaux", value: "0-2%", sub: "du CA", color: "bg-menthe-100 text-menthe-800" },
           ].map((item) => (
             <div key={item.label} className={`${item.color} rounded-lg p-3 text-center`}>
               <p className="text-lg font-bold">{item.value}</p>
@@ -60,19 +60,19 @@ export function HelpClient() {
 
       {/* ── Prochaines échéances ── */}
       <div className="bg-white/70 backdrop-blur-xl border border-white/50 rounded-lg overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h2 className="text-sm font-bold text-gray-900">Vos prochaines échéances</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Les dates à retenir dans les semaines qui viennent</p>
+        <div className="px-5 py-4 border-b border-ardoise-100">
+          <h2 className="text-sm font-bold text-ardoise-900">Vos prochaines échéances</h2>
+          <p className="text-xs text-ardoise-400 mt-0.5">Les dates à retenir dans les semaines qui viennent</p>
         </div>
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-ardoise-100">
           {upcoming.slice(0, 6).map((evt, i) => (
             <div key={i} className="flex items-center gap-4 px-5 py-3">
               <div className="w-14 shrink-0">
-                <p className="text-xs text-gray-400">{MONTH_NAMES[evt.month]?.slice(0, 3)}</p>
-                <p className="text-lg font-bold text-gray-900 -mt-0.5">{evt.day}</p>
+                <p className="text-xs text-ardoise-400">{MONTH_NAMES[evt.month]?.slice(0, 3)}</p>
+                <p className="text-lg font-bold text-ardoise-900 -mt-0.5">{evt.day}</p>
               </div>
               <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${EVENT_DOT[evt.type]}`} />
-              <p className="text-sm text-gray-700 flex-1">{evt.label}</p>
+              <p className="text-sm text-ardoise-700 flex-1">{evt.label}</p>
               <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${EVENT_BADGE[evt.type]}`}>
                 {EVENT_LABEL[evt.type]}
               </span>
@@ -134,22 +134,22 @@ export function HelpClient() {
         onToggle={() => toggle("exonerations")}
       >
         <div className="space-y-3">
-          <div className="flex gap-3 items-start bg-green-50 border border-green-200 rounded-lg p-4">
-            <span className="text-green-600 text-lg mt-0.5">&#10003;</span>
+          <div className="flex gap-3 items-start bg-menthe-50 border border-menthe-200 rounded-lg p-4">
+            <span className="text-menthe-600 text-lg mt-0.5">&#10003;</span>
             <div>
-              <p className="text-sm font-semibold text-green-900">TVA : exonéré(e)</p>
-              <p className="text-sm text-green-700 mt-1">
+              <p className="text-sm font-semibold text-menthe-900">TVA : exonéré(e)</p>
+              <p className="text-sm text-menthe-700 mt-1">
                 Vos actes de soins sont exonérés de TVA (article 261-4-1 du CGI).
                 Vous ne facturez pas de TVA, vous ne la déclarez pas, vous ne la payez pas.
                 Seules des activités annexes (conseil, formation, vente) pourraient y être soumises.
               </p>
             </div>
           </div>
-          <div className="flex gap-3 items-start bg-green-50 border border-green-200 rounded-lg p-4">
-            <span className="text-green-600 text-lg mt-0.5">&#10003;</span>
+          <div className="flex gap-3 items-start bg-menthe-50 border border-menthe-200 rounded-lg p-4">
+            <span className="text-menthe-600 text-lg mt-0.5">&#10003;</span>
             <div>
-              <p className="text-sm font-semibold text-green-900">CVAE : non concerné(e)</p>
-              <p className="text-sm text-green-700 mt-1">
+              <p className="text-sm font-semibold text-menthe-900">CVAE : non concerné(e)</p>
+              <p className="text-sm text-menthe-700 mt-1">
                 La CVAE ne s&apos;applique qu&apos;au-delà de 500 000 EUR de chiffre d&apos;affaires.
                 En pratique, aucun(e) IDEL n&apos;est concerné(e).
               </p>
@@ -193,13 +193,13 @@ export function HelpClient() {
             },
           ].map((decl) => (
             <div key={decl.name} className="bg-white/70 backdrop-blur-xl border border-white/50 rounded-lg p-4">
-              <p className="text-sm font-semibold text-gray-900">{decl.name}</p>
-              <p className="text-sm text-gray-600 mt-1">{decl.desc}</p>
+              <p className="text-sm font-semibold text-ardoise-900">{decl.name}</p>
+              <p className="text-sm text-ardoise-600 mt-1">{decl.desc}</p>
               <div className="flex flex-wrap gap-x-6 gap-y-1 mt-3">
-                <span className="text-xs text-gray-500">
-                  Date limite : <span className="font-semibold text-gray-800">{decl.deadline}</span>
+                <span className="text-xs text-ardoise-500">
+                  Date limite : <span className="font-semibold text-ardoise-800">{decl.deadline}</span>
                 </span>
-                <span className="text-xs text-gray-400">{decl.who}</span>
+                <span className="text-xs text-ardoise-400">{decl.who}</span>
               </div>
             </div>
           ))}
@@ -221,10 +221,10 @@ export function HelpClient() {
                 onClick={() => setCalMonth(i)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
                   calMonth === i
-                    ? "bg-gray-900 text-white"
+                    ? "bg-ardoise-900 text-white"
                     : i === currentMonth
-                      ? "bg-blue-50 text-blue-700 font-semibold"
-                      : "bg-gray-100 text-gray-500 hover:text-gray-900"
+                      ? "bg-violet-50 text-violet-700 font-semibold"
+                      : "bg-ardoise-100 text-ardoise-500 hover:text-ardoise-900"
                 }`}
               >
                 {name.slice(0, 3)}
@@ -232,21 +232,21 @@ export function HelpClient() {
             ))}
           </div>
 
-          <div className="bg-gray-50 rounded-lg overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <p className="text-sm font-semibold text-gray-900">{MONTH_NAMES[calMonth]} 2026</p>
+          <div className="bg-ardoise-50 rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-ardoise-200">
+              <p className="text-sm font-semibold text-ardoise-900">{MONTH_NAMES[calMonth]} 2026</p>
             </div>
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-ardoise-200">
               {(CALENDAR[calMonth] || []).map((evt, i) => {
                 const isPast = calMonth < currentMonth || (calMonth === currentMonth && evt.day < currentDay);
                 const isToday = calMonth === currentMonth && evt.day === currentDay;
                 return (
-                  <div key={i} className={`flex items-center gap-4 px-4 py-3 ${isToday ? "bg-blue-50" : isPast ? "opacity-40" : ""}`}>
-                    <span className={`text-base font-bold w-8 text-center shrink-0 ${isToday ? "text-blue-600" : "text-gray-900"}`}>
+                  <div key={i} className={`flex items-center gap-4 px-4 py-3 ${isToday ? "bg-violet-50" : isPast ? "opacity-40" : ""}`}>
+                    <span className={`text-base font-bold w-8 text-center shrink-0 ${isToday ? "text-violet-600" : "text-ardoise-900"}`}>
                       {evt.day}
                     </span>
                     <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${EVENT_DOT[evt.type]}`} />
-                    <p className="text-sm text-gray-700 flex-1">{evt.label}</p>
+                    <p className="text-sm text-ardoise-700 flex-1">{evt.label}</p>
                     <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full shrink-0 ${EVENT_BADGE[evt.type]}`}>
                       {EVENT_LABEL[evt.type]}
                     </span>
@@ -254,12 +254,12 @@ export function HelpClient() {
                 );
               })}
               {(!CALENDAR[calMonth] || CALENDAR[calMonth].length === 0) && (
-                <p className="px-4 py-5 text-sm text-gray-400 text-center">Aucune échéance ce mois-ci.</p>
+                <p className="px-4 py-5 text-sm text-ardoise-400 text-center">Aucune échéance ce mois-ci.</p>
               )}
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-500">
+          <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-ardoise-500">
             {Object.entries(EVENT_DOT).map(([key, color]) => (
               <span key={key} className="flex items-center gap-1.5">
                 <span className={`w-2 h-2 rounded-full ${color}`} /> {EVENT_LABEL[key]}
@@ -285,14 +285,14 @@ export function HelpClient() {
             { label: "Taxe foncière", text: "Aucune particularité — dépend uniquement de la propriété du local." },
           ].map((item) => (
             <div key={item.label} className="flex gap-3 items-start">
-              <span className="text-xs font-bold text-gray-900 bg-gray-100 rounded px-2 py-1 shrink-0 w-24 text-center">{item.label}</span>
-              <p className="text-sm text-gray-600">{item.text}</p>
+              <span className="text-xs font-bold text-ardoise-900 bg-ardoise-100 rounded px-2 py-1 shrink-0 w-24 text-center">{item.label}</span>
+              <p className="text-sm text-ardoise-600">{item.text}</p>
             </div>
           ))}
         </div>
       </Section>
 
-      <p className="text-xs text-gray-400 text-center pb-4">
+      <p className="text-xs text-ardoise-400 text-center pb-4">
         Données fiscales 2026 — À titre informatif, ne se substitue pas à un expert-comptable.
       </p>
     </div>
@@ -321,8 +321,8 @@ function Section({
         className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/40 transition-colors"
       >
         <div>
-          <p className="text-sm font-bold text-gray-900">{title}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
+          <p className="text-sm font-bold text-ardoise-900">{title}</p>
+          <p className="text-xs text-ardoise-400 mt-0.5">{subtitle}</p>
         </div>
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -330,24 +330,24 @@ function Section({
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth="1.6"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className={`shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-ardoise-400 transition-transform ${open ? "rotate-180" : ""}`}
         >
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
-      {open && <div className="px-5 pb-5 border-t border-gray-100 pt-4">{children}</div>}
+      {open && <div className="px-5 pb-5 border-t border-ardoise-100 pt-4">{children}</div>}
     </div>
   );
 }
 
 const EXPLAINER_COLORS: Record<string, { border: string; title: string; accent: string }> = {
   violet: { border: "border-l-violet-400", title: "text-violet-900", accent: "text-violet-700" },
-  blue: { border: "border-l-blue-400", title: "text-blue-900", accent: "text-blue-700" },
+  blue: { border: "border-l-violet-400", title: "text-violet-900", accent: "text-violet-700" },
   amber: { border: "border-l-amber-400", title: "text-amber-900", accent: "text-amber-700" },
-  emerald: { border: "border-l-emerald-400", title: "text-emerald-900", accent: "text-emerald-700" },
+  emerald: { border: "border-l-menthe-400", title: "text-menthe-900", accent: "text-menthe-700" },
 };
 
 function Explainer({
@@ -371,18 +371,18 @@ function Explainer({
       <p className={`text-sm font-bold ${c.title}`}>{title}</p>
       <div>
         <p className={`text-xs font-semibold uppercase tracking-wider ${c.accent} opacity-60`}>C&apos;est quoi ?</p>
-        <p className="text-sm text-gray-600 mt-0.5">{what}</p>
+        <p className="text-sm text-ardoise-600 mt-0.5">{what}</p>
       </div>
       <div>
         <p className={`text-xs font-semibold uppercase tracking-wider ${c.accent} opacity-60`}>Combien ?</p>
-        <p className="text-sm text-gray-600 mt-0.5">{howMuch}</p>
+        <p className="text-sm text-ardoise-600 mt-0.5">{howMuch}</p>
       </div>
       <div>
         <p className={`text-xs font-semibold uppercase tracking-wider ${c.accent} opacity-60`}>Quand ?</p>
-        <p className="text-sm text-gray-600 mt-0.5">{when}</p>
+        <p className="text-sm text-ardoise-600 mt-0.5">{when}</p>
       </div>
-      <div className="bg-gray-50 rounded px-3 py-2 mt-1">
-        <p className="text-xs text-gray-500"><span className="font-semibold text-gray-700">Bon à savoir :</span> {tip}</p>
+      <div className="bg-ardoise-50 rounded px-3 py-2 mt-1">
+        <p className="text-xs text-ardoise-500"><span className="font-semibold text-ardoise-700">Bon à savoir :</span> {tip}</p>
       </div>
     </div>
   );

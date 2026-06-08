@@ -25,7 +25,7 @@ export function ConnectBankBanner() {
   }
 
   return (
-    <div className="bg-amber-50 border-none px-6 py-4 mb-6 rounded-lg">
+    <div className="bg-amber-50 border-l-4 border-amber-500 px-6 py-4 mb-6 rounded-lg">
       <div className="flex items-center gap-4">
         <div className="shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none">
@@ -55,7 +55,7 @@ export function ConnectBankBanner() {
           className="shrink-0 flex items-center gap-1.5 bg-amber-600 px-3.5 py-1.5 text-xs font-medium text-white rounded-md transition-all hover:bg-amber-700 active:scale-[0.98] disabled:opacity-50"
         >
           {connecting ? "Connexion..." : "Connecter ma banque"}
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         </button>
       </div>
     </div>

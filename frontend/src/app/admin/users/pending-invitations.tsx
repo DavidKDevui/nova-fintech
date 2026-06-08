@@ -72,15 +72,15 @@ export function InvitationsSection({
             type="email"
             placeholder="email@exemple.com"
             required
-            className="flex-1 border border-gray-200/50 bg-white/50 px-4 py-2.5 text-sm rounded-md backdrop-blur-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="flex-1 border border-ardoise-200/50 bg-white/50 px-4 py-2.5 text-sm rounded-md backdrop-blur-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
           />
           <input type="hidden" name="accountType" value={accountType} />
           <button
             type="submit"
             disabled={pending}
-            className="flex items-center gap-2 bg-blue-600 px-5 py-2.5 text-sm font-medium text-white rounded-md transition-all hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center gap-2 bg-violet-600 px-5 py-2.5 text-sm font-medium text-white rounded-md transition-all hover:bg-violet-700 disabled:opacity-50"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
             {pending ? "Envoi..." : "Inviter"}
           </button>
         </form>
@@ -89,13 +89,13 @@ export function InvitationsSection({
       {/* Liste des invitations en attente */}
       {invitations.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-ardoise-400 mb-3">
             Invitations en attente ({invitations.length})
           </h2>
           <div className="bg-white/70 backdrop-blur-xl border border-white/50 rounded-lg overflow-x-auto">
             <table className="w-full text-sm min-w-[500px]">
               <thead>
-                <tr className="border-b border-gray-200/50 text-left text-gray-500">
+                <tr className="border-b border-ardoise-200/50 text-left text-ardoise-500">
                   <th className="px-4 md:px-6 py-4 font-medium">Email</th>
                   <th className="px-4 md:px-6 py-4 font-medium">Expire dans</th>
                   <th className="px-4 md:px-6 py-4 font-medium text-right">Actions</th>
@@ -103,9 +103,9 @@ export function InvitationsSection({
               </thead>
               <tbody>
                 {invitations.map((inv) => (
-                  <tr key={inv.id} className="border-b border-gray-100/50 last:border-0 transition-colors hover:bg-white/40">
+                  <tr key={inv.id} className="border-b border-ardoise-100/50 last:border-0 transition-colors hover:bg-white/40">
                     <td className="px-4 md:px-6 py-4 font-medium">{inv.email}</td>
-                    <td className="px-4 md:px-6 py-4 text-gray-500">
+                    <td className="px-4 md:px-6 py-4 text-ardoise-500">
                       {timeRemaining(inv.expiresAt)}
                     </td>
                     <td className="px-4 md:px-6 py-4 text-right">
@@ -115,7 +115,7 @@ export function InvitationsSection({
                         className="p-1.5 text-red-500 rounded-md hover:bg-red-50 hover:text-red-700 disabled:opacity-50 transition-all"
                         title="Annuler l'invitation"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                       </button>
                     </td>
                   </tr>

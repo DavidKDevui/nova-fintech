@@ -42,7 +42,7 @@ function BridgeCallback() {
           <p className="text-red-600">{error}</p>
           <button
             onClick={() => router.replace("/dashboard")}
-            className="text-sm text-blue-600 underline"
+            className="text-sm text-violet-600 underline"
           >
             Retour au tableau de bord
           </button>
@@ -54,8 +54,8 @@ function BridgeCallback() {
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-center space-y-4">
-        <div className="h-8 w-8 mx-auto animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
-        <p className="text-gray-600">Synchronisation de vos comptes bancaires...</p>
+        <div className="h-8 w-8 mx-auto animate-spin rounded-full border-4 border-ardoise-200 border-t-violet-600" />
+        <p className="text-ardoise-600">Synchronisation de vos comptes bancaires...</p>
       </div>
     </div>
   );

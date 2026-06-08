@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Modal } from "@/components/modal";
+import { Badge, type BadgeTone } from "@/components/badge";
+import { Button } from "@/components/button";
 import { getRejectionAlertAction, upsertRejectionAlertAction } from "@/actions/rejection-alert";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { useData } from "@/providers/data-provider";
@@ -20,10 +22,10 @@ import {
   Cell,
 } from "recharts";
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  en_attente: { label: "En attente", color: "text-amber-700", bg: "bg-amber-50" },
-  paye: { label: "Payé", color: "text-green-700", bg: "bg-green-50" },
-  rejete: { label: "Rejeté", color: "text-red-700", bg: "bg-red-50" },
+const STATUS_CONFIG: Record<string, { label: string; tone: BadgeTone }> = {
+  en_attente: { label: "En attente", tone: "action" },
+  paye: { label: "Payé", tone: "success" },
+  rejete: { label: "Rejeté", tone: "alerte" },
 };
 
 const MONTH_NAMES = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
@@ -266,12 +268,12 @@ export function FacturationClient() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5 animate-pulse">
-          <div className="h-3 bg-gray-200 rounded w-24 mb-3" />
-          <div className="h-6 bg-gray-200 rounded w-32" />
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5 animate-pulse">
+          <div className="h-3 bg-ardoise-200 rounded w-24 mb-3" />
+          <div className="h-6 bg-ardoise-200 rounded w-32" />
         </div>
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5 animate-pulse">
-          <div className="h-48 bg-gray-200 rounded" />
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5 animate-pulse">
+          <div className="h-48 bg-ardoise-200 rounded" />
         </div>
       </div>
     );
@@ -279,8 +281,8 @@ export function FacturationClient() {
 
   if (!hp) {
     return (
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6 text-center">
-        <p className="text-sm text-gray-400">Complétez votre profil pour accéder à la facturation.</p>
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6 text-center">
+        <p className="text-sm text-ardoise-400">Complétez votre profil pour accéder à la facturation.</p>
       </div>
     );
   }
@@ -288,8 +290,8 @@ export function FacturationClient() {
   if (passages.length === 0) {
     return (
       <div>
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6 text-center">
-          <p className="text-sm text-gray-400">Aucune donnée disponible pour le moment.</p>
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6 text-center">
+          <p className="text-sm text-ardoise-400">Aucune donnée disponible pour le moment.</p>
         </div>
       </div>
     );
@@ -299,23 +301,23 @@ export function FacturationClient() {
     <div>
       {/* Sélecteur d'année global */}
       <div className="flex items-center justify-end gap-2 mb-4">
-        <span className="text-xs uppercase tracking-wider text-gray-400">Année</span>
+        <span className="text-xs uppercase tracking-wider text-ardoise-400">Année</span>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => setChartYear((y) => y - 1)}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-ardoise-100 transition-colors"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
-          <span className="text-sm font-semibold text-gray-900 w-12 text-center">{chartYear}</span>
+          <span className="text-sm font-semibold text-ardoise-900 w-12 text-center font-mono">{chartYear}</span>
           <button
             type="button"
             onClick={() => setChartYear((y) => y + 1)}
             disabled={chartYear >= new Date().getFullYear()}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-ardoise-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
       </div>
@@ -323,79 +325,79 @@ export function FacturationClient() {
       {/* Summary KPI cards */}
       {summary && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          <div className="bg-transparent backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+          <div className="bg-transparent backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
             <div className="flex items-center gap-2 mb-1">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-green-600">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-menthe-600">
                 <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
-                <path d="M12 16V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-                <path d="M8 12l4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                <path d="M12 16V8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
+                <path d="M8 12l4-4 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
               </svg>
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-medium text-gray-500">Total CA — Payé</p>
+                <p className="text-xs font-medium text-ardoise-500">Total CA — Payé</p>
                 <InfoBadge tooltip={STATUS_TOOLTIPS.totalCA} />
               </div>
             </div>
-            <p className="text-xl font-bold text-gray-900">{formatCurrency(globalViewData.paye)}</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">{globalViewData.payeCount} facture{globalViewData.payeCount > 1 ? "s" : ""} — {chartYear}</p>
+            <p className="text-xl font-bold text-ardoise-900 font-mono">{formatCurrency(globalViewData.paye)}</p>
+            <p className="text-[10px] text-ardoise-400 mt-0.5">{globalViewData.payeCount} facture{globalViewData.payeCount > 1 ? "s" : ""} — {chartYear}</p>
           </div>
 
           {globalViewData.attenteCount > 0 && (
-            <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+            <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
               <div className="flex items-center gap-2 mb-1">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-amber-600">
                   <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.3" />
-                  <path d="M12 7v4l2.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                  <path d="M12 7v4l2.5 2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
                 </svg>
                 <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-medium text-gray-500">En attente</p>
+                  <p className="text-xs font-medium text-ardoise-500">En attente</p>
                   <InfoBadge tooltip={STATUS_TOOLTIPS.en_attente} />
                 </div>
               </div>
-              <p className="text-xl font-bold text-gray-900">{formatCurrency(globalViewData.en_attente)}</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">{globalViewData.attenteCount} facture{globalViewData.attenteCount > 1 ? "s" : ""} — {chartYear}</p>
+              <p className="text-xl font-bold text-ardoise-900 font-mono">{formatCurrency(globalViewData.en_attente)}</p>
+              <p className="text-[10px] text-ardoise-400 mt-0.5">{globalViewData.attenteCount} facture{globalViewData.attenteCount > 1 ? "s" : ""} — {chartYear}</p>
             </div>
           )}
 
           {globalViewData.rejeteCount > 0 && (
-            <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+            <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
               <div className="flex items-center gap-2 mb-1">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-red-500">
                   <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.3" />
-                  <path d="M15 9l-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-                  <path d="M9 9l6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+                  <path d="M15 9l-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
+                  <path d="M9 9l6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
                 </svg>
                 <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-medium text-gray-500">Rejeté</p>
+                  <p className="text-xs font-medium text-ardoise-500">Rejeté</p>
                   <InfoBadge tooltip={STATUS_TOOLTIPS.rejete} />
                 </div>
               </div>
-              <p className="text-xl font-bold text-gray-900">{formatCurrency(globalViewData.rejete)}</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">{globalViewData.rejeteCount} facture{globalViewData.rejeteCount > 1 ? "s" : ""} — {chartYear}</p>
+              <p className="text-xl font-bold text-ardoise-900 font-mono">{formatCurrency(globalViewData.rejete)}</p>
+              <p className="text-[10px] text-ardoise-400 mt-0.5">{globalViewData.rejeteCount} facture{globalViewData.rejeteCount > 1 ? "s" : ""} — {chartYear}</p>
             </div>
           )}
 
           {avgDelayForYear !== null && (
-            <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+            <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
               <div className="flex items-center gap-2 mb-1">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-brand-600">
                   <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.3" />
-                  <path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                  <path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
                 </svg>
-                <p className="text-xs font-medium text-gray-500">Délai moyen</p>
+                <p className="text-xs font-medium text-ardoise-500">Délai moyen</p>
               </div>
-              <p className="text-xl font-bold text-gray-900">{avgDelayForYear}j</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">Entre soin et virement — {chartYear}</p>
+              <p className="text-xl font-bold text-ardoise-900 font-mono">{avgDelayForYear}j</p>
+              <p className="text-[10px] text-ardoise-400 mt-0.5">Entre soin et virement — {chartYear}</p>
             </div>
           )}
         </div>
       )}
 
       {/* Chart CA mensuel */}
-      <div ref={chartCardRef} className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5 mb-6">
+      <div ref={chartCardRef} className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Facturation mensuelle</h2>
-            <p className="text-xs text-gray-400">Répartition par statut</p>
+            <h2 className="text-base font-bold text-ardoise-900">Facturation mensuelle</h2>
+            <p className="text-xs text-ardoise-400">Répartition par statut</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
@@ -404,8 +406,8 @@ export function FacturationClient() {
                 onClick={() => setCompareMode((v) => !v)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   compareMode
-                    ? "bg-gray-900 text-white"
-                    : "text-gray-500 hover:text-gray-900 bg-gray-100 hover:bg-gray-200"
+                    ? "bg-ardoise-900 text-white"
+                    : "text-ardoise-500 hover:text-ardoise-900 bg-ardoise-100 hover:bg-ardoise-200"
                 }`}
               >
                 Comparer avec {chartYear - 1}
@@ -414,7 +416,7 @@ export function FacturationClient() {
                 <select
                   value={compareStatus}
                   onChange={(e) => setCompareStatus(e.target.value as "paye" | "en_attente" | "rejete")}
-                  className="border border-gray-200 bg-white px-2.5 py-1.5 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                  className="border border-ardoise-200 bg-white px-2.5 py-1.5 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
                 >
                   <option value="paye">Payé</option>
                   <option value="en_attente">En attente</option>
@@ -422,35 +424,36 @@ export function FacturationClient() {
                 </select>
               )}
             </div>
-            <button
+            <Button
+              variant="cta"
+              size="compact"
               type="button"
               onClick={exportChartToPdf}
               disabled={exporting}
               data-html2canvas-ignore="true"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Exporter le graphique en PDF"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
               {exporting ? "Export..." : "PDF"}
-            </button>
+            </Button>
           </div>
         </div>
         <div className="h-40 sm:h-56 min-h-[1px]">
           <ResponsiveContainer width="100%" height="100%" minWidth={1}>
             <BarChart data={chartData} barGap={0}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} width={45} />
-              <Tooltip contentStyle={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 4, fontSize: 13 }} formatter={(value, name) => [formatCurrency(Number(value)), STATUS_CONFIG[String(name)]?.label || String(name)]} />
-              <Legend formatter={(value: string) => <span className="text-xs text-gray-500">{STATUS_CONFIG[value]?.label || value}</span>} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#EFEAF6" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#A79EB5" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: "#A79EB5" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} width={45} />
+              <Tooltip contentStyle={{ background: "white", border: "1px solid #E1DBEC", borderRadius: 4, fontSize: 13 }} formatter={(value, name) => [formatCurrency(Number(value)), STATUS_CONFIG[String(name)]?.label || String(name)]} />
+              <Legend formatter={(value: string) => <span className="text-xs text-ardoise-500">{STATUS_CONFIG[value]?.label || value}</span>} />
               {compareMode ? (
                 <>
-                  <Bar dataKey={`${compareStatus}_prev`} fill="#d1d5db" radius={[4, 4, 0, 0]} name={`${STATUS_CONFIG[compareStatus]?.label || compareStatus} ${chartYear - 1}`} />
-                  <Bar dataKey={compareStatus} fill={compareStatus === "paye" ? "#16a34a" : compareStatus === "en_attente" ? "#d97706" : "#dc2626"} radius={[4, 4, 0, 0]} name={`${STATUS_CONFIG[compareStatus]?.label || compareStatus} ${chartYear}`} />
+                  <Bar dataKey={`${compareStatus}_prev`} fill="#C8C1D4" radius={[4, 4, 0, 0]} name={`${STATUS_CONFIG[compareStatus]?.label || compareStatus} ${chartYear - 1}`} />
+                  <Bar dataKey={compareStatus} fill={compareStatus === "paye" ? "#2FA169" : compareStatus === "en_attente" ? "#d97706" : "#dc2626"} radius={[4, 4, 0, 0]} name={`${STATUS_CONFIG[compareStatus]?.label || compareStatus} ${chartYear}`} />
                 </>
               ) : (
                 <>
-                  <Bar dataKey="paye" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="paye" fill="#2FA169" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="en_attente" fill="#d97706" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="rejete" fill="#dc2626" radius={[4, 4, 0, 0]} />
                 </>
@@ -462,14 +465,14 @@ export function FacturationClient() {
 
       {/* Vue globale + Taux de rejet — row 50/50 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 items-stretch">
-      <div className={`bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5 ${rejectionViewData.total > 0 ? "" : "sm:col-span-2"}`}>
+      <div className={`bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5 ${rejectionViewData.total > 0 ? "" : "sm:col-span-2"}`}>
         <div className="mb-5">
-          <h2 className="text-base font-semibold text-gray-900">Vue globale — CA déclaré vs payé</h2>
-          <p className="text-xs text-gray-400">Répartition annuelle par statut</p>
+          <h2 className="text-base font-bold text-ardoise-900">Vue globale — CA déclaré vs payé</h2>
+          <p className="text-xs text-ardoise-400">Répartition annuelle par statut</p>
         </div>
 
         {globalViewData.declared === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-8">Aucune donnée pour {chartYear}.</p>
+          <p className="text-sm text-ardoise-400 text-center py-8">Aucune donnée pour {chartYear}.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
             <div className="h-40">
@@ -477,7 +480,7 @@ export function FacturationClient() {
                 <PieChart>
                   {(() => {
                     const pieData = [
-                      { name: "paye", value: globalViewData.paye, color: "#16a34a" },
+                      { name: "paye", value: globalViewData.paye, color: "#2FA169" },
                       { name: "en_attente", value: globalViewData.en_attente, color: "#d97706" },
                       { name: "rejete", value: globalViewData.rejete, color: "#dc2626" },
                     ].filter((d) => d.value > 0);
@@ -500,18 +503,18 @@ export function FacturationClient() {
                   <Tooltip
                     formatter={(value: unknown, name: unknown) =>
                       [formatCurrency(Number(value)), STATUS_CONFIG[String(name)]?.label || String(name)]}
-                    contentStyle={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 4, fontSize: 12 }}
+                    contentStyle={{ background: "white", border: "1px solid #E1DBEC", borderRadius: 4, fontSize: 12 }}
                   />
                 </PieChart>
               </ResponsiveContainer>
             </div>
             <div className="space-y-3">
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-gray-400">CA déclaré {chartYear}</p>
-                <p className="text-xl font-bold text-gray-900">{formatCurrency(globalViewData.declared)}</p>
+                <p className="text-[10px] uppercase tracking-wider text-ardoise-400">CA déclaré {chartYear}</p>
+                <p className="text-xl font-bold text-ardoise-900 font-mono">{formatCurrency(globalViewData.declared)}</p>
               </div>
               <div className="space-y-1.5">
-                <SegmentRow color="#16a34a" label="Payé" value={formatCurrency(globalViewData.paye)} pct={globalViewData.pct(globalViewData.paye)} onClick={() => setFilterStatus("paye")} />
+                <SegmentRow color="#2FA169" label="Payé" value={formatCurrency(globalViewData.paye)} pct={globalViewData.pct(globalViewData.paye)} onClick={() => setFilterStatus("paye")} />
                 <SegmentRow color="#d97706" label="En attente" value={formatCurrency(globalViewData.en_attente)} pct={globalViewData.pct(globalViewData.en_attente)} onClick={() => setFilterStatus("en_attente")} />
                 <SegmentRow color="#dc2626" label="Rejeté" value={formatCurrency(globalViewData.rejete)} pct={globalViewData.pct(globalViewData.rejete)} onClick={() => setFilterStatus("rejete")} />
               </div>
@@ -527,19 +530,21 @@ export function FacturationClient() {
       </div>
 
       {/* Table */}
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px]">
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1">
         {/* Header */}
-        <div className="px-5 pt-4 pb-0 border-b border-gray-100 flex items-center justify-between">
+        <div className="px-5 pt-4 pb-0 border-b border-ardoise-100 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-gray-900 mb-4">Détail des passages</h2>
+            <h2 className="text-base font-bold text-ardoise-900 mb-4">Détail des passages</h2>
           </div>
           <div className="flex items-center gap-3 pb-3">
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-ardoise-400">
               {filteredPassages.length} passage{filteredPassages.length > 1 ? "s" : ""} — {formatCurrency(filteredTotal)}
             </span>
             {filteredPassages.length > 0 && (
               <>
-                <button
+                <Button
+                  variant="cta"
+                  size="compact"
                   type="button"
                   onClick={() => {
                     const headers = ["Date", "Moment", "Cabinet", "N° facture", "Statut", "Cotation", "Honoraires", "Majoration", "Férié/Dim/Nuit", "IFD", "Total"];
@@ -550,12 +555,13 @@ export function FacturationClient() {
                     ]);
                     downloadCSV("facturation", headers, rows);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   CSV
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="cta"
+                  size="compact"
                   type="button"
                   onClick={() => {
                     const headers = ["Date", "Cabinet", "N° facture", "Statut", "Cotation", "Total"];
@@ -566,11 +572,10 @@ export function FacturationClient() {
                     ]);
                     downloadPDF("facturation", "Facturation — Détail des passages", headers, rows);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                   PDF
-                </button>
+                </Button>
               </>
             )}
             {totalPages > 1 && (
@@ -579,18 +584,18 @@ export function FacturationClient() {
                   type="button"
                   disabled={page <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center w-8 h-8 rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-ardoise-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
-                <span className="text-sm font-medium text-gray-500 min-w-[3rem] text-center">{page} / {totalPages}</span>
+                <span className="text-sm font-medium text-ardoise-500 min-w-[3rem] text-center font-mono">{page} / {totalPages}</span>
                 <button
                   type="button"
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center w-8 h-8 rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-ardoise-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
               </div>
             )}
@@ -598,11 +603,11 @@ export function FacturationClient() {
         </div>
 
         {/* Filters */}
-        <div className="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
+        <div className="px-5 py-3 border-b border-ardoise-100 flex flex-wrap items-center gap-3">
           <select
             value={filterPractice}
             onChange={(e) => setFilterPractice(e.target.value)}
-            className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+            className="px-2.5 py-1.5 text-xs border border-ardoise-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
           >
             <option value="">Tous les cabinets</option>
             {practiceOptions.map((p) => (
@@ -613,7 +618,7 @@ export function FacturationClient() {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+            className="px-2.5 py-1.5 text-xs border border-ardoise-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
           >
             <option value="">Tous les statuts</option>
             {Object.entries(STATUS_CONFIG).map(([key, val]) => (
@@ -625,36 +630,37 @@ export function FacturationClient() {
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+            className="px-2.5 py-1.5 text-xs border border-ardoise-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent font-mono"
           />
-          <span className="text-xs text-gray-400">→</span>
+          <span className="text-xs text-ardoise-400">→</span>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+            className="px-2.5 py-1.5 text-xs border border-ardoise-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent font-mono"
           />
 
           {(filterPractice || filterStatus || dateFrom || dateTo) && (
-            <button
+            <Button
+              variant="ghost"
+              size="compact"
               type="button"
               onClick={() => { setFilterPractice(""); setFilterStatus(""); setDateFrom(""); setDateTo(""); }}
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
             >
               Réinitialiser
-            </button>
+            </Button>
           )}
         </div>
 
         {/* Table content */}
         {filteredPassages.length === 0 ? (
-          <div className="p-5 text-center text-sm text-gray-400">
+          <div className="p-5 text-center text-sm text-ardoise-400">
             Aucun passage ne correspond aux filtres.
           </div>
         ) : (
           <div className="md:overflow-x-auto">
             {/* Table header — desktop uniquement */}
-            <div className="hidden md:grid md:grid-cols-[16fr_12fr_10fr_12fr_11fr_12fr] md:min-w-[700px] border-b border-gray-200/60">
+            <div className="hidden md:grid md:grid-cols-[16fr_12fr_10fr_12fr_11fr_12fr] md:min-w-[700px] border-b border-ardoise-200/60">
               <SortableHeader column="practiceName" label="Cabinet" sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
               <SortableHeader column="careDate" label="Date" sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
               <SortableHeader column="careMoment" label="Moment" sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
@@ -667,22 +673,20 @@ export function FacturationClient() {
             {paginatedPassages.map((row) => {
               const style = STATUS_CONFIG[displayStatus(row.status)];
               return (
-                <div key={row.id} className="grid grid-cols-2 md:grid-cols-[16fr_12fr_10fr_12fr_11fr_12fr] md:min-w-[700px] md:items-center gap-y-1.5 md:gap-y-0 px-4 py-3 md:p-0 border-b border-gray-200/60 last:border-b-0 hover:bg-white/50 transition-colors">
-                  <div className="order-3 col-span-2 md:order-1 md:col-span-1 text-sm font-medium text-gray-900 md:font-normal md:text-gray-500 md:truncate md:px-5 md:py-3.5">{row.practiceName}</div>
-                  <div className="order-1 md:order-2 text-xs text-gray-500 whitespace-nowrap md:text-sm md:text-gray-900 md:px-5 md:py-3.5">{formatDateFr(row.careDate)}</div>
-                  <div className="hidden md:block md:order-3 md:px-5 md:py-3.5 md:text-sm md:text-gray-500">{row.careMoment.charAt(0).toUpperCase() + row.careMoment.slice(1)}</div>
-                  <div className="order-4 md:order-4 text-xs text-gray-500 md:text-sm md:font-medium md:text-gray-900 md:px-5 md:py-3.5"><span className="md:hidden">N° </span>{row.invoiceNumber}</div>
+                <div key={row.id} className="grid grid-cols-2 md:grid-cols-[16fr_12fr_10fr_12fr_11fr_12fr] md:min-w-[700px] md:items-center gap-y-1.5 md:gap-y-0 px-4 py-3 md:p-0 border-b border-ardoise-200/60 last:border-b-0 hover:bg-white/50 transition-colors">
+                  <div className="order-3 col-span-2 md:order-1 md:col-span-1 text-sm font-medium text-ardoise-900 md:font-normal md:text-ardoise-500 md:truncate md:px-5 md:py-3.5">{row.practiceName}</div>
+                  <div className="order-1 md:order-2 text-xs text-ardoise-500 whitespace-nowrap md:text-sm md:text-ardoise-900 md:px-5 md:py-3.5 font-mono">{formatDateFr(row.careDate)}</div>
+                  <div className="hidden md:block md:order-3 md:px-5 md:py-3.5 md:text-sm md:text-ardoise-500">{row.careMoment.charAt(0).toUpperCase() + row.careMoment.slice(1)}</div>
+                  <div className="order-4 md:order-4 text-xs text-ardoise-500 md:text-sm md:font-medium md:text-ardoise-900 md:px-5 md:py-3.5"><span className="md:hidden">N° </span>{row.invoiceNumber}</div>
                   <div className="order-5 md:order-5 text-right md:text-left md:px-5 md:py-3.5">
                     {style && (
-                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${style.bg} ${style.color}`}>
-                        {style.label}
-                      </span>
+                      <Badge tone={style.tone} dot>{style.label}</Badge>
                     )}
                     {row.status === "paye" && (
                       <ReconciliationBadge reconciliation={row.reconciliation} paymentDate={row.paymentDate} />
                     )}
                   </div>
-                  <div className="order-2 md:order-6 text-base font-semibold text-right whitespace-nowrap text-gray-900 md:px-5 md:py-3.5">{formatCurrency(parseFloat(row.totalAmount))}</div>
+                  <div className="order-2 md:order-6 text-base font-semibold text-right whitespace-nowrap text-ardoise-900 md:px-5 md:py-3.5 font-mono">{formatCurrency(parseFloat(row.totalAmount))}</div>
                 </div>
               );
             })}
@@ -718,7 +722,7 @@ function ReconciliationBadge({
     const [y, m, d] = reconciliation.bankTxDate.split("-");
     return (
       <p
-        className="text-[10px] text-emerald-600 mt-1 truncate"
+        className="text-[10px] text-menthe-600 mt-1 truncate"
         title={`Virement bancaire de ${formatCurrency(parseFloat(reconciliation.bankTxAmount))} reçu le ${formatDateFr(reconciliation.bankTxDate)}`}
       >
         ✓ Encaissé le {d}/{m}/{y}
@@ -737,7 +741,7 @@ function ReconciliationBadge({
       </p>
     );
   }
-  return <p className="text-[10px] text-gray-400 mt-1">En attente du virement</p>;
+  return <p className="text-[10px] text-ardoise-400 mt-1">En attente du virement</p>;
 }
 
 function SegmentRow({ color, label, value, pct, onClick }: {
@@ -745,13 +749,13 @@ function SegmentRow({ color, label, value, pct, onClick }: {
 }) {
   const inner = (
     <>
-      <span className="inline-flex items-center gap-1.5 text-xs text-gray-600">
+      <span className="inline-flex items-center gap-1.5 text-xs text-ardoise-600">
         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }}></span>
         {label}
       </span>
       <span className="text-xs">
-        <span className="font-semibold text-gray-900">{value}</span>
-        <span className="text-gray-400 ml-1.5">{pct.toFixed(0)}%</span>
+        <span className="font-semibold text-ardoise-900 font-mono">{value}</span>
+        <span className="text-ardoise-400 ml-1.5 font-mono">{pct.toFixed(0)}%</span>
       </span>
     </>
   );
@@ -760,7 +764,7 @@ function SegmentRow({ color, label, value, pct, onClick }: {
       <button
         type="button"
         onClick={onClick}
-        className="flex items-center justify-between w-full text-left hover:bg-gray-50 rounded-md px-1 py-0.5 transition-colors"
+        className="flex items-center justify-between w-full text-left hover:bg-ardoise-50 rounded-md px-1 py-0.5 transition-colors"
       >
         {inner}
       </button>
@@ -770,7 +774,7 @@ function SegmentRow({ color, label, value, pct, onClick }: {
 }
 
 const STATUS_TOOLTIPS: Record<string, { dot: string; text: string }> = {
-  totalCA: { dot: "bg-green-600", text: "Total CA — Payé : somme de toutes les factures pour lesquelles le virement a été reçu." },
+  totalCA: { dot: "bg-menthe-600", text: "Total CA — Payé : somme de toutes les factures pour lesquelles le virement a été reçu." },
   en_attente: { dot: "bg-amber-500", text: "En attente : factures créées, en cours de sécurisation ou de télétransmission à la caisse." },
   rejete: { dot: "bg-red-600", text: "Rejeté : paiement refusé par la caisse. Consultez le motif dans le détail ci-dessous." },
 };
@@ -784,12 +788,12 @@ function InfoBadge({ tooltip }: { tooltip: { dot: string; text: string } }) {
         type="button"
         onClick={() => setOpen(!open)}
         onBlur={() => setOpen(false)}
-        className="flex items-center justify-center w-5 h-5 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-500 hover:text-gray-700 text-xs font-semibold transition-colors"
+        className="flex items-center justify-center w-5 h-5 rounded-full bg-ardoise-200 hover:bg-ardoise-300 text-ardoise-500 hover:text-ardoise-700 text-xs font-semibold transition-colors"
       >
         i
       </button>
       {open && (
-        <div className="absolute top-7 left-0 w-64 bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs text-gray-600 z-[60]">
+        <div className="absolute top-7 left-0 w-64 bg-white border border-ardoise-200 rounded-lg shadow-lg p-3 text-xs text-ardoise-600 z-[60]">
           <span className={`inline-block w-2 h-2 rounded-full ${tooltip.dot} mr-2`} />
           {tooltip.text}
         </div>
@@ -836,21 +840,21 @@ function RejectionBlock({ okCount, rejectedCount, year }: { okCount: number; rej
   const rejectPct = total > 0 ? (rejectedCount / total) * 100 : 0;
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5">
+    <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5">
       <div className="mb-5 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">Taux de rejet</h2>
-          <p className="text-xs text-gray-400">Répartition des factures traitées</p>
+          <h2 className="text-base font-bold text-ardoise-900">Taux de rejet</h2>
+          <p className="text-xs text-ardoise-400">Répartition des factures traitées</p>
         </div>
         <button
           type="button"
           onClick={() => setShowAlertModal(true)}
           className={`flex items-center justify-center w-7 h-7 rounded-md transition-all ${
-            alertConfigured ? "text-brand-600 hover:bg-brand-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            alertConfigured ? "text-brand-600 hover:bg-brand-50" : "text-ardoise-400 hover:text-ardoise-600 hover:bg-ardoise-100"
           }`}
           title="Alerte seuil"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={alertConfigured ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={alertConfigured ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
         </button>
       </div>
 
@@ -860,7 +864,7 @@ function RejectionBlock({ okCount, rejectedCount, year }: { okCount: number; rej
             <PieChart>
               {(() => {
                 const pieData = [
-                  { name: "ok", value: okCount, color: "#16a34a" },
+                  { name: "ok", value: okCount, color: "#2FA169" },
                   { name: "rejete", value: rejectedCount, color: "#dc2626" },
                 ].filter((d) => d.value > 0);
                 return (
@@ -881,22 +885,22 @@ function RejectionBlock({ okCount, rejectedCount, year }: { okCount: number; rej
               <Tooltip
                 formatter={(value: unknown, name: unknown) =>
                   [`${value} facture${Number(value) > 1 ? "s" : ""}`, name === "rejete" ? "Rejetées" : "Non rejetées"]}
-                contentStyle={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 4, fontSize: 12 }}
+                contentStyle={{ background: "white", border: "1px solid #E1DBEC", borderRadius: 4, fontSize: 12 }}
               />
             </PieChart>
           </ResponsiveContainer>
-          <span className={`absolute inset-0 flex items-center justify-center pointer-events-none text-xl font-bold ${rejectedCount > 0 ? "text-red-600" : "text-green-600"}`}>
+          <span className={`absolute inset-0 flex items-center justify-center pointer-events-none text-xl font-bold font-mono ${rejectedCount > 0 ? "text-red-600" : "text-menthe-600"}`}>
             {rejectPct.toFixed(1)}%
           </span>
         </div>
 
         <div className="space-y-3">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-gray-400">Total traité {year}</p>
-            <p className="text-xl font-bold text-gray-900">{total} facture{total > 1 ? "s" : ""}</p>
+            <p className="text-[10px] uppercase tracking-wider text-ardoise-400">Total traité {year}</p>
+            <p className="text-xl font-bold text-ardoise-900">{total} facture{total > 1 ? "s" : ""}</p>
           </div>
           <div className="space-y-1.5">
-            <SegmentRow color="#16a34a" label="Non rejetées" value={String(okCount)} pct={okPct} />
+            <SegmentRow color="#2FA169" label="Non rejetées" value={String(okCount)} pct={okPct} />
             <SegmentRow color="#dc2626" label="Rejetées" value={String(rejectedCount)} pct={rejectPct} />
           </div>
         </div>
@@ -905,17 +909,17 @@ function RejectionBlock({ okCount, rejectedCount, year }: { okCount: number; rej
       <Modal open={showAlertModal} onClose={() => setShowAlertModal(false)}>
         <div className="flex flex-col gap-5">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Alerte taux de rejet</h3>
-            <p className="text-sm text-gray-500 mt-1">
+            <h3 className="text-lg font-bold text-ardoise-900">Alerte taux de rejet</h3>
+            <p className="text-sm text-ardoise-500 mt-1">
               Recevez un email si plus d&apos;un certain pourcentage de vos bordereaux des 30 derniers jours sont rejetés.
             </p>
           </div>
           {!alertLoaded ? (
-            <div className="py-6 text-center text-sm text-gray-400">Chargement…</div>
+            <div className="py-6 text-center text-sm text-ardoise-400">Chargement…</div>
           ) : (
             <>
               <div>
-                <label htmlFor="rejection-threshold" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="rejection-threshold" className="block text-sm font-medium text-ardoise-700 mb-1">
                   Seuil de rejet (%)
                 </label>
                 <input
@@ -927,9 +931,9 @@ function RejectionBlock({ okCount, rejectedCount, year }: { okCount: number; rej
                   value={alertThreshold}
                   onChange={(e) => setAlertThreshold(e.target.value)}
                   placeholder="Ex : 5"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                  className="w-full border border-ardoise-200 rounded-lg px-3 py-2.5 text-sm text-ardoise-900 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent font-mono"
                 />
-                <p className="text-xs text-gray-400 mt-1.5">
+                <p className="text-xs text-ardoise-400 mt-1.5">
                   Email envoyé au maximum une fois tous les 14 jours. Échantillon minimum de 10 bordereaux sur la période.
                 </p>
               </div>
@@ -939,20 +943,21 @@ function RejectionBlock({ okCount, rejectedCount, year }: { okCount: number; rej
                   role="switch"
                   aria-checked={alertEnabled}
                   onClick={() => setAlertEnabled((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${alertEnabled ? "bg-brand-600" : "bg-gray-200"}`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${alertEnabled ? "bg-brand-600" : "bg-ardoise-200"}`}
                 >
                   <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${alertEnabled ? "translate-x-5" : "translate-x-0"}`} />
                 </button>
-                <span className="text-sm text-gray-700">Alerte activée</span>
+                <span className="text-sm text-ardoise-700">Alerte activée</span>
               </label>
-              <button
+              <Button
+                variant="cta"
                 type="button"
                 disabled={!alertThreshold || alertSaving}
                 onClick={saveAlert}
-                className="w-full bg-brand-600 text-white text-sm font-medium py-2.5 rounded-lg transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full"
               >
                 {alertSaving ? "Enregistrement…" : "Enregistrer l'alerte"}
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -983,13 +988,13 @@ function SortableHeader({
         type="button"
         onClick={() => onSort(column)}
         className={`inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider transition-colors ${
-          isActive ? "text-gray-700" : "text-gray-400 hover:text-gray-600"
+          isActive ? "text-ardoise-700" : "text-ardoise-400 hover:text-ardoise-600"
         }`}
       >
         {label}
         <span className="flex flex-col -space-y-1">
-          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={isActive && sortDirection === "asc" ? "text-gray-700" : "text-gray-300"}><polyline points="18 15 12 9 6 15"/></svg>
-          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={isActive && sortDirection === "desc" ? "text-gray-700" : "text-gray-300"}><polyline points="6 9 12 15 18 9"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={isActive && sortDirection === "asc" ? "text-ardoise-700" : "text-ardoise-300"}><polyline points="18 15 12 9 6 15"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={isActive && sortDirection === "desc" ? "text-ardoise-700" : "text-ardoise-300"}><polyline points="6 9 12 15 18 9"/></svg>
         </span>
       </button>
     </div>

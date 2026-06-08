@@ -2,33 +2,81 @@
 @plugin "@tailwindcss/typography";
 
 @theme {
-  --color-brand-50: #FFF7ED;
-  --color-brand-100: #FFEDD5;
-  --color-brand-200: #FED7AA;
-  --color-brand-300: #FDBA74;
-  --color-brand-400: #FB923C;
-  --color-brand-500: #F97316;
+  /* Orange & Pêche charte ActiDec v3 — 600 #EC6C12 (CTA) · 500 #FBB07A (pêche, accent doux) · 700 #D14E0A. */
+  --color-brand-50: #FEF7F1;
+  --color-brand-100: #FDEEE0;
+  --color-brand-200: #FCD9BD;
+  --color-brand-300: #FBCBA3;
+  --color-brand-400: #FBBD8C;
+  --color-brand-500: #FBB07A;
   --color-brand-600: #EC6C12;
-  --color-brand-700: #C2580F;
-  --color-brand-800: #9A3412;
+  --color-brand-700: #D14E0A;
+  --color-brand-800: #B5470A;
   --color-brand-900: #7C2D12;
   --color-brand-950: #431407;
 
-  --color-secondary-50: #FAF5FF;
-  --color-secondary-100: #F3E8FF;
-  --color-secondary-200: #E9D5FF;
-  --color-secondary-300: #D8B4FE;
-  --color-secondary-400: #B98ADA;
-  --color-secondary-500: #9060B6;
-  --color-secondary-600: #7C4FA0;
-  --color-secondary-700: #6B3F8A;
-  --color-secondary-800: #5A3374;
-  --color-secondary-900: #49285E;
-  --color-secondary-950: #2E1A3D;
+  /* Violet charte ActiDec v3 — couleur de marque. 900 #5C3A8A = violet profond canonique.
+     (Override de la palette `violet` Tailwind par défaut.) */
+  --color-violet-50: #F8F7FC;
+  --color-violet-100: #F0E8FA;
+  --color-violet-200: #C4A8E0;
+  --color-violet-300: #BA9CD8;
+  --color-violet-400: #B08FCF;
+  --color-violet-500: #AA84C8;
+  --color-violet-600: #A479C4;
+  --color-violet-700: #9060B6;
+  --color-violet-800: #6B459C;
+  --color-violet-900: #5C3A8A;
+  --color-violet-950: #2B1A47;
+
+  /* Menthe charte ActiDec v3 — gains, économies, optimisations, états de succès.
+     Ancres charte : 100 #E6F7EE · 200 #C5EBD7 · 500 #3DB87A · 600 #2FA169. */
+  --color-menthe-50: #F0FBF5;
+  --color-menthe-100: #E6F7EE;
+  --color-menthe-200: #C5EBD7;
+  --color-menthe-300: #9BDCBA;
+  --color-menthe-400: #5FC998;
+  --color-menthe-500: #3DB87A;
+  --color-menthe-600: #2FA169;
+  --color-menthe-700: #278456;
+  --color-menthe-800: #226B47;
+  --color-menthe-900: #1E583C;
+  --color-menthe-950: #0C3122;
+
+  /* Ardoise charte ActiDec v3 — neutres teintés violet. Texte = encre 900 #1A0F2E. */
+  --color-ardoise-50: #F8F7FC;
+  --color-ardoise-100: #EFEAF6;
+  --color-ardoise-200: #E1DBEC;
+  --color-ardoise-300: #C8C1D4;
+  --color-ardoise-400: #A79EB5;
+  --color-ardoise-500: #847A95;
+  --color-ardoise-600: #645A75;
+  --color-ardoise-700: #463C58;
+  --color-ardoise-800: #2E2440;
+  --color-ardoise-900: #1A0F2E;
+  --color-ardoise-950: #120A20;
+
+  /* Sémantiques charte — Alerte (solde insuffisant / retard).
+     Action = brand-600 (orange) · Gain = menthe-500 · Neutre = ardoise-500 (#847A95). */
+  --color-alerte-50: #FCECEC;
+  --color-alerte-100: #F9D9D9;
+  --color-alerte-500: #E05252;
+  --color-alerte-600: #C73E3E;
+
+  /* Polices charte ActiDec v3 — DM Sans (interface), JetBrains Mono (chiffres) */
+  --font-sans: var(--font-dm-sans), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", monospace;
 }
 
-* {
-  font-family: var(--font-sora), system-ui, sans-serif;
+/* DM Sans est posé sur le <body> (cf. layout.tsx) et hérité par tout le texte.
+   On NE met PAS de sélecteur universel `*` : hors layer, il écraserait les
+   utilitaires `font-mono` / `font-sans`. On force seulement l'héritage sur les
+   contrôles de formulaire, qui sont les seuls à ne pas hériter de la police. */
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
 }
 
 button,
@@ -38,7 +86,8 @@ button,
 }
 
 body {
-  background: linear-gradient(135deg, #FFFFFE 0%, #FFFEFD 50%, #FFFDFB 100%);
+  /* Fond « brume » charte ActiDec v3 — lavande/gris très clair teinté violet (pas blanc). */
+  background: #FCFBFE;
   letter-spacing: -0.02em;
 }
 
@@ -103,6 +152,21 @@ body {
 .animate-step-in {
   animation: step-in 0.3s ease-out both;
 }
+
+/* Logo — pulsation douce du point "pouls" (charte ActiDec v3) */
+@keyframes logo-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.logo-pulse {
+  animation: logo-pulse 1.8s ease-in-out infinite;
+}
+
+/* Ombres charte ActiDec v3 — 3 niveaux très discrets (« un produit financier ne flotte pas »). */
+.shadow-1 { box-shadow: 0 1px 2px rgba(26, 15, 46, 0.04), 0 2px 6px rgba(26, 15, 46, 0.05); }
+.shadow-2 { box-shadow: 0 4px 14px rgba(26, 15, 46, 0.08); }
+.shadow-3 { box-shadow: 0 16px 40px rgba(26, 15, 46, 0.14); }
 
 /* Mobile drawer */
 .drawer-overlay {

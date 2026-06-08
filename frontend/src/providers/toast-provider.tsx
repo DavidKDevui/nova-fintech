@@ -15,7 +15,7 @@ export function ToastProvider() {
         toastOptions={{
           style: {
             borderRadius: "0",
-            fontFamily: "var(--font-sora), system-ui, sans-serif",
+            fontFamily: "var(--font-dm-sans), system-ui, sans-serif",
             letterSpacing: "-0.02em",
           },
         }}

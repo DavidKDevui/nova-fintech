@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { completeOnboardingAction } from "@/actions/onboarding";
 import { verifyRppsAction } from "@/actions/verify-rpps";
+import { Button } from "@/components/button";
 
 const FORM_STEPS = [
   { id: "identity", label: "Identité" },
@@ -74,7 +75,7 @@ export function OnboardingModal({ open }: { open: boolean }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in-fast p-4">
-      <div className="w-full max-w-4xl h-full max-h-[600px] bg-white border border-gray-200 rounded-2xl animate-fade-up-fast overflow-hidden flex flex-col">
+      <div className="w-full max-w-4xl h-full max-h-[600px] bg-white border border-ardoise-200 rounded-2xl animate-fade-up-fast overflow-hidden flex flex-col">
 
         {/* ── Welcome screen ── */}
         {screen === "welcome" && (
@@ -88,23 +89,23 @@ export function OnboardingModal({ open }: { open: boolean }) {
                 </svg>
               </div>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-bold text-ardoise-900 mb-2">
               Bienvenue sur Actidec
             </h2>
-            <p className="text-sm text-gray-500 mb-2 max-w-xs mx-auto">
+            <p className="text-sm text-ardoise-500 mb-2 max-w-xs mx-auto">
               Configurons votre espace en quelques étapes pour personnaliser votre expérience.
             </p>
-            <p className="text-xs text-gray-400 mb-8">
+            <p className="text-xs text-ardoise-400 mb-8">
               Cela ne prendra que 2 minutes.
             </p>
-            <button
+            <Button
+              variant="cta"
               type="button"
               onClick={() => setScreen("form")}
-              className="inline-flex items-center gap-2.5 bg-brand-600 px-6 py-3 rounded-lg text-sm font-medium text-white transition-all hover:bg-brand-700 active:scale-[0.98]"
             >
               Commencer
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-            </button>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </Button>
           </div>
         )}
 
@@ -112,7 +113,7 @@ export function OnboardingModal({ open }: { open: boolean }) {
         {screen === "form" && (
           <div className="flex-1 flex flex-col">
             {/* Progress bar */}
-            <div className="h-1 bg-gray-100">
+            <div className="h-1 bg-ardoise-100">
               <div
                 className="h-full bg-gradient-to-r from-brand-500 to-brand-600 transition-all duration-500 ease-out"
                 style={{ width: `${progress}%` }}
@@ -122,7 +123,7 @@ export function OnboardingModal({ open }: { open: boolean }) {
             <div className="flex-1 flex flex-col p-5 sm:p-10">
               {/* Step indicators */}
               <div className="mb-8">
-                <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-gray-400 mb-3 overflow-x-auto">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-ardoise-400 mb-3 overflow-x-auto">
                   {FORM_STEPS.map((s, i) => (
                     <span key={s.id} className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                       <span
@@ -131,7 +132,7 @@ export function OnboardingModal({ open }: { open: boolean }) {
                             ? "border-brand-600 bg-brand-600 text-white"
                             : i === formStep
                               ? "border-brand-600 text-brand-600"
-                              : "border-gray-200 text-gray-300"
+                              : "border-ardoise-200 text-ardoise-300"
                         }`}
                       >
                         {i < formStep ? (
@@ -140,22 +141,22 @@ export function OnboardingModal({ open }: { open: boolean }) {
                           i + 1
                         )}
                       </span>
-                      <span className={`hidden sm:inline ${i === formStep ? "text-gray-900 font-medium" : ""}`}>
+                      <span className={`hidden sm:inline ${i === formStep ? "text-ardoise-900 font-medium" : ""}`}>
                         {s.label}
                       </span>
                       {i < FORM_STEPS.length - 1 && (
-                        <span className="w-6 h-px bg-gray-200" />
+                        <span className="w-6 h-px bg-ardoise-200" />
                       )}
                     </span>
                   ))}
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">
+                <h2 className="text-2xl font-bold text-ardoise-900">
                   {formStep === 0 && "Comment vous appelez-vous ?"}
                   {formStep === 1 && "Quelle est votre profession ?"}
                   {formStep === 2 && "Quand avez-vous débuté ?"}
                   {formStep === 3 && "Quel est votre régime fiscal ?"}
                 </h2>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-ardoise-500">
                   {formStep === 0 && "Renseignez votre nom et prénom pour personnaliser votre espace."}
                   {formStep === 1 && "Sélectionnez votre métier pour personnaliser votre expérience."}
                   {formStep === 2 && "Indiquez la date de début de votre activité libérale."}
@@ -167,35 +168,46 @@ export function OnboardingModal({ open }: { open: boolean }) {
               <div key={formStep} className="flex-1 animate-step-in">
                 {formStep === 0 && (
                   <div className="space-y-4">
+                    <div>
+                    <label htmlFor="firstName" className="block text-sm font-medium text-ardoise-700 mb-1.5">Prénom</label>
                     <div className="relative group">
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-300 transition-colors group-focus-within:text-brand-600">
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 text-ardoise-300 transition-colors group-focus-within:text-brand-600">
                         <UserIcon />
                       </div>
                       <input
+                        id="firstName"
                         type="text"
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                         placeholder="Prénom"
-                        className="w-full border-b-2 border-gray-200 bg-transparent pl-8 pr-4 py-4 text-[0.9rem] transition-all placeholder:text-gray-400 placeholder:font-medium hover:border-gray-400 focus:border-brand-500 focus:outline-none"
+                        className="w-full border-b-2 border-ardoise-200 bg-transparent pl-8 pr-4 py-4 text-[0.9rem] transition-all placeholder:text-ardoise-400 placeholder:font-medium hover:border-ardoise-400 focus:border-brand-500 focus:outline-none"
                       />
                     </div>
+                    </div>
+                    <div>
+                    <label htmlFor="lastName" className="block text-sm font-medium text-ardoise-700 mb-1.5">Nom</label>
                     <div className="relative group">
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-300 transition-colors group-focus-within:text-brand-600">
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 text-ardoise-300 transition-colors group-focus-within:text-brand-600">
                         <UserIcon />
                       </div>
                       <input
+                        id="lastName"
                         type="text"
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                         placeholder="Nom"
-                        className="w-full border-b-2 border-gray-200 bg-transparent pl-8 pr-4 py-4 text-[0.9rem] transition-all placeholder:text-gray-400 placeholder:font-medium hover:border-gray-400 focus:border-brand-500 focus:outline-none"
+                        className="w-full border-b-2 border-ardoise-200 bg-transparent pl-8 pr-4 py-4 text-[0.9rem] transition-all placeholder:text-ardoise-400 placeholder:font-medium hover:border-ardoise-400 focus:border-brand-500 focus:outline-none"
                       />
                     </div>
+                    </div>
+                    <div>
+                    <label htmlFor="rppsNumber" className="block text-sm font-medium text-ardoise-700 mb-1.5">Numéro RPPS</label>
                     <div className="relative group">
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-300 transition-colors group-focus-within:text-brand-600">
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 text-ardoise-300 transition-colors group-focus-within:text-brand-600">
                         <RppsIcon />
                       </div>
                       <input
+                        id="rppsNumber"
                         type="text"
                         inputMode="numeric"
                         maxLength={11}
@@ -206,14 +218,15 @@ export function OnboardingModal({ open }: { open: boolean }) {
                           setRppsError("");
                         }}
                         placeholder="Numéro RPPS (11 chiffres)"
-                        className="w-full border-b-2 border-gray-200 bg-transparent pl-8 pr-4 py-4 text-[0.9rem] transition-all placeholder:text-gray-400 placeholder:font-medium hover:border-gray-400 focus:border-brand-500 focus:outline-none"
+                        className="w-full border-b-2 border-ardoise-200 bg-transparent pl-8 pr-4 py-4 text-[0.9rem] transition-all placeholder:text-ardoise-400 placeholder:font-medium hover:border-ardoise-400 focus:border-brand-500 focus:outline-none font-mono"
                       />
+                    </div>
                     </div>
                     {rppsError && (
                       <p className="text-sm text-red-600 mt-1">{rppsError}</p>
                     )}
                     {rppsVerifying && (
-                      <p className="text-sm text-gray-500 mt-1">Vérification en cours...</p>
+                      <p className="text-sm text-ardoise-500 mt-1">Vérification en cours...</p>
                     )}
                   </div>
                 )}
@@ -225,23 +238,23 @@ export function OnboardingModal({ open }: { open: boolean }) {
                         key={p.value}
                         type="button"
                         onClick={() => setProfession(p.value)}
-                        className={`flex items-center gap-4 w-full p-4 border-2 text-left transition-all hover:border-gray-400 ${
+                        className={`flex items-center gap-4 w-full p-4 border-2 text-left transition-all hover:border-ardoise-400 ${
                           profession === p.value
                             ? "border-brand-500 bg-brand-50"
-                            : "border-gray-200"
+                            : "border-ardoise-200"
                         }`}
                       >
                         <div className={`flex items-center justify-center w-12 h-12 rounded-lg transition-colors ${
-                          profession === p.value ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-500"
+                          profession === p.value ? "bg-brand-600 text-white" : "bg-ardoise-100 text-ardoise-500"
                         }`}>
                           <p.icon />
                         </div>
                         <div>
-                          <span className="font-medium text-gray-900">{p.label}</span>
-                          <p className="text-xs text-gray-400 mt-0.5">Professionnel de santé</p>
+                          <span className="font-medium text-ardoise-900">{p.label}</span>
+                          <p className="text-xs text-ardoise-400 mt-0.5">Professionnel de santé</p>
                         </div>
                         {profession === p.value && (
-                          <svg className="ml-auto text-brand-600" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          <svg className="ml-auto text-brand-600" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                         )}
                       </button>
                     ))}
@@ -250,19 +263,21 @@ export function OnboardingModal({ open }: { open: boolean }) {
 
                 {formStep === 2 && (
                   <div>
+                    <label htmlFor="activityStartDate" className="block text-sm font-medium text-ardoise-700 mb-1.5">Date de début d&apos;activité</label>
                     <div className="relative group">
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-300 transition-colors group-focus-within:text-brand-600">
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 text-ardoise-300 transition-colors group-focus-within:text-brand-600">
                         <CalendarIcon />
                       </div>
                       <input
+                        id="activityStartDate"
                         type="date"
                         value={activityStartDate}
                         onChange={(e) => setActivityStartDate(e.target.value)}
                         max={new Date().toISOString().split("T")[0]}
-                        className="w-full border-b-2 border-gray-200 bg-transparent pl-8 pr-4 py-4 text-[0.9rem] transition-all hover:border-gray-400 focus:border-brand-500 focus:outline-none"
+                        className="w-full border-b-2 border-ardoise-200 bg-transparent pl-8 pr-4 py-4 text-[0.9rem] transition-all hover:border-ardoise-400 focus:border-brand-500 focus:outline-none font-mono"
                       />
                     </div>
-                    <p className="mt-3 text-xs text-gray-400">
+                    <p className="mt-3 text-xs text-ardoise-400">
                       Date à laquelle vous avez commencé votre activité libérale.
                     </p>
                   </div>
@@ -275,24 +290,24 @@ export function OnboardingModal({ open }: { open: boolean }) {
                         key={r.value}
                         type="button"
                         onClick={() => setTaxRegime(r.value)}
-                        className={`flex items-start gap-4 w-full p-4 border-2 text-left transition-all hover:border-gray-400 ${
+                        className={`flex items-start gap-4 w-full p-4 border-2 text-left transition-all hover:border-ardoise-400 ${
                           taxRegime === r.value
                             ? "border-brand-500 bg-brand-50"
-                            : "border-gray-200"
+                            : "border-ardoise-200"
                         }`}
                       >
                         <div className={`flex items-center justify-center w-5 h-5 mt-0.5 border-2 shrink-0 transition-all ${
                           taxRegime === r.value
                             ? "border-brand-600 bg-brand-600"
-                            : "border-gray-300"
+                            : "border-ardoise-300"
                         }`}>
                           {taxRegime === r.value && (
                             <CheckIcon size={12} stroke="white" />
                           )}
                         </div>
                         <div>
-                          <span className="font-medium text-gray-900">{r.label}</span>
-                          <p className="text-xs text-gray-400 mt-0.5">{r.description}</p>
+                          <span className="font-medium text-ardoise-900">{r.label}</span>
+                          <p className="text-xs text-ardoise-400 mt-0.5">{r.description}</p>
                         </div>
                       </button>
                     ))}
@@ -302,17 +317,18 @@ export function OnboardingModal({ open }: { open: boolean }) {
               </div>
 
               {/* Navigation */}
-              <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-100">
-                <button
+              <div className="flex items-center justify-between mt-8 pt-6 border-t border-ardoise-100">
+                <Button
+                  variant="ghost"
                   type="button"
                   onClick={() => formStep === 0 ? setScreen("welcome") : setFormStep(formStep - 1)}
-                  className="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                   Retour
-                </button>
+                </Button>
 
-                <button
+                <Button
+                  variant="cta"
                   type="button"
                   onClick={async () => {
                     if (formStep === 0) {
@@ -332,11 +348,10 @@ export function OnboardingModal({ open }: { open: boolean }) {
                     }
                   }}
                   disabled={!canGoNext || rppsVerifying || undefined}
-                  className="flex items-center gap-2 bg-brand-600 px-5 py-2.5 rounded-lg text-sm font-medium text-white transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-30 disabled:active:scale-100"
                 >
                   {rppsVerifying ? "Vérification..." : "Continuer"}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                </button>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </Button>
               </div>
             </div>
           </div>
@@ -351,15 +366,15 @@ export function OnboardingModal({ open }: { open: boolean }) {
                   {(firstName[0]! + lastName[0]!).toUpperCase()}
                 </div>
               </div>
-              <h2 className="text-2xl font-bold text-gray-900">
+              <h2 className="text-2xl font-bold text-ardoise-900">
                 Tout est bon, {firstName} ?
               </h2>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-ardoise-500">
                 Vérifiez vos informations avant de finaliser.
               </p>
             </div>
 
-            <div className="space-y-0 border border-gray-200 divide-y divide-gray-200 mb-8">
+            <div className="space-y-0 border border-ardoise-200 divide-y divide-ardoise-200 mb-8">
               <RecapRow label="Nom complet" value={`${firstName} ${lastName}`} />
               <RecapRow label="Numéro RPPS" value={rppsNumber} />
               <RecapRow label="Profession" value={professionLabel} />
@@ -372,14 +387,14 @@ export function OnboardingModal({ open }: { open: boolean }) {
             )}
 
             <div className="flex items-center justify-between">
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => setScreen("form")}
-                className="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                 Modifier
-              </button>
+              </Button>
 
               <form action={action}>
                 <input type="hidden" name="firstName" value={firstName} />
@@ -388,14 +403,14 @@ export function OnboardingModal({ open }: { open: boolean }) {
                 <input type="hidden" name="profession" value={profession} />
                 <input type="hidden" name="activityStartDate" value={activityStartDate} />
                 <input type="hidden" name="taxRegime" value={taxRegime} />
-                <button
+                <Button
+                  variant="cta"
                   type="submit"
                   disabled={pending}
-                  className="flex items-center gap-2 bg-brand-600 px-5 py-2.5 rounded-lg text-sm font-medium text-white transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
                 >
                   {pending ? "Enregistrement..." : "Confirmer et commencer"}
                   <CheckIcon size={16} />
-                </button>
+                </Button>
               </form>
             </div>
           </div>
@@ -409,8 +424,8 @@ export function OnboardingModal({ open }: { open: boolean }) {
 function RecapRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between px-4 py-3.5">
-      <span className="text-sm text-gray-500">{label}</span>
-      <span className="text-sm font-medium text-gray-900">{value}</span>
+      <span className="text-sm text-ardoise-500">{label}</span>
+      <span className="text-sm font-medium text-ardoise-900">{value}</span>
     </div>
   );
 }

@@ -294,7 +294,6 @@ export function OptimizationClient() {
       </div>
 
       <div className="relative space-y-8">
-        <DataMissingOverlay bankConnected={bankConnected} />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -358,7 +357,7 @@ export function OptimizationClient() {
                     <span
                       className={`self-start inline-block text-[8px] font-bold uppercase tracking-wider px-1.5 py-[1px] rounded-full mb-3 ${
                         card.tag === "Optimisation sociale"
-                          ? "bg-emerald-400/90 text-emerald-950"
+                          ? "bg-menthe-400/90 text-menthe-950"
                           : "bg-violet-400/90 text-violet-950"
                       }`}
                     >
@@ -381,7 +380,7 @@ export function OptimizationClient() {
                       onClick={(e) => e.preventDefault()}
                     >
                       {card.amountAuto ? (
-                        <span className="text-sm font-semibold text-white bg-white/15 backdrop-blur-sm rounded-md px-3 py-1.5">
+                        <span className="text-sm font-semibold text-white bg-white/15 backdrop-blur-sm rounded-md px-3 py-1.5 font-mono">
                           {formatEur(amount)} <span className="text-[10px] font-normal text-white/70">/ an (auto)</span>
                         </span>
                       ) : (
@@ -394,7 +393,7 @@ export function OptimizationClient() {
                             value={amount}
                             onChange={(e) => setAmount(card.key, Number(e.target.value))}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-28 text-sm font-semibold text-white bg-white/15 backdrop-blur-sm rounded-md px-3 py-1.5 outline-none focus:bg-white/25 [&::-webkit-inner-spin-button]:appearance-none"
+                            className="w-28 text-sm font-semibold text-white bg-white/15 backdrop-blur-sm rounded-md px-3 py-1.5 outline-none focus:bg-white/25 [&::-webkit-inner-spin-button]:appearance-none font-mono"
                           />
                           <span className="text-[10px] text-white/70">
                             € / an{max != null ? ` · max ${formatEur(max)}` : ""}
@@ -460,15 +459,15 @@ export function OptimizationClient() {
               showAfter={hasOptim}
             />
             <div className="pt-2">
-              <div className="text-xs text-gray-500 mb-2">Tranche marginale d&apos;imposition</div>
+              <div className="text-xs text-ardoise-500 mb-2">Tranche marginale d&apos;imposition</div>
               <div className="flex gap-1">
                 {["0%", "11%", "30%", "41%", "45%"].map((t, i) => (
                   <span
                     key={t}
-                    className={`flex-1 text-center text-[10px] font-bold py-1 rounded ${
+                    className={`flex-1 text-center text-[10px] font-bold py-1 rounded font-mono ${
                       i === fiscalAfter.trancheIndex
                         ? "bg-brand-500 text-white"
-                        : "bg-gray-100 text-gray-500"
+                        : "bg-ardoise-100 text-ardoise-500"
                     }`}
                   >
                     {t}
@@ -490,13 +489,14 @@ export function OptimizationClient() {
               before={hasOptim ? formatEur(gainAnnuel) : "—"}
               after={hasOptim ? formatEur(gainAnnuel) : "—"}
               showAfter={false}
-              valueClass={hasOptim && gainAnnuel > 0 ? "text-emerald-600" : undefined}
+              valueClass={hasOptim && gainAnnuel > 0 ? "text-menthe-600" : undefined}
             />
           </ImpactSection>
         </aside>
       </div>
 
         <RecommendationsSection />
+        <DataMissingOverlay bankConnected={bankConnected} />
       </div>
 
       <FloatingChat
@@ -536,8 +536,8 @@ function computeFiscal(
 
 function ImpactSection({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-4">
-      <h3 className="text-base font-semibold text-gray-900 mb-4">{title}</h3>
+    <section className="rounded-xl border border-ardoise-200 bg-white p-4">
+      <h3 className="text-base font-semibold text-ardoise-900 mb-4">{title}</h3>
       <div className="space-y-1">{children}</div>
     </section>
   );
@@ -562,21 +562,21 @@ function ImpactRow({
   return (
     <div className="py-1.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-gray-500">{label}</span>
+        <span className="text-xs text-ardoise-500">{label}</span>
         {showAfter && !sameValue ? (
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-400 line-through">{before}</span>
-            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+            <span className="text-xs font-medium text-ardoise-400 line-through font-mono">{before}</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-ardoise-400">
               <line x1="5" y1="12" x2="19" y2="12" />
               <polyline points="12 5 19 12 12 19" />
             </svg>
-            <span className={`text-sm font-semibold ${valueClass ?? "text-brand-600"}`}>{after}</span>
+            <span className={`text-sm font-semibold font-mono ${valueClass ?? "text-brand-600"}`}>{after}</span>
           </div>
         ) : (
-          <span className={`text-sm font-semibold ${valueClass ?? "text-gray-900"}`}>{before}</span>
+          <span className={`text-sm font-semibold font-mono ${valueClass ?? "text-ardoise-900"}`}>{before}</span>
         )}
       </div>
-      {note && <div className="text-[10px] text-gray-400 mt-0.5">{note}</div>}
+      {note && <div className="text-[10px] text-ardoise-400 mt-0.5">{note}</div>}
     </div>
   );
 }
@@ -589,7 +589,7 @@ const SEVERITY_STYLES: Record<Recommendation["severity"], { dot: string; chip: s
   critical:    { dot: "bg-red-500",    chip: "bg-red-50 text-red-700",       chipLabel: "Critique" },
   warning:     { dot: "bg-amber-500",  chip: "bg-amber-50 text-amber-700",   chipLabel: "À surveiller" },
   opportunity: { dot: "bg-brand-500",  chip: "bg-brand-50 text-brand-700",   chipLabel: "Opportunité" },
-  info:        { dot: "bg-gray-400",   chip: "bg-gray-100 text-gray-600",    chipLabel: "Info" },
+  info:        { dot: "bg-ardoise-400",   chip: "bg-ardoise-100 text-ardoise-600",    chipLabel: "Info" },
 };
 
 function RecommendationsSection() {
@@ -606,12 +606,12 @@ function RecommendationsSection() {
 
   if (recos === null) {
     return (
-      <section className="rounded-xl border border-gray-200 bg-white p-5">
+      <section className="rounded-xl border border-ardoise-200 bg-white p-5">
         <div className="animate-pulse space-y-3">
-          <div className="h-4 bg-gray-200 rounded w-64" />
-          <div className="h-3 bg-gray-200 rounded w-48" />
-          <div className="h-16 bg-gray-100 rounded" />
-          <div className="h-16 bg-gray-100 rounded" />
+          <div className="h-4 bg-ardoise-200 rounded w-64" />
+          <div className="h-3 bg-ardoise-200 rounded w-48" />
+          <div className="h-16 bg-ardoise-100 rounded" />
+          <div className="h-16 bg-ardoise-100 rounded" />
         </div>
       </section>
     );
@@ -619,9 +619,9 @@ function RecommendationsSection() {
 
   if (recos.length === 0) {
     return (
-      <section className="rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="text-base font-semibold text-gray-900 mb-1">Recommandations personnalisées</h2>
-        <p className="text-xs text-gray-500">Aucune opportunité d&apos;optimisation détectée pour l&apos;instant. Continue comme ça.</p>
+      <section className="rounded-xl border border-ardoise-200 bg-white p-5">
+        <h2 className="text-base font-bold text-ardoise-900 mb-1">Recommandations personnalisées</h2>
+        <p className="text-xs text-ardoise-500">Aucune opportunité d&apos;optimisation détectée pour l&apos;instant. Continue comme ça.</p>
       </section>
     );
   }
@@ -636,16 +636,16 @@ function RecommendationsSection() {
   };
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-5">
+    <section className="rounded-xl border border-ardoise-200 bg-white p-5">
       <div className="flex items-end justify-between flex-wrap gap-2 mb-4">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">Recommandations personnalisées</h2>
-          <p className="text-xs text-gray-500 mt-0.5">{recos.length} opportunité{recos.length > 1 ? "s" : ""} détectée{recos.length > 1 ? "s" : ""} d&apos;après tes données.</p>
+          <h2 className="text-base font-bold text-ardoise-900">Recommandations personnalisées</h2>
+          <p className="text-xs text-ardoise-500 mt-0.5">{recos.length} opportunité{recos.length > 1 ? "s" : ""} détectée{recos.length > 1 ? "s" : ""} d&apos;après tes données.</p>
         </div>
         {totalImpact !== 0 && (
           <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wide text-gray-400">Impact cumulé estimé</p>
-            <p className={`text-lg font-bold ${totalImpact > 0 ? "text-brand-600" : "text-red-600"}`}>
+            <p className="text-[10px] uppercase tracking-wide text-ardoise-400">Impact cumulé estimé</p>
+            <p className={`text-lg font-bold font-mono ${totalImpact > 0 ? "text-brand-600" : "text-red-600"}`}>
               {totalImpact > 0 ? "+" : ""}{formatEur(totalImpact)}/an
             </p>
           </div>
@@ -657,19 +657,19 @@ function RecommendationsSection() {
           const style = SEVERITY_STYLES[r.severity];
           const isExpanded = expanded.has(r.key);
           return (
-            <div key={r.key} className="rounded-lg border border-gray-200/70 bg-gray-50/40 hover:bg-gray-50 transition-colors">
+            <div key={r.key} className="rounded-lg border border-ardoise-200/70 bg-ardoise-50/40 hover:bg-ardoise-50 transition-colors">
               <div className="flex items-start gap-3 p-3">
                 <span className={`shrink-0 mt-1.5 w-2 h-2 rounded-full ${style.dot}`} aria-hidden="true" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center flex-wrap gap-2 mb-0.5">
-                    <h3 className="text-sm font-semibold text-gray-900">{r.title}</h3>
+                    <h3 className="text-sm font-semibold text-ardoise-900">{r.title}</h3>
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${style.chip}`}>{style.chipLabel}</span>
                   </div>
-                  <p className="text-xs text-gray-600 leading-relaxed">{r.message}</p>
+                  <p className="text-xs text-ardoise-600 leading-relaxed">{r.message}</p>
                   {isExpanded && r.evidence.length > 0 && (
-                    <ul className="mt-2 space-y-0.5 text-[11px] text-gray-500">
+                    <ul className="mt-2 space-y-0.5 text-[11px] text-ardoise-500">
                       {r.evidence.map((ev, i) => (
-                        <li key={i} className="flex gap-1.5"><span className="text-gray-400">·</span><span>{ev}</span></li>
+                        <li key={i} className="flex gap-1.5"><span className="text-ardoise-400">·</span><span>{ev}</span></li>
                       ))}
                     </ul>
                   )}
@@ -677,7 +677,7 @@ function RecommendationsSection() {
                     <button
                       type="button"
                       onClick={() => toggle(r.key)}
-                      className="text-[11px] font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                      className="text-[11px] font-medium text-ardoise-500 hover:text-ardoise-700 transition-colors"
                     >
                       {isExpanded ? "Masquer le détail" : "Voir le détail"}
                     </button>
@@ -690,10 +690,10 @@ function RecommendationsSection() {
                 </div>
                 {r.impactEur !== undefined && r.impactEur !== 0 && (
                   <div className="shrink-0 text-right">
-                    <p className={`text-sm font-bold ${r.impactEur > 0 ? "text-brand-600" : "text-red-600"}`}>
+                    <p className={`text-sm font-bold font-mono ${r.impactEur > 0 ? "text-brand-600" : "text-red-600"}`}>
                       {r.impactEur > 0 ? "+" : ""}{formatEur(r.impactEur)}
                     </p>
-                    <p className="text-[10px] text-gray-400">/an</p>
+                    <p className="text-[10px] text-ardoise-400">/an</p>
                   </div>
                 )}
               </div>

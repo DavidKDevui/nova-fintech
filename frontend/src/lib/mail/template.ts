@@ -69,29 +69,30 @@ export type Block =
 
 // ── Design tokens ──
 
+// Tokens charte ActiDec v3 — orange CTA, neutres ardoise (teintés violet), fond brume.
 const BRAND = {
   orange600: "#EC6C12",
-  orange700: "#C2580F",
-  orange50: "#FFF7ED",
-  orange100: "#FFEDD5",
-  orange200: "#FED7AA",
-  slate900: "#0f172a",
-  slate700: "#334155",
-  slate500: "#64748b",
-  slate200: "#e2e8f0",
+  orange700: "#D14E0A",
+  orange50: "#FEF7F1",
+  orange100: "#FDEEE0",
+  orange200: "#FCD9BD",
+  slate900: "#1A0F2E", // ardoise 900 (encre)
+  slate700: "#463C58", // ardoise 700
+  slate500: "#847A95", // ardoise 500
+  slate200: "#E1DBEC", // ardoise 200
   white: "#ffffff",
-  bg: "#FFFCF9",
-  font: "'Sora', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  bg: "#F8F7FC", // brume charte (lavande très clair)
+  font: "'DM Sans', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
 };
 
 // ── Logo SVG (inline, same as logo.tsx) ──
 
-const LOGO_HTML = `<span style="font-family:${BRAND.font};font-size:28px;font-weight:800;letter-spacing:-0.04em;color:${BRAND.slate900};text-decoration:none">actidec</span>`;
+const LOGO_HTML = `<span style="font-family:${BRAND.font};font-size:28px;font-weight:800;letter-spacing:-0.03em;text-decoration:none"><span style="color:${BRAND.orange600}">A</span><span style="color:${BRAND.slate900}">cti</span><span style="color:${BRAND.orange600}">D</span><span style="color:${BRAND.slate900}">ec</span><span style="color:${BRAND.orange600}">.</span></span>`;
 
 // ── Icons (inline SVG, 14px) ──
 
 function renderIcon(name: string, color: string): string {
-  const s = `xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;display:inline-block"`;
+  const s = `xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;display:inline-block"`;
   switch (name) {
     case "arrow-right":
       return `<svg ${s}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>`;
@@ -128,8 +129,8 @@ function renderBlock(block: Block): string {
       const border = isPrimary ? "none" : `2px solid ${BRAND.orange200}`;
       const iconColor = isPrimary ? BRAND.white : BRAND.orange600;
       const icon = renderIcon(block.icon ?? "arrow-right", iconColor);
-      return `<table cellpadding="0" cellspacing="0" style="margin:16px 0"><tr><td style="border-radius:6px;background:${bg}" align="center">
-        <a href="${block.url}" style="display:inline-block;font-family:${BRAND.font};font-size:13px;font-weight:600;color:${color};text-decoration:none;padding:10px 20px;border:${border};border-radius:6px">${block.label} &nbsp;${icon}</a>
+      return `<table cellpadding="0" cellspacing="0" style="margin:16px 0"><tr><td style="border-radius:10px;background:${bg}" align="center">
+        <a href="${block.url}" style="display:inline-block;font-family:${BRAND.font};font-size:13px;font-weight:600;color:${color};text-decoration:none;padding:10px 20px;border:${border};border-radius:10px">${block.label} &nbsp;${icon}</a>
       </td></tr></table>`;
     }
 
@@ -186,7 +187,7 @@ export function buildMailHtml(blocks: Block[]): string {
         </td></tr></table>
 
         <!-- Content card -->
-        <table width="600" cellpadding="0" cellspacing="0" style="background:${BRAND.white};border-radius:12px;border:1px solid ${BRAND.slate200}">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:${BRAND.white};border-radius:14px;border:1px solid ${BRAND.slate200}">
           <tr>
             <td style="padding:40px 44px">
               ${content}
@@ -196,7 +197,7 @@ export function buildMailHtml(blocks: Block[]): string {
 
         <!-- Footer -->
         <table width="600" cellpadding="0" cellspacing="0"><tr><td style="padding:24px 0;text-align:center">
-          <p style="color:${BRAND.slate500};font-family:${BRAND.font};font-size:12px;margin:0">Actidec &mdash; Trésorerie pour professionnels de santé</p>
+          <p style="color:${BRAND.slate500};font-family:${BRAND.font};font-size:12px;margin:0">ActiDec &mdash; Trésorerie pour professionnels de santé</p>
         </td></tr></table>
       </td>
     </tr>

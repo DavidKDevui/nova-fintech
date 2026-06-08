@@ -15,10 +15,10 @@ export function EstimationBadge({
 }) {
   return (
     <span className="relative group inline-flex items-center align-middle">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1 py-px cursor-help hover:bg-gray-200 hover:text-gray-600 transition-colors">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-ardoise-400 bg-ardoise-100 rounded px-1 py-px cursor-help hover:bg-ardoise-200 hover:text-ardoise-600 transition-colors">
         {label}
       </span>
-      <span className="absolute left-1/2 -translate-x-1/2 top-5 w-64 bg-gray-900 text-white text-xs rounded-lg px-3.5 py-3 hidden group-hover:block z-[9999] shadow-lg leading-relaxed text-left font-normal normal-case">
+      <span className="absolute left-1/2 -translate-x-1/2 top-5 w-64 bg-ardoise-900 text-white text-xs rounded-lg px-3.5 py-3 hidden group-hover:block z-[9999] shadow-lg leading-relaxed text-left font-normal normal-case">
         {tooltip}
       </span>
     </span>

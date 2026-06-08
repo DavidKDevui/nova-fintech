@@ -20,6 +20,7 @@ import { countWorkingDays, countRemainingWorkingDays } from "@/lib/data/fr-holid
 import { computeIR, computeParts, getBareme } from "@/lib/data/fr-tax";
 import { downloadCSV, downloadPDF, getChartImage } from "@/lib/export";
 import { ExportButtons } from "@/components/export-buttons";
+import { Button } from "@/components/button";
 
 const TABS = [
   { key: "activity", label: "Mon activité" },
@@ -44,14 +45,14 @@ export function ManagementClient() {
   return (
     <div>
       {/* Tabs */}
-      <div className="flex items-center gap-0 border-b border-gray-100 mb-6">
+      <div className="flex items-center gap-0 border-b border-ardoise-100 mb-6">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
             className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
-              tab === t.key ? "border-brand-600 text-brand-600" : "border-transparent text-gray-400 hover:text-gray-600"
+              tab === t.key ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
             }`}
           >
             {t.label}
@@ -296,21 +297,21 @@ function ActivityTab() {
       </div>
 
       {/* Chart + monthly breakdown (aligned) */}
-      <div className="relative bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
+      <div className="relative bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 overflow-hidden">
         {/* Overlay uniquement si pas de banque ET pas de bordereaux exploitables.
             Pendant le chargement initial on l'inhibe pour éviter un flash : les
             skeletons en dessous suffisent à indiquer l'attente. */}
         <DataMissingOverlay bankConnected={bankConnected || isEstimated || loading} />
         {isEstimated && (
-          <div className="px-4 py-1.5 text-[11px] text-gray-400 border-b border-gray-100/80 flex items-center gap-1.5">
-            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+          <div className="px-4 py-1.5 text-[11px] text-ardoise-400 border-b border-ardoise-100/80 flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
               <circle cx="12" cy="12" r="10" />
               <path d="M12 16v-4" />
               <path d="M12 8h.01" />
             </svg>
             <span>
               CA issu de vos bordereaux.{" "}
-              <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600">
+              <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-600">
                 Connecter ma banque
               </Link>{" "}
               pour voir vos dépenses et votre rémunération.
@@ -320,83 +321,83 @@ function ActivityTab() {
         <div className="pb-2 flex">
           {/* KPI cards stacked vertically */}
           <div style={{ width: 260 }} className="flex flex-col items-center px-2 py-1 shrink-0">
-            <div className="w-[80%] mx-3 my-2 bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
+            <div className="w-[80%] mx-3 my-2 bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[10px] p-2.5">
               <div className="flex items-center gap-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-green-600 shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-menthe-600 shrink-0">
                   <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
-                  <path d="M12 16V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-                  <path d="M8 12l4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                  <path d="M12 16V8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
+                  <path d="M8 12l4-4 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
                 </svg>
-                <p className="text-xs font-medium text-gray-500 truncate inline-flex items-center gap-1.5">
+                <p className="text-[11px] font-mono uppercase tracking-wide text-ardoise-500 truncate inline-flex items-center gap-1.5">
                   Chiffre d&apos;affaires
                   <CASourceIndicator source={effectiveCA.source} primary="transactions" />
                 </p>
               </div>
               {loading ? (
-                <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
+                <div className="h-5 bg-ardoise-200 rounded w-20 animate-pulse mt-1" />
               ) : (
-                <p className="text-lg font-bold text-gray-900 mt-0.5">{formatCurrency(effectiveCA.ca)}</p>
+                <p className="text-lg font-bold text-ardoise-900 mt-0.5 font-mono">{formatCurrency(effectiveCA.ca)}</p>
               )}
             </div>
 
-            <div className="w-[80%] mx-3 my-2 bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
+            <div className="w-[80%] mx-3 my-2 bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[10px] p-2.5">
               <div>
                 <div className="flex items-center gap-1.5">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-red-500 shrink-0">
                     <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
-                    <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-                    <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                    <path d="M12 8v8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
+                    <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
                   </svg>
-                  <p className="text-xs font-medium text-gray-500 truncate">Dépenses</p>
+                  <p className="text-[11px] font-mono uppercase tracking-wide text-ardoise-500 truncate">Dépenses</p>
                 </div>
                 {loading ? (
-                  <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
+                  <div className="h-5 bg-ardoise-200 rounded w-20 animate-pulse mt-1" />
                 ) : (
-                  <p className="text-lg font-bold text-gray-900 mt-0.5">
+                  <p className="text-lg font-bold text-ardoise-900 mt-0.5 font-mono">
                     {isEstimated ? "—" : formatCurrency(kpis.decaissement)}
                   </p>
                 )}
               </div>
-              <div className="border-t border-gray-100 my-2" />
+              <div className="border-t border-ardoise-100 my-2" />
               <div>
                 <div className="flex items-center gap-1.5">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-orange-500 shrink-0">
                     <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.3" />
-                    <path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-                    <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                    <path d="M12 8v8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
+                    <path d="M16 12l-4 4-4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
                   </svg>
-                  <p className="text-xs font-medium text-gray-500 truncate">Dont cotisations sociales</p>
+                  <p className="text-[11px] font-mono uppercase tracking-wide text-ardoise-500 truncate">Dont cotisations sociales</p>
                 </div>
                 {loading ? (
-                  <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
+                  <div className="h-5 bg-ardoise-200 rounded w-20 animate-pulse mt-1" />
                 ) : (
-                  <p className="text-lg font-bold text-gray-900 mt-0.5">
+                  <p className="text-lg font-bold text-ardoise-900 mt-0.5 font-mono">
                     {isEstimated ? "—" : formatCurrency(kpis.cotisations)}
                   </p>
                 )}
               </div>
             </div>
 
-            <div className="w-[80%] mx-3 my-2 bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[10px] p-2.5">
+            <div className="w-[80%] mx-3 my-2 bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[10px] p-2.5">
               <div className="flex items-center gap-1.5">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-brand-600 shrink-0">
                   <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.3" />
-                  <path d="M12 7v4l2.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                  <path d="M12 7v4l2.5 2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
                   <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.5" />
                 </svg>
-                <p className="text-xs font-medium text-gray-500 truncate inline-flex items-center gap-1.5">
+                <p className="text-[11px] font-mono uppercase tracking-wide text-ardoise-500 truncate inline-flex items-center gap-1.5">
                   Rém. avant impôt
                   {isEstimated && <EstimationBadge tooltip="En l'absence de données bancaires, la rémunération avant impôt est affichée en miroir du CA (charges inconnues)." />}
                 </p>
               </div>
               {loading ? (
-                <div className="h-5 bg-gray-200 rounded w-20 animate-pulse mt-1" />
+                <div className="h-5 bg-ardoise-200 rounded w-20 animate-pulse mt-1" />
               ) : isEstimated ? (
-                <p className="text-lg font-bold text-gray-400 italic mt-0.5">
+                <p className="text-lg font-bold text-ardoise-400 italic mt-0.5 font-mono">
                   {projectedAnnualCA > 0 ? `~${formatCurrency(projectedAnnualCA)}` : "—"}
                 </p>
               ) : (
-                <p className="text-lg font-bold text-gray-900 mt-0.5">
+                <p className="text-lg font-bold text-ardoise-900 mt-0.5 font-mono">
                   {formatCurrency(
                     chartData.reduce((s, m) => s + m.revenus - m.urssaf - m.carpimko - m.chargesPro - m.retrocession - m.madelin, 0)
                   )}
@@ -406,15 +407,15 @@ function ActivityTab() {
           </div>
           <div className="flex-1 min-w-0" ref={chartRef}>
             {loading ? (
-              <div className="h-60 bg-gray-100 rounded animate-pulse" />
+              <div className="h-60 bg-ardoise-100 rounded animate-pulse" />
             ) : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={chartData} barGap={2} barCategoryGap="20%" margin={{ left: 0, right: 0, top: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} hide />
-                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={0} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#A79EB5" }} tickLine={false} axisLine={false} hide />
+                  <YAxis tick={{ fontSize: 11, fill: "#A79EB5" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={0} />
                   <Tooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E1DBEC", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
                     formatter={(value, name) => {
                       const labels: Record<string, string> = {
                         revenus: isEstimated ? "Revenus (bordereaux)" : "Revenus",
@@ -440,7 +441,7 @@ function ActivityTab() {
                       return labels[value] ?? value;
                     }}
                   />
-                  <Bar dataKey="revenus" fill="#22c55e" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="revenus" fill="#3DB87A" radius={[3, 3, 0, 0]} />
                   <Bar dataKey="autresDepenses" stackId="depenses" fill="#ef4444" />
                   <Bar dataKey="cotisations" stackId="depenses" fill="#f97316" radius={[3, 3, 0, 0]} />
                 </BarChart>
@@ -450,18 +451,18 @@ function ActivityTab() {
         </div>
 
         {!loading && (
-          <div className="border-t border-gray-100 text-xs overflow-x-auto">
+          <div className="border-t border-ardoise-100 text-xs overflow-x-auto">
             <div className="min-w-[900px]">
               {/* Header */}
-              <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
+              <div className="grid border-b border-ardoise-100" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
                 <div className="px-3 py-3.5" />
                 {chartData.map((m) => (
-                  <div key={m.name} className="py-3.5 text-center font-semibold text-gray-500">{m.name}</div>
+                  <div key={m.name} className="py-3.5 text-center font-semibold text-ardoise-500">{m.name}</div>
                 ))}
               </div>
               {/* CA */}
-              <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                <div className="px-3 py-3.5 text-sm font-semibold text-gray-700">Chiffre d&apos;affaires</div>
+              <div className="grid border-b border-ardoise-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
+                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700">Chiffre d&apos;affaires</div>
                 {chartData.map((m, i) => {
                   const now = new Date();
                   const isPastYear = year < now.getFullYear();
@@ -473,7 +474,7 @@ function ActivityTab() {
                   // Past months: real CA from bank_transactions, intact.
                   if (isPastMonth) {
                     return (
-                      <div key={m.name} className="py-3.5 text-center font-medium text-gray-700">
+                      <div key={m.name} className="py-3.5 text-center font-medium text-ardoise-700 font-mono">
                         {m.revenus > 0 ? formatCurrency(m.revenus) : "—"}
                       </div>
                     );
@@ -482,7 +483,7 @@ function ActivityTab() {
                   // No daily rate yet → no simulation possible.
                   if (dailyRate <= 0) {
                     return (
-                      <div key={m.name} className="py-3.5 text-center font-medium text-gray-700">
+                      <div key={m.name} className="py-3.5 text-center font-medium text-ardoise-700 font-mono">
                         {m.revenus > 0 ? formatCurrency(m.revenus) : "—"}
                       </div>
                     );
@@ -494,7 +495,7 @@ function ActivityTab() {
                     const worked = Math.max(0, wd - (vacations[i] || 0));
                     const simulated = Math.round(dailyRate * worked);
                     return (
-                      <div key={m.name} className="py-3.5 text-center font-medium text-gray-400 italic">
+                      <div key={m.name} className="py-3.5 text-center font-medium text-ardoise-400 italic font-mono">
                         {simulated > 0 ? `~${formatCurrency(simulated)}` : formatCurrency(0)}
                       </div>
                     );
@@ -511,29 +512,29 @@ function ActivityTab() {
                     const projection = Math.round(dailyRate * workedRemaining);
                     const total = Math.round(m.revenus) + projection;
                     return (
-                      <div key={m.name} className="py-3.5 text-center font-medium text-gray-700">
+                      <div key={m.name} className="py-3.5 text-center font-medium text-ardoise-700 font-mono">
                         {total > 0 ? <>~{formatCurrency(total)}</> : formatCurrency(0)}
                       </div>
                     );
                   }
 
-                  return <div key={m.name} className="py-3.5 text-center font-medium text-gray-300">—</div>;
+                  return <div key={m.name} className="py-3.5 text-center font-medium text-ardoise-300">—</div>;
                 })}
               </div>
               {/* Dépenses */}
               <div
-                className="grid border-b border-gray-50 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                className="grid border-b border-ardoise-50 cursor-pointer hover:bg-ardoise-50/50 transition-colors"
                 style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}
                 onClick={() => setDepensesOpen((v) => !v)}
               >
-                <div className="px-3 py-3.5 text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
                   Dépenses
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform ${depensesOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`text-ardoise-400 transition-transform ${depensesOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
                 </div>
                 {chartData.map((m) => {
                   const dep = m.cotisations + m.autresDepenses;
                   return (
-                    <div key={m.name} className="py-3.5 text-center font-medium text-gray-700">
+                    <div key={m.name} className="py-3.5 text-center font-medium text-ardoise-700 font-mono">
                       {dep > 0 ? formatCurrency(dep) : "—"}
                     </div>
                   );
@@ -549,12 +550,12 @@ function ActivityTab() {
                     { key: "retrocession", label: "Rétrocession" },
                     { key: "madelin", label: "Madelin" },
                   ] as const).map((sub) => (
-                    <div key={sub.key} className="grid border-b border-gray-50 bg-gray-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                      <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-gray-500">{sub.label}</div>
+                    <div key={sub.key} className="grid border-b border-ardoise-50 bg-ardoise-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
+                      <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500">{sub.label}</div>
                       {chartData.map((m) => {
                         const val = m[sub.key];
                         return (
-                          <div key={m.name} className="py-2.5 text-center text-xs font-medium text-gray-500">
+                          <div key={m.name} className="py-2.5 text-center text-xs font-medium text-ardoise-500 font-mono">
                             {val > 0 ? formatCurrency(val) : "—"}
                           </div>
                         );
@@ -565,14 +566,14 @@ function ActivityTab() {
               )}
               {/* Rém. avant impôt */}
               <div
-                className="grid border-b border-gray-50 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                className="grid border-b border-ardoise-50 cursor-pointer hover:bg-ardoise-50/50 transition-colors"
                 style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}
                 onClick={() => setRemOpen((v) => !v)}
               >
-                <div className="px-3 py-3.5 text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
                   Rém. avant impôt
                   {isEstimated && <EstimationBadge tooltip="En l'absence de données bancaires, la rémunération avant impôt est affichée en miroir du CA (charges inconnues). Connectez votre banque pour les charges réelles." />}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform ${remOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`text-ardoise-400 transition-transform ${remOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
                 </div>
                 {chartData.map((m, i) => {
                   // Fallback : rem = CA projeté (mêmes valeurs que la ligne CA),
@@ -580,7 +581,7 @@ function ActivityTab() {
                   if (isEstimated) {
                     const projected = projectedCAByMonth[i] ?? 0;
                     return (
-                      <div key={m.name} className="py-3.5 text-center font-medium text-gray-400 italic">
+                      <div key={m.name} className="py-3.5 text-center font-medium text-ardoise-400 italic font-mono">
                         {projected > 0 ? `~${formatCurrency(projected)}` : "—"}
                       </div>
                     );
@@ -589,7 +590,7 @@ function ActivityTab() {
                   const res = m.revenus - charges;
                   const empty = m.revenus === 0 && charges === 0;
                   return (
-                    <div key={m.name} className={`py-3.5 text-center font-medium ${empty ? "text-gray-300" : res >= 0 ? "text-gray-900" : "text-red-500"}`}>
+                    <div key={m.name} className={`py-3.5 text-center font-medium font-mono ${empty ? "text-ardoise-300" : res >= 0 ? "text-ardoise-900" : "text-red-500"}`}>
                       {empty ? "—" : formatCurrency(res)}
                     </div>
                   );
@@ -598,27 +599,27 @@ function ActivityTab() {
               {/* Sub-rows rém. avant impôt */}
               {remOpen && (
                 <>
-                  <div className="grid border-b border-gray-50 bg-gray-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                    <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-gray-500">Rémunération versée</div>
+                  <div className="grid border-b border-ardoise-50 bg-ardoise-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
+                    <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500">Rémunération versée</div>
                     {chartData.map((m) => (
-                      <div key={m.name} className="py-2.5 text-center text-xs font-medium text-gray-500">
+                      <div key={m.name} className="py-2.5 text-center text-xs font-medium text-ardoise-500 font-mono">
                         {m.remuneration > 0 ? formatCurrency(m.remuneration) : "—"}
                       </div>
                     ))}
                   </div>
-                  <div className="grid border-b border-gray-50 bg-gray-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                    <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-gray-500">Provision d&apos;impôt estimée</div>
+                  <div className="grid border-b border-ardoise-50 bg-ardoise-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
+                    <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500">Provision d&apos;impôt estimée</div>
                     {chartData.map((m, i) => {
                       const isFuture = year > currentYear || (year === currentYear && i >= currentMonth);
                       // En fallback bordereaux : on n'estime rien dans Mon activité,
                       // les charges déductibles ne sont pas connues → tiret partout.
                       if (isEstimated) {
-                        return <div key={m.name} className="py-2.5 text-center text-xs font-medium text-gray-300">—</div>;
+                        return <div key={m.name} className="py-2.5 text-center text-xs font-medium text-ardoise-300">—</div>;
                       }
                       // Past months: show real tax transactions
                       if (!isFuture) {
                         return (
-                          <div key={m.name} className="py-2.5 text-center text-xs font-medium text-gray-500">
+                          <div key={m.name} className="py-2.5 text-center text-xs font-medium text-ardoise-500 font-mono">
                             {m.impots > 0 ? formatCurrency(m.impots) : "—"}
                           </div>
                         );
@@ -629,7 +630,7 @@ function ActivityTab() {
                       const remAvantImpot = m.revenus - charges;
                       const estimated = remAvantImpot > 0 ? Math.round(remAvantImpot * pasRate) : 0;
                       return (
-                        <div key={m.name} className="py-2.5 text-center text-xs font-medium text-gray-400 italic">
+                        <div key={m.name} className="py-2.5 text-center text-xs font-medium text-ardoise-400 italic font-mono">
                           {estimated > 0 ? `~${formatCurrency(estimated)}` : "—"}
                         </div>
                       );
@@ -639,7 +640,7 @@ function ActivityTab() {
               )}
               {/* Vacances */}
               <div className="grid" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                <div className="px-3 py-3.5 text-sm font-semibold text-gray-700">Vacances (jours)</div>
+                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700">Vacances (jours)</div>
                 {chartData.map((m, i) => {
                   const now = new Date();
                   const isPastMonth = year < now.getFullYear() || (year === now.getFullYear() && i < now.getMonth());
@@ -660,7 +661,7 @@ function ActivityTab() {
                           const v = Math.max(0, Math.min(daysInMonth, parseInt(e.target.value) || 0));
                           void upsertVacationDayAction(year, i + 1, v);
                         }}
-                        className="w-10 text-center text-xs font-medium text-gray-700 border border-gray-200 rounded hover:border-gray-300 focus:border-brand-500 focus:outline-none bg-transparent transition-colors py-1 disabled:bg-gray-50 disabled:text-gray-300 disabled:cursor-not-allowed disabled:hover:border-gray-200"
+                        className="w-10 text-center text-xs font-medium text-ardoise-700 border border-ardoise-200 rounded hover:border-ardoise-300 focus:border-brand-500 focus:outline-none bg-transparent transition-colors py-1 disabled:bg-ardoise-50 disabled:text-ardoise-300 disabled:cursor-not-allowed disabled:hover:border-ardoise-200 font-mono"
                       />
                     </div>
                   );
@@ -827,15 +828,15 @@ function ContributionsTab() {
         <YearSelector year={year} setYear={setYear} maxYear={currentYear} />
       </div>
       {isEstimated && (
-        <div className="px-4 py-1.5 text-[11px] text-gray-400 flex items-center gap-1.5">
-          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+        <div className="px-4 py-1.5 text-[11px] text-ardoise-400 flex items-center gap-1.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 16v-4" />
             <path d="M12 8h.01" />
           </svg>
           <span>
             Cotisations estimées à partir de vos bordereaux.{" "}
-            <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600">
+            <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-600">
               Connecter ma banque
             </Link>{" "}
             pour les montants réels.
@@ -845,14 +846,14 @@ function ContributionsTab() {
       {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* URSSAF */}
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6">
           <div className="flex items-center gap-4 mb-6">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-urssaf.svg" alt="URSSAF" className="h-8" />
             {isEstimated && <EstimationBadge tooltip="Cotisations URSSAF estimées à partir du CA issu de vos bordereaux. Connectez votre banque pour les montants réellement prélevés." />}
           </div>
           <div className="flex items-center gap-1.5 mb-1">
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-ardoise-400">
               {showReel ? `Cotisations versées en ${year}` : `Montant total estimé des cotisations ${year}`}
             </p>
             <InfoTooltip text={showReel
@@ -861,25 +862,25 @@ function ContributionsTab() {
             />
           </div>
           {(showReel ? tableLoading : cardsLoading) ? (
-            <div className="h-8 bg-gray-200 rounded w-28 animate-pulse mb-4" />
+            <div className="h-8 bg-ardoise-200 rounded w-28 animate-pulse mb-4" />
           ) : (
-            <p className="text-2xl font-bold text-gray-900 mb-4">
+            <p className="text-2xl font-bold text-ardoise-900 mb-4 font-mono">
               {showReel
                 ? (totalUrssafReel > 0 ? formatCurrency(totalUrssafReel) : "—")
                 : (estimate ? `~${formatCurrency(estimate.urssafAnnuel)}` : "—")}
             </p>
           )}
           <div className="flex items-center gap-1.5 mb-1">
-            <p className="text-xs text-gray-400">{showReel ? "Nombre de prélèvements" : "Montant par échéance"}</p>
+            <p className="text-xs text-ardoise-400">{showReel ? "Nombre de prélèvements" : "Montant par échéance"}</p>
             <InfoTooltip text={showReel
               ? `Nombre de prélèvements Urssaf passés sur vos comptes en ${year}.`
               : `Estimation du montant prélevé à chaque échéance Urssaf en ${year}.`}
             />
           </div>
           {(showReel ? tableLoading : cardsLoading) ? (
-            <div className="h-8 bg-gray-200 rounded w-28 animate-pulse" />
+            <div className="h-8 bg-ardoise-200 rounded w-28 animate-pulse" />
           ) : (
-            <p className="text-2xl font-bold text-gray-900">
+            <p className="text-2xl font-bold text-ardoise-900">
               {showReel
                 ? (monthlyData.filter((m) => m.urssaf > 0).length > 0
                     ? `${monthlyData.filter((m) => m.urssaf > 0).length} prélèvements`
@@ -890,14 +891,14 @@ function ContributionsTab() {
         </div>
 
         {/* CARPIMKO */}
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6">
           <div className="flex items-center gap-4 mb-6">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-carpimko.png" alt="CARPIMKO" className="h-8" />
             {isEstimated && <EstimationBadge tooltip="Cotisations CARPIMKO estimées à partir du CA issu de vos bordereaux. Connectez votre banque pour les montants réellement prélevés." />}
           </div>
           <div className="flex items-center gap-1.5 mb-1">
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-ardoise-400">
               {showReel ? `Cotisations versées en ${year}` : `Montant total estimé des cotisations ${year}`}
             </p>
             <InfoTooltip text={showReel
@@ -906,25 +907,25 @@ function ContributionsTab() {
             />
           </div>
           {(showReel ? tableLoading : cardsLoading) ? (
-            <div className="h-8 bg-gray-200 rounded w-28 animate-pulse mb-4" />
+            <div className="h-8 bg-ardoise-200 rounded w-28 animate-pulse mb-4" />
           ) : (
-            <p className="text-2xl font-bold text-gray-900 mb-4">
+            <p className="text-2xl font-bold text-ardoise-900 mb-4 font-mono">
               {showReel
                 ? (totalCarpimkoReel > 0 ? formatCurrency(totalCarpimkoReel) : "—")
                 : (estimate ? `~${formatCurrency(estimate.carpimkoAnnuel)}` : "—")}
             </p>
           )}
           <div className="flex items-center gap-1.5 mb-1">
-            <p className="text-xs text-gray-400">{showReel ? "Nombre de prélèvements" : "Montant par échéance"}</p>
+            <p className="text-xs text-ardoise-400">{showReel ? "Nombre de prélèvements" : "Montant par échéance"}</p>
             <InfoTooltip text={showReel
               ? `Nombre de prélèvements Carpimko passés sur vos comptes en ${year}.`
               : `Estimation du montant prélevé à chaque échéance Carpimko en ${year}.`}
             />
           </div>
           {(showReel ? tableLoading : cardsLoading) ? (
-            <div className="h-8 bg-gray-200 rounded w-28 animate-pulse" />
+            <div className="h-8 bg-ardoise-200 rounded w-28 animate-pulse" />
           ) : (
-            <p className="text-2xl font-bold text-gray-900">
+            <p className="text-2xl font-bold text-ardoise-900">
               {showReel
                 ? (monthlyData.filter((m) => m.carpimko > 0).length > 0
                     ? `${monthlyData.filter((m) => m.carpimko > 0).length} prélèvements`
@@ -936,26 +937,26 @@ function ContributionsTab() {
       </div>
 
       {/* Monthly table */}
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 overflow-hidden">
         <div className="px-5 pt-4 pb-3">
-          <h2 className="text-base font-semibold text-gray-900">Détail mensuel</h2>
+          <h2 className="text-base font-bold text-ardoise-900">Détail mensuel</h2>
         </div>
         {tableLoading ? (
           <div className="px-5 pb-5">
-            <div className="h-32 bg-gray-100 rounded animate-pulse" />
+            <div className="h-32 bg-ardoise-100 rounded animate-pulse" />
           </div>
         ) : (
-          <div className="border-t border-gray-100 text-xs overflow-x-auto">
+          <div className="border-t border-ardoise-100 text-xs overflow-x-auto">
             <div className="min-w-[900px]">
             {/* Header */}
-            <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
+            <div className="grid border-b border-ardoise-100" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
               <div className="px-3 py-3.5" />
               {MONTH_LABELS.map((m) => (
-                <div key={m} className="py-3.5 text-center font-semibold text-gray-500">{m}</div>
+                <div key={m} className="py-3.5 text-center font-semibold text-ardoise-500">{m}</div>
               ))}
             </div>
             {/* URSSAF */}
-            <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
+            <div className="grid border-b border-ardoise-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
               <div className="px-3 py-3.5 flex items-center gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo-urssaf.svg" alt="URSSAF" className="h-5" />
@@ -968,16 +969,16 @@ function ContributionsTab() {
                 const canEstimate = isEstimated || year > currentYear || (year === currentYear && i >= new Date().getMonth());
                 const est = canEstimate ? (estimatedMonths[i]?.urssaf ?? 0) : 0;
                 if (reel > 0) {
-                  return <div key={i} className="py-3.5 text-center font-medium text-gray-700">{formatCurrency(reel)}</div>;
+                  return <div key={i} className="py-3.5 text-center font-medium text-ardoise-700 font-mono">{formatCurrency(reel)}</div>;
                 }
                 if (est > 0) {
-                  return <div key={i} className="py-3.5 text-center font-medium text-gray-400 italic">~{formatCurrency(est)}</div>;
+                  return <div key={i} className="py-3.5 text-center font-medium text-ardoise-400 italic font-mono">~{formatCurrency(est)}</div>;
                 }
-                return <div key={i} className="py-3.5 text-center font-medium text-gray-300">—</div>;
+                return <div key={i} className="py-3.5 text-center font-medium text-ardoise-300">—</div>;
               })}
             </div>
             {/* CARPIMKO */}
-            <div className="grid border-b border-gray-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
+            <div className="grid border-b border-ardoise-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
               <div className="px-3 py-3.5 flex items-center gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo-carpimko.png" alt="CARPIMKO" className="h-5" />
@@ -988,17 +989,17 @@ function ContributionsTab() {
                 const canEstimate = isEstimated || year > currentYear || (year === currentYear && i >= new Date().getMonth());
                 const est = canEstimate ? (estimatedMonths[i]?.carpimko ?? 0) : 0;
                 if (reel > 0) {
-                  return <div key={i} className="py-3.5 text-center font-medium text-gray-700">{formatCurrency(reel)}</div>;
+                  return <div key={i} className="py-3.5 text-center font-medium text-ardoise-700 font-mono">{formatCurrency(reel)}</div>;
                 }
                 if (canEstimate) {
-                  return <div key={i} className="py-3.5 text-center font-medium text-gray-400 italic">{est > 0 ? `~${formatCurrency(est)}` : "0 €"}</div>;
+                  return <div key={i} className="py-3.5 text-center font-medium text-ardoise-400 italic font-mono">{est > 0 ? `~${formatCurrency(est)}` : "0 €"}</div>;
                 }
-                return <div key={i} className="py-3.5 text-center font-medium text-gray-300">—</div>;
+                return <div key={i} className="py-3.5 text-center font-medium text-ardoise-300">—</div>;
               })}
             </div>
             {/* Total */}
             <div className="grid" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-              <div className="px-3 py-3.5 text-sm font-semibold text-gray-900">Total</div>
+              <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-900">Total</div>
               {monthlyData.map((m, i) => {
                 const reelTotal = m.urssaf + m.carpimko;
                 const canEstimate = isEstimated || year > currentYear || (year === currentYear && i >= new Date().getMonth());
@@ -1007,12 +1008,12 @@ function ContributionsTab() {
                 const value = hasReel ? reelTotal : estTotal;
                 if (value > 0) {
                   return (
-                    <div key={i} className={`py-3.5 text-center font-semibold ${hasReel ? "text-gray-900" : "text-gray-400 italic"}`}>
+                    <div key={i} className={`py-3.5 text-center font-semibold font-mono ${hasReel ? "text-ardoise-900" : "text-ardoise-400 italic"}`}>
                       {hasReel ? formatCurrency(value) : `~${formatCurrency(value)}`}
                     </div>
                   );
                 }
-                return <div key={i} className="py-3.5 text-center font-semibold text-gray-300">—</div>;
+                return <div key={i} className="py-3.5 text-center font-semibold text-ardoise-300">—</div>;
               })}
             </div>
             </div>
@@ -1095,17 +1096,17 @@ function TransactionsList({
   }, [transactions, year, exportFilename]);
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
+    <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 overflow-hidden">
       <div className="flex items-center justify-between px-6 pt-5 pb-3">
         <div>
-          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-          <p className="text-xs text-gray-400 mt-0.5">{description}</p>
+          <h3 className="text-base font-semibold text-ardoise-900">{title}</h3>
+          <p className="text-xs text-ardoise-400 mt-0.5">{description}</p>
         </div>
         <div className="flex items-center gap-3">
           {!loading && transactions.length > 0 && (
             <div className="text-right">
-              <p className="text-xs text-gray-400">Total {year}</p>
-              <p className="text-base font-bold text-gray-900">{formatCurrency(total)}</p>
+              <p className="text-xs text-ardoise-400">Total {year}</p>
+              <p className="text-base font-bold text-ardoise-900 font-mono">{formatCurrency(total)}</p>
             </div>
           )}
           <ExportButtons
@@ -1116,17 +1117,17 @@ function TransactionsList({
       </div>
       {loading ? (
         <div className="px-6 pb-6">
-          <div className="h-32 bg-gray-100 rounded animate-pulse" />
+          <div className="h-32 bg-ardoise-100 rounded animate-pulse" />
         </div>
       ) : transactions.length === 0 ? (
-        <div className="px-6 pb-6 text-sm text-gray-400">
+        <div className="px-6 pb-6 text-sm text-ardoise-400">
           Aucune transaction enregistrée en {year} pour les catégories concernées.
         </div>
       ) : (
-        <div className="border-t border-gray-100 overflow-x-auto">
+        <div className="border-t border-ardoise-100 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 text-xs font-semibold text-gray-500">
+              <tr className="border-b border-ardoise-100 text-xs font-semibold text-ardoise-500">
                 <th className="text-left px-6 py-3">Date</th>
                 <th className="text-left px-3 py-3">Libellé</th>
                 <th className="text-left px-3 py-3">Catégorie</th>
@@ -1135,17 +1136,17 @@ function TransactionsList({
             </thead>
             <tbody>
               {transactions.map((t) => (
-                <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatTransactionDate(t.date)}</td>
-                  <td className="px-3 py-3 text-gray-900 truncate max-w-[420px]" title={t.cleanDescription ?? t.description}>
+                <tr key={t.id} className="border-b border-ardoise-50 hover:bg-ardoise-50/50 transition-colors">
+                  <td className="px-6 py-3 text-ardoise-700 whitespace-nowrap font-mono">{formatTransactionDate(t.date)}</td>
+                  <td className="px-3 py-3 text-ardoise-900 truncate max-w-[420px]" title={t.cleanDescription ?? t.description}>
                     {t.cleanDescription ?? t.description}
                   </td>
                   <td className="px-3 py-3">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-ardoise-100 text-ardoise-700">
                       {CATEGORY_LABELS[t.category] ?? t.category}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-right font-medium text-gray-900 whitespace-nowrap">
+                  <td className="px-6 py-3 text-right font-medium text-ardoise-900 whitespace-nowrap font-mono">
                     {formatCurrency(Math.abs(t.amount))}
                   </td>
                 </tr>
@@ -1429,15 +1430,15 @@ function TaxesTab() {
       <YearSelector year={year} setYear={setYear} maxYear={currentYear} />
     </div>
     {isEstimated && (
-      <div className="px-4 py-1.5 text-[11px] text-gray-400 flex items-center gap-1.5">
-        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <div className="px-4 py-1.5 text-[11px] text-ardoise-400 flex items-center gap-1.5">
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
           <circle cx="12" cy="12" r="10" />
           <path d="M12 16v-4" />
           <path d="M12 8h.01" />
         </svg>
         <span>
           BNC et PAS estimés à partir de vos bordereaux.{" "}
-          <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600">
+          <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-600">
             Connecter ma banque
           </Link>{" "}
           pour intégrer vos prélèvements réels.
@@ -1446,19 +1447,19 @@ function TaxesTab() {
     )}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Ma situation fiscale */}
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6">
         <div className="mb-5">
-          <h3 className="text-base font-semibold text-gray-900">Ma situation fiscale</h3>
+          <h3 className="text-base font-semibold text-ardoise-900">Ma situation fiscale</h3>
         </div>
         <form action={saveAction} className="space-y-4">
           <input type="hidden" name="year" value={year} />
           <div>
-            <label className="block text-sm text-gray-500 mb-1.5">Situation conjugale</label>
+            <label className="block text-sm text-ardoise-500 mb-1.5">Situation conjugale</label>
             <select
               name="maritalStatus"
               value={situation}
               onChange={(e) => setSituation(e.target.value as "celibataire" | "marie" | "pacse")}
-              className="w-full border border-gray-200 bg-transparent px-3 py-2 rounded-md text-sm transition-all hover:border-gray-400 focus:border-gray-900 focus:outline-none appearance-none cursor-pointer"
+              className="w-full border border-ardoise-200 bg-transparent px-3 py-2 rounded-md text-sm transition-all hover:border-ardoise-400 focus:border-violet-500 focus:outline-none appearance-none cursor-pointer"
             >
               <option value="celibataire">Célibataire</option>
               <option value="marie">Marié(e)</option>
@@ -1466,7 +1467,7 @@ function TaxesTab() {
             </select>
           </div>
           <div>
-            <label className="block text-sm text-gray-500 mb-1.5">Nombre d&apos;enfants à charge</label>
+            <label className="block text-sm text-ardoise-500 mb-1.5">Nombre d&apos;enfants à charge</label>
             <input
               type="number"
               name="dependentChildren"
@@ -1474,7 +1475,7 @@ function TaxesTab() {
               max="20"
               value={enfants}
               onChange={(e) => setEnfants(Math.max(0, parseInt(e.target.value) || 0))}
-              className="w-full border border-gray-200 bg-transparent px-3 py-2 rounded-md text-sm transition-all hover:border-gray-400 focus:border-gray-900 focus:outline-none"
+              className="w-full border border-ardoise-200 bg-transparent px-3 py-2 rounded-md text-sm transition-all hover:border-ardoise-400 focus:border-violet-500 focus:outline-none font-mono"
             />
           </div>
           {showSingleParent && (
@@ -1485,18 +1486,18 @@ function TaxesTab() {
                 name="isSingleParent"
                 checked={isSingleParent}
                 onChange={(e) => setIsSingleParent(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                className="mt-0.5 h-4 w-4 rounded border-ardoise-300 text-brand-600 focus:ring-brand-500"
               />
-              <label htmlFor="isSingleParent" className="text-sm text-gray-700 leading-tight">
+              <label htmlFor="isSingleParent" className="text-sm text-ardoise-700 leading-tight">
                 Parent isolé (case T)
-                <span className="block text-xs text-gray-400 mt-0.5">
+                <span className="block text-xs text-ardoise-400 mt-0.5">
                   Vous vivez seul(e) et élevez seul(e) votre/vos enfant(s). Donne droit à une demi-part supplémentaire.
                 </span>
               </label>
             </div>
           )}
           <div>
-            <label className="block text-sm text-gray-500 mb-1.5">Autres revenus BNC ou salariés du foyer en {year}</label>
+            <label className="block text-sm text-ardoise-500 mb-1.5">Autres revenus BNC ou salariés du foyer en {year}</label>
             <div className="relative">
               <input
                 type="number"
@@ -1506,16 +1507,16 @@ function TaxesTab() {
                 value={autresRevenus || ""}
                 onChange={(e) => setAutresRevenus(Math.max(0, parseInt(e.target.value) || 0))}
                 placeholder="0"
-                className="w-full border border-gray-200 bg-transparent px-3 py-2 pr-8 rounded-md text-sm transition-all hover:border-gray-400 focus:border-gray-900 focus:outline-none"
+                className="w-full border border-ardoise-200 bg-transparent px-3 py-2 pr-8 rounded-md text-sm transition-all hover:border-ardoise-400 focus:border-violet-500 focus:outline-none font-mono"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">€</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ardoise-400">€</span>
             </div>
-            <p className="mt-1 text-xs text-gray-400">Revenus nets imposables du conjoint ou autres activités.</p>
+            <p className="mt-1 text-xs text-ardoise-400">Revenus nets imposables du conjoint ou autres activités.</p>
           </div>
           {year < currentYear && (
             <div>
               <div className="flex items-center gap-1.5 mb-1.5">
-                <label className="block text-sm text-gray-500">IR réel de mon avis d&apos;imposition {year}</label>
+                <label className="block text-sm text-ardoise-500">IR réel de mon avis d&apos;imposition {year}</label>
                 <InfoTooltip text={`Montant exact de l'impôt sur le revenu figurant sur votre avis d'imposition ${year + 1} (revenus ${year}). Optionnel : permet de comparer à l'estimation de l'app et de détecter d'éventuels crédits/réductions non pris en compte.`} />
               </div>
               <div className="relative">
@@ -1526,33 +1527,33 @@ function TaxesTab() {
                   value={declaredIr}
                   onChange={(e) => setDeclaredIr(e.target.value)}
                   placeholder="Optionnel"
-                  className="w-full border border-gray-200 bg-transparent px-3 py-2 pr-8 rounded-md text-sm transition-all hover:border-gray-400 focus:border-gray-900 focus:outline-none"
+                  className="w-full border border-ardoise-200 bg-transparent px-3 py-2 pr-8 rounded-md text-sm transition-all hover:border-ardoise-400 focus:border-violet-500 focus:outline-none font-mono"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">€</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ardoise-400">€</span>
               </div>
-              <p className="mt-1 text-xs text-gray-400">À renseigner après réception de votre avis (août {year + 1}).</p>
+              <p className="mt-1 text-xs text-ardoise-400">À renseigner après réception de votre avis (août {year + 1}).</p>
             </div>
           )}
-          <div className="pt-2 border-t border-gray-100 space-y-1">
+          <div className="pt-2 border-t border-ardoise-100 space-y-1">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">Nombre de parts fiscales</span>
-              <span className="font-semibold text-gray-900">{parts}</span>
+              <span className="text-ardoise-500">Nombre de parts fiscales</span>
+              <span className="font-semibold text-ardoise-900 font-mono">{parts}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-1.5">
-                <span className="text-gray-500">{hp?.taxRegime === "micro_bnc" ? "BNC après abattement 34 %" : "Bénéfice BNC estimé"}</span>
+                <span className="text-ardoise-500">{hp?.taxRegime === "micro_bnc" ? "BNC après abattement 34 %" : "Bénéfice BNC estimé"}</span>
                 <InfoTooltip text={hp?.taxRegime === "micro_bnc"
                   ? "Régime micro-BNC : les recettes annuelles sont diminuées d'un abattement forfaitaire de 34 %."
                   : "Régime déclaration contrôlée : bénéfice = recettes encaissées - charges déductibles (URSSAF, CARPIMKO, charges pro, rétrocession, Madelin)."} />
                 {isEstimated && <EstimationBadge tooltip="Bénéfice BNC dérivé du CA de vos bordereaux. En régime déclaration contrôlée, les charges déductibles (URSSAF/CARPIMKO) sont estimées à partir du CA." />}
               </div>
-              <span className={`font-semibold ${isProjected || isEstimated ? "text-gray-500 italic" : "text-gray-900"}`}>
+              <span className={`font-semibold font-mono ${isProjected || isEstimated ? "text-ardoise-500 italic" : "text-ardoise-900"}`}>
                 {monthlyLoading ? "…" : `${(isProjected || isEstimated) ? "~" : ""}${formatCurrency(revenuBNC)}`}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">Revenu imposable du foyer</span>
-              <span className={`font-semibold ${isProjected ? "text-gray-500 italic" : "text-gray-900"}`}>
+              <span className="text-ardoise-500">Revenu imposable du foyer</span>
+              <span className={`font-semibold font-mono ${isProjected ? "text-ardoise-500 italic" : "text-ardoise-900"}`}>
                 {monthlyLoading ? "…" : `${isProjected ? "~" : ""}${formatCurrency(revenuImposable)}`}
               </span>
             </div>
@@ -1562,56 +1563,57 @@ function TaxesTab() {
             <p className="bg-red-50 p-3 rounded-md text-sm text-red-600">{saveState.error}</p>
           )}
           {saveState?.success && (
-            <p className="bg-green-50 p-3 rounded-md text-sm text-green-600">Situation fiscale enregistrée.</p>
+            <p className="bg-menthe-50 p-3 rounded-md text-sm text-menthe-600">Situation fiscale enregistrée.</p>
           )}
 
-          <button
+          <Button
             type="submit"
+            variant="cta"
             disabled={saving || !dbLoaded}
-            className="flex items-center gap-2 bg-gray-900 px-5 py-3 rounded-md text-sm font-medium text-white transition-all hover:bg-black active:scale-[0.98] disabled:bg-gray-300 disabled:opacity-60 disabled:hover:bg-gray-300 disabled:active:scale-100 disabled:cursor-not-allowed"
+            className="flex items-center gap-2"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             {saving ? "Enregistrement..." : "Enregistrer"}
-          </button>
+          </Button>
         </form>
       </div>
 
       {/* Mon imposition estimée */}
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
-        <h3 className="text-base font-semibold text-gray-900 mb-5">Mon imposition estimée</h3>
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6">
+        <h3 className="text-base font-semibold text-ardoise-900 mb-5">Mon imposition estimée</h3>
         <div className="space-y-4">
           <div>
             <div className="flex items-center gap-1.5 mb-1">
-              <p className="text-xs text-gray-400">Impôt estimé sur les revenus {year}</p>
+              <p className="text-xs text-ardoise-400">Impôt estimé sur les revenus {year}</p>
               <InfoTooltip text={`Estimation de l'impôt sur le revenu calculée avec le barème progressif applicable aux revenus ${year} (loi de finances ${year + 1}), votre situation familiale et le quotient familial${ir.plafonneQf ? " (plafonné)" : ""}.`} />
               {isEstimated && <EstimationBadge tooltip="IR calculé à partir du BNC dérivé de vos bordereaux. Connectez votre banque pour des charges déductibles réelles." />}
             </div>
-            <p className="text-2xl font-bold text-gray-900">{monthlyLoading ? "…" : formatCurrency(ir.impot)}</p>
+            <p className="text-2xl font-bold text-ardoise-900 font-mono">{monthlyLoading ? "…" : formatCurrency(ir.impot)}</p>
             {ir.plafonneQf && (
               <p className="text-xs text-orange-600 mt-1">Quotient familial plafonné — gain limité par demi-part supplémentaire.</p>
             )}
           </div>
           <div>
             <div className="flex items-center gap-1.5 mb-1">
-              <p className="text-xs text-gray-400">Régularisation {year} payée en {year + 1}</p>
+              <p className="text-xs text-ardoise-400">Régularisation {year} payée en {year + 1}</p>
               <InfoTooltip text={isEstimated
                 ? `Sans connexion bancaire, aucun PAS prélevé n'est observable : la régularisation correspond à l'intégralité du PAS estimé. Connectez votre banque pour retrancher les acomptes déjà débités.`
                 : `Différence entre l'impôt estimé et le PAS prélevé. PAS BNC : acomptes réellement prélevés (transactions catégorisées « Impôts » : ${formatCurrency(pasYtdReel)} à date)${year >= currentYear ? ` + projection au taux ${(pasRate * 100).toFixed(1)} % pour les mois restants` : ""}. PAS conjoint : approximation au même taux. Positif = complément à payer (sept-déc ${year + 1}), négatif = remboursement (été ${year + 1}).`} />
               {isEstimated && <EstimationBadge />}
             </div>
-            <p className={`text-2xl font-bold ${regularisation >= 0 ? "text-red-500" : "text-green-600"}`}>
+            <p className={`text-2xl font-bold font-mono ${regularisation >= 0 ? "text-red-500" : "text-menthe-600"}`}>
               {monthlyLoading ? "…" : `${regularisation >= 0 ? "+" : ""}${formatCurrency(regularisation)}`}
             </p>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-ardoise-400 mt-1">
               IR estimé {formatCurrency(ir.impot)} − PAS {formatCurrency(pasAnnuel)}
               {pasYtdReel > 0 && ` (dont ${formatCurrency(pasYtdReel)} déjà prélevés)`}
               {isEstimated && " · aucun prélèvement observé"}
             </p>
           </div>
 
-          <div className="pt-4 border-t border-gray-100">
-            <p className="text-sm font-medium text-gray-900 mb-1">Tranche marginale d&apos;imposition</p>
-            <p className="text-xs text-gray-400 mb-3">
+          <div className="pt-4 border-t border-ardoise-100">
+            <p className="text-sm font-medium text-ardoise-900 mb-1">Tranche marginale d&apos;imposition</p>
+            <p className="text-xs text-ardoise-400 mb-3">
               Vous remplissez {ir.fillPercent} % de cette tranche.
               {ir.distanceToNext > 0 && ` Dans ${formatCurrency(ir.distanceToNext)} de revenus imposables supplémentaires, vous passerez à la tranche supérieure.`}
             </p>
@@ -1625,7 +1627,7 @@ function TaxesTab() {
                   <div
                     key={t.rate}
                     className={`relative flex-1 transition-all ${
-                      isPast ? "bg-brand-600" : isActive ? "bg-brand-200" : "bg-gray-100"
+                      isPast ? "bg-brand-600" : isActive ? "bg-brand-200" : "bg-ardoise-100"
                     }`}
                   >
                     {isActive && (
@@ -1638,21 +1640,21 @@ function TaxesTab() {
                 );
               })}
             </div>
-            <div className="flex text-[10px] font-medium text-gray-400">
+            <div className="flex text-[10px] font-medium text-ardoise-400">
               {bareme.map((t, i) => (
-                <div key={t.rate} className={`flex-1 text-center ${i === ir.currentTrancheIndex ? "text-brand-600 font-bold" : ""}`}>
+                <div key={t.rate} className={`flex-1 text-center font-mono ${i === ir.currentTrancheIndex ? "text-brand-600 font-bold" : ""}`}>
                   {t.rate} %
                 </div>
               ))}
             </div>
 
             <div className="mt-4 flex items-center justify-between">
-              <span className="text-sm text-gray-500">Taux moyen</span>
-              <span className="text-sm font-bold text-gray-900">{ir.tauxMoyen} %</span>
+              <span className="text-sm text-ardoise-500">Taux moyen</span>
+              <span className="text-sm font-bold text-ardoise-900 font-mono">{ir.tauxMoyen} %</span>
             </div>
             <div className="flex items-center justify-between mt-1">
-              <span className="text-sm text-gray-500">Tranche marginale</span>
-              <span className="text-sm font-bold text-gray-900">{currentTranche.rate} %</span>
+              <span className="text-sm text-ardoise-500">Tranche marginale</span>
+              <span className="text-sm font-bold text-ardoise-900 font-mono">{currentTranche.rate} %</span>
             </div>
           </div>
 
@@ -1662,18 +1664,18 @@ function TaxesTab() {
             if (isNaN(declared)) return null;
             const ecart = declared - ir.impot;
             return (
-              <div className="pt-4 border-t border-gray-100">
+              <div className="pt-4 border-t border-ardoise-100">
                 <div className="flex items-center gap-1.5 mb-1">
-                  <p className="text-sm font-medium text-gray-900">IR réel vs estimation</p>
+                  <p className="text-sm font-medium text-ardoise-900">IR réel vs estimation</p>
                   <InfoTooltip text="Un écart négatif signifie que votre avis d'imposition est inférieur à l'estimation de l'app — probablement à cause de crédits ou réductions (dons, garde d'enfant, etc.) non pris en compte." />
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">IR déclaré</span>
-                  <span className="font-semibold text-gray-900">{formatCurrency(declared)}</span>
+                  <span className="text-ardoise-500">IR déclaré</span>
+                  <span className="font-semibold text-ardoise-900 font-mono">{formatCurrency(declared)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm mt-1">
-                  <span className="text-gray-500">Écart estimé / réel</span>
-                  <span className={`font-semibold ${ecart >= 0 ? "text-red-500" : "text-green-600"}`}>
+                  <span className="text-ardoise-500">Écart estimé / réel</span>
+                  <span className={`font-semibold font-mono ${ecart >= 0 ? "text-red-500" : "text-menthe-600"}`}>
                     {ecart >= 0 ? "+" : ""}{formatCurrency(ecart)}
                   </span>
                 </div>
@@ -1850,7 +1852,7 @@ function SummaryTab() {
     {
       key: "ca", title: "Chiffre d'affaires", year: currentYear, value: annualCA, prevYear, prevValue: null,
       icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
         </svg>
       ),
@@ -1858,7 +1860,7 @@ function SummaryTab() {
     {
       key: "ch", title: "Charges pro.", year: currentYear, value: annualChargesPro, prevYear, prevValue: null,
       icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>
         </svg>
       ),
@@ -1866,7 +1868,7 @@ function SummaryTab() {
     {
       key: "cot", title: "Cotisations sociales", year: currentYear, value: annualCotisations, prevYear, prevValue: null,
       icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
       ),
@@ -1874,7 +1876,7 @@ function SummaryTab() {
     {
       key: "rem", title: "Rémunération avant impôt", year: currentYear, value: annualRemAvantImpot, prevYear, prevValue: null,
       icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4z"/>
         </svg>
       ),
@@ -1882,7 +1884,7 @@ function SummaryTab() {
     {
       key: "ir", title: "Impôt sur le revenu", year: irYear, value: irPrev, prevYear: irPrevYear, prevValue: null,
       icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>
         </svg>
       ),
@@ -1905,22 +1907,22 @@ function SummaryTab() {
       {/* Trésorerie prévisionnelle — nécessite des vraies transactions bancaires
           (pas juste un bridgeUserUuid posé). En fallback bordereaux on n'a pas
           de solde de compte exploitable → on garde l'overlay affiché. */}
-      <div className="relative bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+      <div className="relative bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6">
         <DataMissingOverlay bankConnected={(bankConnected && !isEstimated) || isLoading} />
         <div className="flex items-center justify-between mb-4 gap-3">
-          <h3 className="text-base font-semibold text-gray-900">Trésorerie prévisionnelle</h3>
-          <div className="inline-flex rounded-lg bg-gray-100 p-0.5 text-[11px] font-medium">
+          <h3 className="text-base font-semibold text-ardoise-900">Trésorerie prévisionnelle</h3>
+          <div className="inline-flex rounded-full bg-ardoise-100 p-0.5 text-[11px] font-medium">
             <button
               type="button"
               onClick={() => setIncludeRegul(true)}
-              className={`px-3 py-1.5 rounded-md transition-colors ${includeRegul ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              className={`px-3 py-1.5 rounded-full transition-colors ${includeRegul ? "bg-white text-ardoise-900 shadow-sm" : "text-ardoise-500 hover:text-ardoise-700"}`}
             >
               Prévoir la régularisation
             </button>
             <button
               type="button"
               onClick={() => setIncludeRegul(false)}
-              className={`px-3 py-1.5 rounded-md transition-colors ${!includeRegul ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              className={`px-3 py-1.5 rounded-full transition-colors ${!includeRegul ? "bg-white text-ardoise-900 shadow-sm" : "text-ardoise-500 hover:text-ardoise-700"}`}
             >
               Ne pas prévoir
             </button>
@@ -1928,7 +1930,7 @@ function SummaryTab() {
         </div>
 
         {isLoading ? (
-          <div className="h-64 bg-gray-100 rounded animate-pulse" />
+          <div className="h-64 bg-ardoise-100 rounded animate-pulse" />
         ) : (
           <>
             <ResponsiveContainer width="100%" height={260}>
@@ -1936,22 +1938,22 @@ function SummaryTab() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                 <XAxis
                   dataKey="name"
-                  tick={{ fontSize: 11, fill: "#6b7280" }}
+                  tick={{ fontSize: 11, fill: "#847A95" }}
                   tickLine={false}
                   axisLine={false}
                   tickMargin={20}
                 />
                 <YAxis
-                  tick={{ fontSize: 11, fill: "#9ca3af" }}
+                  tick={{ fontSize: 11, fill: "#A79EB5" }}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v: number) => `${v >= 0 ? "+" : ""}${(v / 1000).toFixed(1)}k`}
                   width={40}
                 />
-                <ReferenceLine y={0} stroke="#1f2937" strokeWidth={1.5} />
+                <ReferenceLine y={0} stroke="#2E2440" strokeWidth={1.5} />
                 <Tooltip
                   cursor={{ fill: "rgba(0,0,0,0.04)" }}
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E1DBEC", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
                   formatter={(value) => {
                     const num = typeof value === "number" ? value : Number(value ?? 0);
                     return [formatSigned(num), "Montant"];
@@ -1965,33 +1967,33 @@ function SummaryTab() {
                       const num = typeof value === "number" ? value : Number(value ?? 0);
                       return formatSigned(num);
                     }}
-                    style={{ fontSize: 11, fontWeight: 600, fill: "#1f2937" }}
+                    style={{ fontSize: 11, fontWeight: 600, fill: "#2E2440" }}
                   />
                   {chartData.map((d) => (
-                    <Cell key={d.key} fill={d.value >= 0 ? "#22c55e" : "#ef4444"} />
+                    <Cell key={d.key} fill={d.value >= 0 ? "#3DB87A" : "#ef4444"} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
 
-            <div className="mt-6 pt-4 border-t border-gray-100">
+            <div className="mt-6 pt-4 border-t border-ardoise-100">
               <div className="flex items-center gap-1.5 mb-1">
-                <p className="text-xs text-gray-400">Solde de trésorerie prévisionnelle</p>
+                <p className="text-xs text-ardoise-400">Solde de trésorerie prévisionnelle</p>
                 <InfoTooltip text={includeRegul
                   ? `Solde hypothétique après avoir anticipé votre régularisation d'Urssaf et de Carpimko ${currentYear} (ajustée en ${currentYear + 1}) ainsi que 3 mois de vos frais professionnels.`
                   : `Solde hypothétique après avoir anticipé 3 mois de vos frais professionnels (sans tenir compte de la régularisation ${currentYear}).`} />
               </div>
-              <p className={`text-3xl font-bold ${isEstimated ? "text-gray-300" : solde >= 0 ? "text-gray-900" : "text-red-500"}`}>
+              <p className={`text-3xl font-bold font-mono ${isEstimated ? "text-ardoise-300" : solde >= 0 ? "text-ardoise-900" : "text-red-500"}`}>
                 {isEstimated ? "—" : formatSigned(solde)}
               </p>
             </div>
 
-            <p className="mt-4 text-xs text-gray-500 leading-relaxed">
+            <p className="mt-4 text-xs text-ardoise-500 leading-relaxed">
               {includeRegul
                 ? <>Solde de trésorerie hypothétique après avoir anticipé votre régularisation d&apos;Urssaf et de Carpimko {currentYear} (ajustée en {currentYear + 1}) ainsi que 3 mois de vos frais professionnels.</>
                 : <>Solde de trésorerie hypothétique après avoir anticipé 3 mois de vos frais professionnels. La régularisation {currentYear} n&apos;est pas prise en compte.</>}
             </p>
-            <p className="mt-2 text-xs text-gray-500 leading-relaxed">
+            <p className="mt-2 text-xs text-ardoise-500 leading-relaxed">
               Un montant positif indique une trésorerie suffisante pour couvrir ces dépenses à venir.
             </p>
           </>
@@ -1999,17 +2001,17 @@ function SummaryTab() {
       </div>
 
       {/* Métriques annuelles N vs N-1 */}
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-6">
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6">
         {isEstimated && (
-          <div className="mb-3 text-[11px] text-gray-400 flex items-center gap-1.5">
-            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+          <div className="mb-3 text-[11px] text-ardoise-400 flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
               <circle cx="12" cy="12" r="10" />
               <path d="M12 16v-4" />
               <path d="M12 8h.01" />
             </svg>
             <span>
               Estimations à partir de vos bordereaux.{" "}
-              <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600">
+              <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-600">
                 Connecter ma banque
               </Link>
               .
@@ -2017,9 +2019,9 @@ function SummaryTab() {
           </div>
         )}
         {isLoading ? (
-          <div className="h-96 bg-gray-100 rounded animate-pulse" />
+          <div className="h-96 bg-ardoise-100 rounded animate-pulse" />
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-ardoise-100">
             {metrics.map((m, idx) => {
               const scale = Math.max(m.value, m.prevValue ?? 0);
               const pctN = scale > 0 ? Math.min(100, (m.value / scale) * 100) : 0;
@@ -2031,29 +2033,29 @@ function SummaryTab() {
                     {m.icon}
                   </div>
                   {/* Title */}
-                  <p className="text-sm font-medium text-gray-900 flex-1 min-w-0">{m.title}</p>
+                  <p className="text-sm font-medium text-ardoise-900 flex-1 min-w-0">{m.title}</p>
                   {/* Years + bars stacked */}
                   <div className="flex flex-col gap-2 w-[55%] shrink-0">
                     {/* Year N */}
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-medium text-gray-500 w-10 shrink-0">{m.year}</span>
-                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <span className="text-[11px] font-medium text-ardoise-500 w-10 shrink-0 font-mono">{m.year}</span>
+                      <div className="flex-1 h-1.5 bg-ardoise-100 rounded-full overflow-hidden">
                         <div className="h-full bg-brand-600 rounded-full transition-all" style={{ width: `${pctN}%` }} />
                       </div>
                       <div className="w-20 text-right shrink-0 leading-tight">
-                        <p className="text-[10px] text-gray-400 italic">Prévision</p>
-                        <p className="text-[12px] font-semibold text-gray-900">{formatCurrency(m.value)}</p>
+                        <p className="text-[10px] text-ardoise-400 italic">Prévision</p>
+                        <p className="text-[12px] font-semibold text-ardoise-900 font-mono">{formatCurrency(m.value)}</p>
                       </div>
                     </div>
                     {/* Year N-1 */}
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-medium text-gray-400 w-10 shrink-0">{m.prevYear}</span>
-                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-gray-300 rounded-full transition-all" style={{ width: `${pctNm1}%` }} />
+                      <span className="text-[11px] font-medium text-ardoise-400 w-10 shrink-0 font-mono">{m.prevYear}</span>
+                      <div className="flex-1 h-1.5 bg-ardoise-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-ardoise-300 rounded-full transition-all" style={{ width: `${pctNm1}%` }} />
                       </div>
                       <div className="w-20 text-right shrink-0 leading-tight">
                         <p className="text-[10px] italic">&nbsp;</p>
-                        <p className="text-[12px] font-semibold text-gray-300">{m.prevValue != null ? formatCurrency(m.prevValue) : "—"}</p>
+                        <p className="text-[12px] font-semibold text-ardoise-300 font-mono">{m.prevValue != null ? formatCurrency(m.prevValue) : "—"}</p>
                       </div>
                     </div>
                   </div>
@@ -2234,20 +2236,20 @@ function RemainderTab() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold text-gray-900">Reste à vivre</h2>
+        <h2 className="text-lg font-bold text-ardoise-900">Reste à vivre</h2>
         <InfoTooltip text="Trésorerie projetée à différents horizons : on part de votre solde bancaire, on y ajoute vos encaissements estimés (moyenne mensuelle des mois écoulés) et on déduit les échéances fiscales/sociales à venir ainsi qu'une moyenne de vos charges pro. Indicatif — ne tient pas compte de régularisations ou de dépenses ponctuelles." />
       </div>
 
       {isEstimated && (
-        <div className="text-[11px] text-gray-400 flex items-center gap-1.5">
-          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+        <div className="text-[11px] text-ardoise-400 flex items-center gap-1.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 16v-4" />
             <path d="M12 8h.01" />
           </svg>
           <span>
             Estimations à partir de vos bordereaux.{" "}
-            <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600">
+            <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-600">
               Connecter ma banque
             </Link>
             .
@@ -2255,20 +2257,20 @@ function RemainderTab() {
         </div>
       )}
 
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5">
-        <p className="text-xs text-gray-400 mb-1">Trésorerie actuelle (compte par défaut)</p>
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5">
+        <p className="text-xs text-ardoise-400 mb-1">Trésorerie actuelle (compte par défaut)</p>
         {isLoading ? (
-          <div className="h-8 w-32 bg-gray-100 rounded animate-pulse" />
+          <div className="h-8 w-32 bg-ardoise-100 rounded animate-pulse" />
         ) : (
           <div className="flex items-baseline gap-3 flex-wrap">
-            <p className={`text-3xl font-bold ${!hasBalance ? "text-gray-300" : defaultBalance >= 0 ? "text-gray-900" : "text-rose-600"}`}>
+            <p className={`text-3xl font-bold font-mono ${!hasBalance ? "text-ardoise-300" : defaultBalance >= 0 ? "text-ardoise-900" : "text-alerte-600"}`}>
               {formatCurrency(hasBalance ? defaultBalance : 0)}
             </p>
             {!hasBalance && (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-ardoise-500">
                 {!bankConnected ? "Banque non connectée" : !hp?.defaultBankAccountId ? "Aucun compte par défaut configuré" : "Compte par défaut introuvable"}
                 {" — "}
-                <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-700">
+                <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-700">
                   {!bankConnected ? "connecter ma banque" : "configurer un compte par défaut"}
                 </Link>{" "}
                 pour afficher le solde.
@@ -2290,44 +2292,44 @@ function RemainderTab() {
             { label: "Rétrocession + Madelin", value: b.projRetroMadelin },
           ].filter((r) => Math.abs(r.value) > 0.5);
           return (
-            <div key={b.key} className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-5">
+            <div key={b.key} className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5">
               <div className="mb-4">
-                <p className="text-sm font-semibold text-gray-900">{b.label}</p>
-                <p className="text-[11px] text-gray-400">au {b.horizonDate}</p>
+                <p className="text-sm font-semibold text-ardoise-900">{b.label}</p>
+                <p className="text-[11px] text-ardoise-400">au {b.horizonDate}</p>
               </div>
               {isLoading ? (
-                <div className="h-48 bg-gray-100 rounded animate-pulse" />
+                <div className="h-48 bg-ardoise-100 rounded animate-pulse" />
               ) : (
                 <>
-                  <div className="flex items-baseline justify-between pb-3 border-b border-gray-100">
-                    <p className="text-xs text-gray-500">Trésorerie de départ</p>
-                    <p className={`text-sm font-medium tabular-nums ${hasBalance ? "text-gray-900" : "text-gray-300"}`}>
+                  <div className="flex items-baseline justify-between pb-3 border-b border-ardoise-100">
+                    <p className="text-xs text-ardoise-500">Trésorerie de départ</p>
+                    <p className={`text-sm font-medium tabular-nums font-mono ${hasBalance ? "text-ardoise-900" : "text-ardoise-300"}`}>
                       {formatCurrency(hasBalance ? defaultBalance : 0)}
                     </p>
                   </div>
                   {rows.length === 0 ? (
-                    <p className="py-4 text-xs text-gray-400 italic">Aucune charge ni encaissement projeté sur la période.</p>
+                    <p className="py-4 text-xs text-ardoise-400 italic">Aucune charge ni encaissement projeté sur la période.</p>
                   ) : (
                     <div className="py-3 space-y-1.5">
                       {rows.map((r) => (
                         <div key={r.label} className="flex items-baseline justify-between text-xs">
-                          <span className="text-gray-600">{r.label}</span>
-                          <span className={`tabular-nums ${r.isCredit ? "text-emerald-600" : "text-gray-700"}`}>
+                          <span className="text-ardoise-600">{r.label}</span>
+                          <span className={`tabular-nums font-mono ${r.isCredit ? "text-menthe-600" : "text-ardoise-700"}`}>
                             {r.isCredit ? "+" : "−"}{formatCurrency(r.value)}
                           </span>
                         </div>
                       ))}
                     </div>
                   )}
-                  <div className="pt-3 border-t border-gray-100">
-                    <p className="text-[11px] text-gray-400 mb-0.5">Reste à vivre estimé</p>
-                    <p className={`text-2xl font-bold tabular-nums ${b.remainder >= 0 ? "text-gray-900" : "text-rose-600"}`}>
+                  <div className="pt-3 border-t border-ardoise-100">
+                    <p className="text-[11px] text-ardoise-400 mb-0.5">Reste à vivre estimé</p>
+                    <p className={`text-2xl font-bold tabular-nums font-mono ${b.remainder >= 0 ? "text-ardoise-900" : "text-alerte-600"}`}>
                       {formatCurrency(b.remainder)}
                     </p>
                     {!hasBalance && (
-                      <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                      <p className="text-[11px] text-ardoise-500 mt-1 leading-relaxed">
                         Calcul partant d&apos;une trésorerie à 0 € : {!bankConnected ? "banque non connectée" : !hp?.defaultBankAccountId ? "aucun compte par défaut configuré" : "compte par défaut introuvable"}.{" "}
-                        <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-700">
+                        <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-700">
                           {!bankConnected ? "Connecter ma banque" : "Configurer un compte"}
                         </Link>{" "}
                         pour partir d&apos;un solde réel.
@@ -2341,7 +2343,7 @@ function RemainderTab() {
         })}
       </div>
 
-      <p className="text-[11px] text-gray-400 leading-relaxed">
+      <p className="text-[11px] text-ardoise-400 leading-relaxed">
         Estimation indicative. Encaissements et charges pro. extrapolés à partir de la moyenne mensuelle des mois écoulés ; cotisations sociales et impôts pris sur le calendrier d&apos;échéances avec votre estimation annualisée. Ne tient pas compte d&apos;éventuelles régularisations URSSAF/CARPIMKO ni de dépenses ponctuelles.
       </p>
     </div>
@@ -2483,21 +2485,21 @@ function SimulationTab() {
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold text-gray-900">Simulation de cotisations</h2>
+          <h2 className="text-lg font-bold text-ardoise-900">Simulation de cotisations</h2>
           <InfoTooltip text="Calcul via OpenFisca (régime PAMC IDEL) + barème CARPIMKO. À titre indicatif : en pratique, l'URSSAF est calculée sur le revenu N-2 ; cette simulation suppose que le revenu indiqué est celui de l'année en cours." />
         </div>
         <ExportButtons onCsv={handleExportCsv} onPdf={handleExportPdf} disabled={!baseline || !simulated} />
       </div>
       {isEstimated && (
-        <div className="px-4 py-1.5 text-[11px] text-gray-400 flex items-center gap-1.5">
-          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+        <div className="px-4 py-1.5 text-[11px] text-ardoise-400 flex items-center gap-1.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 16v-4" />
             <path d="M12 8h.01" />
           </svg>
           <span>
             CA actuel calculé à partir de vos bordereaux.{" "}
-            <Link href="/transactions" className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600">
+            <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-600">
               Connecter ma banque
             </Link>{" "}
             pour caler la simulation sur vos encaissements réels.
@@ -2506,17 +2508,17 @@ function SimulationTab() {
       )}
 
       {/* Slider compact */}
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4 space-y-3">
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4 space-y-3">
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div className="flex items-baseline gap-3 flex-wrap">
-            <p className="text-2xl font-bold text-gray-900">{formatCurrency(simulatedCA)}</p>
+            <p className="text-2xl font-bold text-ardoise-900 font-mono">{formatCurrency(simulatedCA)}</p>
             {baselineCA > 0 && simulatedCA !== baselineCA && (
-              <p className={`text-xs font-medium ${simulatedCA > baselineCA ? "text-emerald-600" : "text-rose-600"}`}>
+              <p className={`text-xs font-medium ${simulatedCA > baselineCA ? "text-menthe-600" : "text-alerte-600"}`}>
                 {simulatedCA > baselineCA ? "+" : ""}{diffPct} % vs actuel ({formatCurrency(baselineCA)})
               </p>
             )}
             {baselineCA > 0 && simulatedCA === baselineCA && (
-              <p className="text-xs text-gray-500">CA actuel projeté</p>
+              <p className="text-xs text-ardoise-500">CA actuel projeté</p>
             )}
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -2531,7 +2533,7 @@ function SimulationTab() {
                   className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors disabled:opacity-30 ${
                     isActive
                       ? "bg-brand-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      : "bg-ardoise-100 text-ardoise-700 hover:bg-ardoise-200"
                   }`}
                 >
                   {m === 1 ? "Actuel" : `${m > 1 ? "+" : ""}${Math.round((m - 1) * 100)} %`}
@@ -2554,22 +2556,22 @@ function SimulationTab() {
 
       {/* KPI list + chart side-by-side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] divide-y divide-gray-100">
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 divide-y divide-ardoise-100">
           {cards.map((c) => {
             const diff = c.after - c.before;
             const isUp = diff > 0;
             const isGood = c.isReward ? isUp : !isUp;
             return (
               <div key={c.label} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                <p className="text-xs uppercase tracking-wide text-gray-500">{c.label}</p>
+                <p className="text-xs uppercase tracking-wide text-ardoise-500">{c.label}</p>
                 <div className="flex items-baseline gap-2 text-right">
-                  <p className="text-sm font-bold text-gray-900">{formatCurrency(c.after)}</p>
+                  <p className="text-sm font-bold text-ardoise-900 font-mono">{formatCurrency(c.after)}</p>
                   {Math.abs(diff) >= 1 ? (
-                    <p className={`text-xs font-medium tabular-nums ${isGood ? "text-emerald-600" : "text-rose-600"}`}>
+                    <p className={`text-xs font-medium tabular-nums font-mono ${isGood ? "text-menthe-600" : "text-alerte-600"}`}>
                       {diff > 0 ? "+" : ""}{formatCurrency(diff)}
                     </p>
                   ) : (
-                    <p className="text-xs text-gray-400">—</p>
+                    <p className="text-xs text-ardoise-400">—</p>
                   )}
                 </div>
               </div>
@@ -2577,17 +2579,17 @@ function SimulationTab() {
           })}
         </div>
 
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-4">
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
           <div ref={chartRef} className="w-full h-60">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E1DBEC" />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={(v) => `${Math.round(v / 1000)} k`} tick={{ fontSize: 11 }} width={36} />
                 <Tooltip formatter={(v) => formatCurrency(Number(v ?? 0))} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="actuel" name="Actuel" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="simule" name="Simulé" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="simule" name="Simulé" fill="#9060B6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -2595,13 +2597,13 @@ function SimulationTab() {
       </div>
 
       {(loading || (baseline === null && !loading)) && (
-        <p className="text-xs text-gray-500 text-center">
+        <p className="text-xs text-ardoise-500 text-center">
           {loading ? "Chargement…" : "Pas encore de CA encaissé cette année — aucune base de comparaison."}
         </p>
       )}
-      {simLoading && <p className="text-sm text-gray-400 text-center">Recalcul…</p>}
+      {simLoading && <p className="text-sm text-ardoise-400 text-center">Recalcul…</p>}
       {hp?.taxRegime === "micro_bnc" && (
-        <p className="text-xs text-gray-500 text-center">
+        <p className="text-xs text-ardoise-500 text-center">
           Régime micro-BNC : abattement forfaitaire de 34 % appliqué automatiquement sur le CA pour le calcul des cotisations.
         </p>
       )}
@@ -2625,20 +2627,20 @@ function YearSelector({
       <button
         type="button"
         onClick={() => setYear((y) => y - 1)}
-        className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+        className="flex items-center justify-center w-8 h-8 rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-ardoise-100 transition-colors"
         aria-label="Année précédente"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <span className="text-sm font-semibold text-gray-900 w-12 text-center">{year}</span>
+      <span className="text-sm font-semibold text-ardoise-900 w-12 text-center font-mono">{year}</span>
       <button
         type="button"
         onClick={() => setYear((y) => y + 1)}
         disabled={year >= maxYear}
-        className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        className="flex items-center justify-center w-8 h-8 rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-ardoise-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         aria-label="Année suivante"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
     </div>
   );
@@ -2654,14 +2656,14 @@ function InfoTooltip({ text }: { text: string }) {
         onMouseEnter={() => setShow(true)}
         onMouseLeave={() => setShow(false)}
         onClick={() => setShow((v) => !v)}
-        className="flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 transition-colors shrink-0 cursor-help"
+        className="flex items-center justify-center w-4 h-4 rounded-full bg-ardoise-200 text-ardoise-500 hover:bg-ardoise-300 transition-colors shrink-0 cursor-help"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
       </button>
       {show && (
-        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg leading-relaxed">
+        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-ardoise-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg leading-relaxed">
           {text}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-ardoise-900" />
         </div>
       )}
     </div>

@@ -2,47 +2,43 @@ import Link from "next/link";
 
 export function Logo({ size = "default", variant = "dark" }: { size?: "small" | "default" | "large"; variant?: "dark" | "light" }) {
   const dimensions = {
-    small: { width: 150, height: 40 },
-    default: { width: 200, height: 52 },
-    large: { width: 270, height: 70 },
+    small: { width: 124, height: 33 },
+    default: { width: 164, height: 44 },
+    large: { width: 220, height: 59 },
   };
 
   const { width, height } = dimensions[size];
-  const textColor = variant === "light" ? "white" : "#1a1a1f";
-  const subColor = "#EC6C12";
+  // Lettres en violet de marque sur fond clair, blanc sur fond sombre (charte ActiDec v3)
+  const textColor = variant === "light" ? "#FFFFFF" : "#5C3A8A";
+  // Orange CTA — capitales A/D + point "pouls" (charte : couleur d'accent du wordmark)
+  const accent = "#EC6C12";
 
   return (
     <Link href="/" className="inline-block select-none" draggable={false}>
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 340 72"
+        viewBox="0 0 180 48"
         width={width}
         height={height}
-        aria-label="Actidec"
+        aria-label="ActiDec"
         style={{ pointerEvents: "none", userSelect: "none" }}
       >
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;800');`}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@700');`}</style>
         <text
-          x="10"
-          y="42"
-          fontFamily="'Manrope', system-ui, -apple-system, sans-serif"
-          fontWeight="800"
-          fontSize="42"
-          fill={textColor}
-          letterSpacing="-2"
+          x="2"
+          y="35"
+          fontFamily="'DM Sans', system-ui, -apple-system, sans-serif"
+          fontWeight="700"
+          fontSize="30"
+          letterSpacing="-1.5"
         >
-          actidec
+          <tspan fill={accent}>A</tspan>
+          <tspan fill={textColor}>cti</tspan>
+          <tspan fill={accent}>D</tspan>
+          <tspan fill={textColor}>ec</tspan>
         </text>
-        <text
-          x="10"
-          y="60"
-          fontFamily="'Manrope', system-ui, -apple-system, sans-serif"
-          fontWeight="300"
-          fontSize="12"
-          fill={subColor}
-        >
-          Votre expert-comptable digital
-        </text>
+        {/* Point "pouls" rond (charte ActiDec v3) — cercle vectoriel, jamais un glyphe carré */}
+        <circle className="logo-pulse" cx="123" cy="31" r="3.4" fill={accent} />
       </svg>
     </Link>
   );

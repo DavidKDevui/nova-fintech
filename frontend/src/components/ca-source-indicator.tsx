@@ -22,10 +22,10 @@ export function CASourceIndicator({
   const message = FALLBACK_MESSAGES[source];
   return (
     <span className="relative group inline-flex items-center align-middle">
-      <span className="w-4 h-4 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-[10px] font-bold cursor-help hover:bg-gray-200 hover:text-gray-600 transition-colors">
+      <span className="w-4 h-4 rounded-full bg-ardoise-100 text-ardoise-400 flex items-center justify-center text-[10px] font-bold cursor-help hover:bg-ardoise-200 hover:text-ardoise-600 transition-colors">
         i
       </span>
-      <span className="absolute left-1/2 -translate-x-1/2 top-6 w-64 bg-gray-900 text-white text-xs rounded-lg px-3.5 py-3 hidden group-hover:block z-[9999] shadow-lg leading-relaxed text-left font-normal normal-case">
+      <span className="absolute left-1/2 -translate-x-1/2 top-6 w-64 bg-ardoise-900 text-white text-xs rounded-lg px-3.5 py-3 hidden group-hover:block z-[9999] shadow-lg leading-relaxed text-left font-normal normal-case">
         {message}
       </span>
     </span>

@@ -69,7 +69,7 @@ export function PracticeTable({
     <div className="bg-white/70 backdrop-blur-xl border border-white/50 rounded-lg overflow-x-auto">
       <table className="w-full text-sm min-w-[600px]">
         <thead>
-          <tr className="border-b border-gray-200/50 text-left text-gray-500">
+          <tr className="border-b border-ardoise-200/50 text-left text-ardoise-500">
             <th className="px-4 md:px-6 py-4 font-medium">Nom</th>
             <th className="px-4 md:px-6 py-4 font-medium">FINESS</th>
             <th className="px-4 md:px-6 py-4 font-medium">Date d&apos;ajout</th>
@@ -78,7 +78,7 @@ export function PracticeTable({
         </thead>
         <tbody>
           {practices.map((practice) => (
-            <tr key={practice.id} className="border-b border-gray-100/50 last:border-0 transition-colors hover:bg-white/40">
+            <tr key={practice.id} className="border-b border-ardoise-100/50 last:border-0 transition-colors hover:bg-white/40">
               {editingId === practice.id ? (
                 <>
                   <td className="px-4 md:px-6 py-3">
@@ -86,7 +86,7 @@ export function PracticeTable({
                       type="text"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="w-full border border-gray-200/50 bg-white/50 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full border border-ardoise-200/50 bg-white/50 px-3 py-1.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
                     />
                   </td>
                   <td className="px-4 md:px-6 py-3">
@@ -95,10 +95,10 @@ export function PracticeTable({
                       value={editFiness}
                       onChange={(e) => setEditFiness(e.target.value)}
                       maxLength={9}
-                      className="w-full border border-gray-200/50 bg-white/50 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full border border-ardoise-200/50 bg-white/50 px-3 py-1.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
                     />
                   </td>
-                  <td className="px-4 md:px-6 py-4 text-gray-500">
+                  <td className="px-4 md:px-6 py-4 text-ardoise-500">
                     {new Date(practice.createdAt).toLocaleDateString("fr-FR")}
                   </td>
                   <td className="px-4 md:px-6 py-3 text-right">
@@ -106,17 +106,17 @@ export function PracticeTable({
                       <button
                         onClick={() => saveEdit(practice.id)}
                         disabled={saving || !editName.trim() || !editFiness.trim()}
-                        className="p-1.5 text-green-600 rounded-md hover:bg-green-50 hover:text-green-700 disabled:opacity-50 transition-all"
+                        className="p-1.5 text-menthe-600 rounded-md hover:bg-menthe-50 hover:text-menthe-700 disabled:opacity-50 transition-all"
                         title="Enregistrer"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                       </button>
                       <button
                         onClick={cancelEdit}
-                        className="p-1.5 text-gray-500 rounded-md hover:bg-gray-100 hover:text-gray-700 transition-all"
+                        className="p-1.5 text-ardoise-500 rounded-md hover:bg-ardoise-100 hover:text-ardoise-700 transition-all"
                         title="Annuler"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                       </button>
                     </div>
                   </td>
@@ -124,18 +124,18 @@ export function PracticeTable({
               ) : (
                 <>
                   <td className="px-4 md:px-6 py-4 font-medium">{practice.name}</td>
-                  <td className="px-4 md:px-6 py-4 text-gray-500">{practice.finess}</td>
-                  <td className="px-4 md:px-6 py-4 text-gray-500">
+                  <td className="px-4 md:px-6 py-4 text-ardoise-500">{practice.finess}</td>
+                  <td className="px-4 md:px-6 py-4 text-ardoise-500">
                     {new Date(practice.createdAt).toLocaleDateString("fr-FR")}
                   </td>
                   <td className="px-4 md:px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => startEdit(practice)}
-                        className="p-1.5 text-gray-500 rounded-md hover:bg-gray-100 hover:text-gray-700 transition-all"
+                        className="p-1.5 text-ardoise-500 rounded-md hover:bg-ardoise-100 hover:text-ardoise-700 transition-all"
                         title="Modifier"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                       </button>
                       <button
                         onClick={() => handleDelete(practice.id)}
@@ -143,7 +143,7 @@ export function PracticeTable({
                         className="p-1.5 text-red-500 rounded-md hover:bg-red-50 hover:text-red-700 disabled:opacity-50 transition-all"
                         title="Supprimer"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                       </button>
                     </div>
                   </td>
@@ -153,7 +153,7 @@ export function PracticeTable({
           ))}
           {practices.length === 0 && (
             <tr>
-              <td colSpan={4} className="px-4 md:px-6 py-8 text-center text-gray-400">
+              <td colSpan={4} className="px-4 md:px-6 py-8 text-center text-ardoise-400">
                 Aucun cabinet
               </td>
             </tr>

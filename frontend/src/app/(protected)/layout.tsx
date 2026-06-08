@@ -21,8 +21,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Service indisponible</h1>
-          <p className="text-sm text-gray-500">Veuillez réessayer dans quelques instants.</p>
+          <h1 className="text-2xl font-bold text-ardoise-900 mb-2">Service indisponible</h1>
+          <p className="text-sm text-ardoise-500">Veuillez réessayer dans quelques instants.</p>
         </div>
       </div>
     );

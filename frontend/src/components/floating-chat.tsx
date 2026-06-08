@@ -72,9 +72,9 @@ export function FloatingChat({ suggestions = [] }: { suggestions?: string[] }) {
 
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-2rem)] h-[560px] max-h-[calc(100vh-3rem)] rounded-2xl bg-white shadow-2xl border border-gray-200/70 flex flex-col animate-fade-up-fast">
+        <div className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-2rem)] h-[560px] max-h-[calc(100vh-3rem)] rounded-2xl bg-white shadow-2xl border border-ardoise-200/70 flex flex-col animate-fade-up-fast">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/70">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-ardoise-200/70">
             <div className="flex items-center gap-2">
               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-100 text-brand-600">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -85,8 +85,8 @@ export function FloatingChat({ suggestions = [] }: { suggestions?: string[] }) {
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-semibold text-gray-900 leading-tight">Nova</p>
-                <p className="text-[10px] text-gray-400 leading-tight">Assistant financier</p>
+                <p className="text-sm font-semibold text-ardoise-900 leading-tight">Nova</p>
+                <p className="text-[10px] text-ardoise-400 leading-tight">Assistant financier</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -95,18 +95,18 @@ export function FloatingChat({ suggestions = [] }: { suggestions?: string[] }) {
                   type="button"
                   onClick={resetConversation}
                   aria-label="Nouvelle conversation"
-                  className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                  className="p-1.5 text-ardoise-400 hover:text-ardoise-700 hover:bg-ardoise-100 rounded-md transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16" /><path d="M3 21v-5h5" /></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16" /><path d="M3 21v-5h5" /></svg>
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Fermer"
-                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                className="p-1.5 text-ardoise-400 hover:text-ardoise-700 hover:bg-ardoise-100 rounded-md transition-colors"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
               </button>
             </div>
           </div>
@@ -116,8 +116,8 @@ export function FloatingChat({ suggestions = [] }: { suggestions?: string[] }) {
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-4">
                 <div className="text-center">
-                  <p className="text-sm font-medium text-gray-900">Bonjour, je suis Nova</p>
-                  <p className="text-xs text-gray-400 mt-1">Comment puis-je vous aider ?</p>
+                  <p className="text-sm font-medium text-ardoise-900">Bonjour, je suis Nova</p>
+                  <p className="text-xs text-ardoise-400 mt-1">Comment puis-je vous aider ?</p>
                 </div>
                 {suggestions.length > 0 && (
                   <div className="grid grid-cols-1 gap-2 w-full">
@@ -126,7 +126,7 @@ export function FloatingChat({ suggestions = [] }: { suggestions?: string[] }) {
                         key={s}
                         type="button"
                         onClick={() => sendMessage(s)}
-                        className="text-left text-xs text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200/70 rounded-lg px-3 py-2 transition-colors"
+                        className="text-left text-xs text-ardoise-600 bg-ardoise-50 hover:bg-ardoise-100 border border-ardoise-200/70 rounded-lg px-3 py-2 transition-colors"
                       >
                         {s}
                       </button>
@@ -143,7 +143,7 @@ export function FloatingChat({ suggestions = [] }: { suggestions?: string[] }) {
                   >
                     {msg.tools && msg.tools.length > 0 && (
                       <div className="flex items-center gap-1.5 mb-1 px-1">
-                        <span className="text-[10px] text-gray-400">
+                        <span className="text-[10px] text-ardoise-400">
                           {msg.tools.map((t) => TOOL_LABELS[t] || t).join(", ")}
                         </span>
                       </div>
@@ -152,7 +152,7 @@ export function FloatingChat({ suggestions = [] }: { suggestions?: string[] }) {
                       className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs ${
                         msg.role === "user"
                           ? "bg-brand-600 text-white rounded-br-md"
-                          : "bg-gray-100 text-gray-900 rounded-bl-md"
+                          : "bg-ardoise-100 text-ardoise-900 rounded-bl-md"
                       }`}
                     >
                       {msg.content ? (
@@ -161,8 +161,8 @@ export function FloatingChat({ suggestions = [] }: { suggestions?: string[] }) {
                             [&_p]:text-xs [&_li]:text-xs [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs
                             [&_p]:my-1 [&_p]:leading-relaxed
                             [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5
-                            [&_strong]:font-semibold [&_strong]:text-gray-900
-                            [&_code]:bg-gray-200 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[10px]
+                            [&_strong]:font-semibold [&_strong]:text-ardoise-900
+                            [&_code]:bg-ardoise-200 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[10px]
                           ">
                             <ReactMarkdown>{msg.content}</ReactMarkdown>
                           </div>
@@ -171,9 +171,9 @@ export function FloatingChat({ suggestions = [] }: { suggestions?: string[] }) {
                         )
                       ) : (
                         <span className="inline-flex gap-1">
-                          <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                          <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                          <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                          <span className="w-1.5 h-1.5 bg-ardoise-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <span className="w-1.5 h-1.5 bg-ardoise-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <span className="w-1.5 h-1.5 bg-ardoise-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                         </span>
                       )}
                     </div>
@@ -185,7 +185,7 @@ export function FloatingChat({ suggestions = [] }: { suggestions?: string[] }) {
           </div>
 
           {/* Input */}
-          <div className="border-t border-gray-200/70 p-3 flex items-end gap-2">
+          <div className="border-t border-ardoise-200/70 p-3 flex items-end gap-2">
             <textarea
               ref={inputRef}
               value={input}
@@ -194,7 +194,7 @@ export function FloatingChat({ suggestions = [] }: { suggestions?: string[] }) {
               placeholder="Posez votre question..."
               rows={1}
               disabled={loading}
-              className="flex-1 resize-none rounded-lg border border-gray-200/70 bg-white px-3 py-2 text-xs text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent disabled:opacity-50"
+              className="flex-1 resize-none rounded-lg border border-ardoise-200/70 bg-white px-3 py-2 text-xs text-ardoise-900 placeholder:text-ardoise-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent disabled:opacity-50"
               style={{ minHeight: "36px", maxHeight: "100px" }}
               onInput={(e) => {
                 const target = e.target as HTMLTextAreaElement;
@@ -209,7 +209,7 @@ export function FloatingChat({ suggestions = [] }: { suggestions?: string[] }) {
               aria-label="Envoyer"
               className="flex items-center justify-center w-9 h-9 rounded-lg bg-brand-600 text-white transition-all hover:bg-brand-700 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
             </button>
           </div>
         </div>

@@ -35,7 +35,7 @@ export function Modal({ open, onClose, children }: ModalProps) {
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
       className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in-fast p-4"
     >
-      <div className="w-full max-w-sm bg-white rounded-xl p-6 border border-gray-200 animate-fade-up-fast">
+      <div className="w-full max-w-sm bg-white rounded-xl p-6 border border-ardoise-200 animate-fade-up-fast">
         {children}
       </div>
     </div>,

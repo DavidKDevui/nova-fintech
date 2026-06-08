@@ -217,50 +217,50 @@ export function DeadlinesClient() {
 
       {/* Stats row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-3.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Prochaine échéance</p>
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-3.5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-ardoise-400 mb-1">Prochaine échéance</p>
           {nextEvent ? (
             <>
-              <p className="text-2xl font-bold text-gray-900">{formatCountdown(getDaysUntil(currentMonth, currentDay, nextEvent.month, nextEvent.day))}</p>
-              <p className="text-xs text-gray-500 mt-1 truncate">{nextEvent.label}</p>
+              <p className="text-2xl font-bold text-ardoise-900">{formatCountdown(getDaysUntil(currentMonth, currentDay, nextEvent.month, nextEvent.day))}</p>
+              <p className="text-xs text-ardoise-500 mt-1 truncate">{nextEvent.label}</p>
               {nextEvent.estimatedAmount != null && nextEvent.estimatedAmount > 0 ? (
-                <p className="text-xs font-semibold text-brand-600 mt-0.5">~{formatCurrency(nextEvent.estimatedAmount)}</p>
+                <p className="text-xs font-semibold text-brand-600 mt-0.5 font-mono">~{formatCurrency(nextEvent.estimatedAmount)}</p>
               ) : null}
             </>
           ) : (
-            <p className="text-sm text-gray-400">Aucune</p>
+            <p className="text-sm text-ardoise-400">Aucune</p>
           )}
         </div>
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-3.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Ce mois-ci</p>
-          <p className="text-2xl font-bold text-gray-900">{remainingThisMonth} <span className="text-base font-normal text-gray-400">restante{remainingThisMonth > 1 ? "s" : ""}</span></p>
-          <p className="text-xs text-gray-500 mt-1">{passedThisMonth} passée{passedThisMonth > 1 ? "s" : ""} / {totalThisMonth} au total</p>
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-3.5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-ardoise-400 mb-1">Ce mois-ci</p>
+          <p className="text-2xl font-bold text-ardoise-900">{remainingThisMonth} <span className="text-base font-normal text-ardoise-400">restante{remainingThisMonth > 1 ? "s" : ""}</span></p>
+          <p className="text-xs text-ardoise-500 mt-1">{passedThisMonth} passée{passedThisMonth > 1 ? "s" : ""} / {totalThisMonth} au total</p>
         </div>
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] p-3.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1 inline-flex items-center gap-1.5">
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-3.5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-ardoise-400 mb-1 inline-flex items-center gap-1.5">
             Cotisations annuelles estimées
             <CASourceIndicator source={effectiveCA.source} />
           </p>
           {estimate ? (
             <>
-              <p className="text-2xl font-bold text-gray-900">~{formatCurrency(estimate.urssafAnnuel + estimate.carpimkoAnnuel + estimate.pasAnnuel)}</p>
+              <p className="text-2xl font-bold text-ardoise-900 font-mono">~{formatCurrency(estimate.urssafAnnuel + estimate.carpimkoAnnuel + estimate.pasAnnuel)}</p>
               <div className="flex flex-col gap-0.5 mt-1.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 text-gray-400"><span className={`w-1.5 h-1.5 rounded-full ${EVENT_DOT.urssaf}`} />URSSAF</span>
-                  <span className="text-gray-700 font-medium">{formatCurrency(estimate.urssafAnnuel)}</span>
+                  <span className="flex items-center gap-1.5 text-ardoise-400"><span className={`w-1.5 h-1.5 rounded-full ${EVENT_DOT.urssaf}`} />URSSAF</span>
+                  <span className="text-ardoise-700 font-medium font-mono">{formatCurrency(estimate.urssafAnnuel)}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 text-gray-400"><span className={`w-1.5 h-1.5 rounded-full ${EVENT_DOT.carpimko}`} />CARPIMKO</span>
-                  <span className="text-gray-700 font-medium">{formatCurrency(estimate.carpimkoAnnuel)}</span>
+                  <span className="flex items-center gap-1.5 text-ardoise-400"><span className={`w-1.5 h-1.5 rounded-full ${EVENT_DOT.carpimko}`} />CARPIMKO</span>
+                  <span className="text-ardoise-700 font-medium font-mono">{formatCurrency(estimate.carpimkoAnnuel)}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 text-gray-400"><span className={`w-1.5 h-1.5 rounded-full ${EVENT_DOT.ir}`} />Impôt revenu</span>
-                  <span className="text-gray-700 font-medium">{formatCurrency(estimate.pasAnnuel)}</span>
+                  <span className="flex items-center gap-1.5 text-ardoise-400"><span className={`w-1.5 h-1.5 rounded-full ${EVENT_DOT.ir}`} />Impôt revenu</span>
+                  <span className="text-ardoise-700 font-medium font-mono">{formatCurrency(estimate.pasAnnuel)}</span>
                 </div>
               </div>
             </>
           ) : (
-            <p className="text-sm text-gray-400">Données insuffisantes</p>
+            <p className="text-sm text-ardoise-400">Données insuffisantes</p>
           )}
         </div>
       </div>
@@ -274,9 +274,9 @@ export function DeadlinesClient() {
             className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
               filter === f.key
                 ? f.key === "all"
-                  ? "bg-gray-900 text-white"
+                  ? "bg-ardoise-900 text-white"
                   : `${EVENT_BADGE[f.key]} ring-1 ring-current`
-                : "bg-gray-100 text-gray-500 hover:text-gray-900"
+                : "bg-ardoise-100 text-ardoise-500 hover:text-ardoise-900"
             }`}
           >
             {f.label}
@@ -289,11 +289,11 @@ export function DeadlinesClient() {
         <DataMissingOverlay bankConnected={bankConnected} />
 
       {/* Upcoming list */}
-      <div className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden flex flex-col lg:max-h-[540px]">
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 overflow-hidden flex flex-col lg:max-h-[540px]">
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-ardoise-100 shrink-0">
           <div>
-            <h2 className="text-sm font-bold text-gray-900">Prochaines échéances</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{upcoming.length} échéance{upcoming.length > 1 ? "s" : ""} dans les 30 prochains jours</p>
+            <h2 className="text-sm font-bold text-ardoise-900">Prochaines échéances</h2>
+            <p className="text-xs text-ardoise-400 mt-0.5">{upcoming.length} échéance{upcoming.length > 1 ? "s" : ""} dans les 30 prochains jours</p>
           </div>
           <ExportButtons
             onCsv={handleExportCsv}
@@ -302,16 +302,16 @@ export function DeadlinesClient() {
           />
         </div>
         {upcoming.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-gray-400 text-center">Aucune échéance à venir pour ce filtre.</p>
+          <p className="px-5 py-8 text-sm text-ardoise-400 text-center">Aucune échéance à venir pour ce filtre.</p>
         ) : (
-          <div className="divide-y divide-gray-100 overflow-y-auto flex-1">
+          <div className="divide-y divide-ardoise-100 overflow-y-auto flex-1">
             {upcoming.map((evt, i) => {
               const daysUntil = getDaysUntil(currentMonth, currentDay, evt.month, evt.day);
               return (
                 <div key={i} className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/40 transition-colors">
                   <div className="w-14 shrink-0">
-                    <p className="text-[10px] uppercase text-gray-400">{MONTH_NAMES[evt.month]?.slice(0, 3)}</p>
-                    <p className="text-xl font-bold text-gray-900 -mt-0.5">{evt.day}</p>
+                    <p className="text-[10px] uppercase text-ardoise-400">{MONTH_NAMES[evt.month]?.slice(0, 3)}</p>
+                    <p className="text-xl font-bold text-ardoise-900 -mt-0.5 font-mono">{evt.day}</p>
                   </div>
                   <div className="w-16 flex items-center justify-center shrink-0">
                     {evt.type === "urssaf" ? (
@@ -324,32 +324,32 @@ export function DeadlinesClient() {
                       // eslint-disable-next-line @next/next/no-img-element -- static logo asset
                       <img src="/logo-dgfip.svg" alt="DGFiP" className="h-7 w-full object-contain" />
                     ) : evt.type === "cfe" ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01M8 14h.01M16 14h.01M12 14h.01"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-menthe-500"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01M8 14h.01M16 14h.01M12 14h.01"/></svg>
                     ) : (
                       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-800">{evt.label}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className="text-sm text-ardoise-800">{evt.label}</p>
+                    <p className="text-xs text-ardoise-400 mt-0.5">
                       {daysUntil === 0 ? "Aujourd'hui" : daysUntil === 1 ? "Demain" : `Dans ${daysUntil} jours`}
                     </p>
                   </div>
                   {evt.estimatedAmount != null && evt.estimatedAmount > 0 ? (
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-sm font-semibold text-gray-900">~{formatCurrency(evt.estimatedAmount)}</span>
+                      <span className="text-sm font-semibold text-ardoise-900 font-mono">~{formatCurrency(evt.estimatedAmount)}</span>
                       <div className="relative group">
-                        <div className="w-4 h-4 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-[10px] font-bold cursor-help hover:bg-gray-200 hover:text-gray-600 transition-colors">i</div>
-                        <div className="absolute right-0 top-6 w-72 bg-gray-900 text-white text-xs rounded-lg px-3.5 py-3 hidden group-hover:block z-[9999] shadow-lg space-y-2">
+                        <div className="w-4 h-4 rounded-full bg-ardoise-100 text-ardoise-400 flex items-center justify-center text-[10px] font-bold cursor-help hover:bg-ardoise-200 hover:text-ardoise-600 transition-colors">i</div>
+                        <div className="absolute right-0 top-6 w-72 bg-ardoise-900 text-white text-xs rounded-lg px-3.5 py-3 hidden group-hover:block z-[9999] shadow-lg space-y-2">
                           {getEstimateTooltip(evt.type, estimate, prefs)}
                         </div>
                       </div>
                     </div>
                   ) : evt.estimatedAmount === 0 ? (
-                    <span className="text-xs font-medium text-green-600 shrink-0">Exonéré</span>
+                    <span className="text-xs font-medium text-menthe-600 shrink-0">Exonéré</span>
                   ) : evt.type === "declaration" ? null : (
-                    <span className="flex items-center gap-1 text-xs text-gray-300 shrink-0">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span className="flex items-center gap-1 text-xs text-ardoise-300 shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                       Estimation à venir
                     </span>
                   )}
@@ -361,19 +361,19 @@ export function DeadlinesClient() {
       </div>
 
       {/* ── Calendar Grid ── */}
-      <div ref={calendarCardRef} className="bg-white/70 backdrop-blur-xl border border-gray-200/70 rounded-[15px] overflow-hidden">
+      <div ref={calendarCardRef} className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 overflow-hidden">
         {/* Month navigation */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-ardoise-100">
           <button
             onClick={() => { setCalMonth(Math.max(0, calMonth - 1)); setSelectedDay(null); }}
             disabled={calMonth <= 0}
             data-html2canvas-ignore="true"
-            className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="p-1.5 rounded hover:bg-ardoise-100 text-ardoise-400 hover:text-ardoise-900 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <div className="text-center">
-            <h2 className="text-sm font-bold text-gray-900">{MONTH_NAMES[calMonth]} {currentYear}</h2>
+            <h2 className="text-sm font-bold text-ardoise-900">{MONTH_NAMES[calMonth]} {currentYear}</h2>
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -381,19 +381,19 @@ export function DeadlinesClient() {
               onClick={exportCalendarToPdf}
               disabled={calExporting}
               data-html2canvas-ignore="true"
-              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md bg-ardoise-100 text-ardoise-700 hover:bg-ardoise-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Exporter le calendrier en PDF"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
               {calExporting ? "..." : "PDF"}
             </button>
             <button
               onClick={() => { setCalMonth(Math.min(11, calMonth + 1)); setSelectedDay(null); }}
               disabled={calMonth >= 11}
               data-html2canvas-ignore="true"
-              className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="p-1 rounded hover:bg-ardoise-100 text-ardoise-400 hover:text-ardoise-900 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
           </div>
         </div>
@@ -403,7 +403,7 @@ export function DeadlinesClient() {
           {/* Day headers */}
           <div className="grid grid-cols-7 mb-2">
             {DAY_NAMES.map((d) => (
-              <div key={d} className="text-center text-xs font-semibold uppercase tracking-wider text-gray-400 py-1">
+              <div key={d} className="text-center text-xs font-semibold uppercase tracking-wider text-ardoise-400 py-1">
                 {d}
               </div>
             ))}
@@ -430,16 +430,16 @@ export function DeadlinesClient() {
                   onClick={() => hasEvents ? setSelectedDay(isSelected ? null : day) : setSelectedDay(null)}
                   className={`
                     h-20 flex flex-col items-center justify-center rounded-md transition-all
-                    ${isSelected ? "bg-gray-900 text-white" : ""}
-                    ${!isSelected && isToday ? "bg-blue-50 text-blue-700 font-bold" : ""}
-                    ${!isSelected && !isToday && hasEvents ? "hover:bg-gray-100 cursor-pointer" : ""}
-                    ${!isSelected && !isToday && !hasEvents ? "text-gray-300 cursor-default" : ""}
-                    ${!isSelected && !isToday && hasEvents && !isPast ? "text-gray-900 font-medium" : ""}
-                    ${!isSelected && !isToday && hasEvents && isPast ? "text-gray-400" : ""}
-                    ${!isSelected && !isToday && !hasEvents && isPast ? "text-gray-200" : ""}
+                    ${isSelected ? "bg-ardoise-900 text-white" : ""}
+                    ${!isSelected && isToday ? "bg-violet-50 text-violet-700 font-bold" : ""}
+                    ${!isSelected && !isToday && hasEvents ? "hover:bg-ardoise-100 cursor-pointer" : ""}
+                    ${!isSelected && !isToday && !hasEvents ? "text-ardoise-300 cursor-default" : ""}
+                    ${!isSelected && !isToday && hasEvents && !isPast ? "text-ardoise-900 font-medium" : ""}
+                    ${!isSelected && !isToday && hasEvents && isPast ? "text-ardoise-400" : ""}
+                    ${!isSelected && !isToday && !hasEvents && isPast ? "text-ardoise-200" : ""}
                   `}
                 >
-                  <span className="text-sm">{day}</span>
+                  <span className="text-sm font-mono">{day}</span>
                   {hasEvents && (
                     <div className="flex gap-0.5 mt-0.5">
                       {eventTypes.slice(0, 3).map((type) => (
@@ -458,19 +458,19 @@ export function DeadlinesClient() {
 
         {/* Selected day detail */}
         {selectedDay && selectedDayEvents.length > 0 && (
-          <div className="border-t border-gray-100">
-            <div className="px-3 py-2 bg-gray-50">
-              <p className="text-[10px] font-semibold text-gray-900">
+          <div className="border-t border-ardoise-100">
+            <div className="px-3 py-2 bg-ardoise-50">
+              <p className="text-[10px] font-semibold text-ardoise-900">
                 {selectedDay} {MONTH_NAMES[calMonth]} — {selectedDayEvents.length} échéance{selectedDayEvents.length > 1 ? "s" : ""}
               </p>
             </div>
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-ardoise-100">
               {selectedDayEvents.map((evt, i) => (
                 <div key={i} className="flex items-center gap-2 px-3 py-2">
                   <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${EVENT_DOT[evt.type]}`} />
-                  <p className="text-xs text-gray-800 flex-1">{evt.label}</p>
+                  <p className="text-xs text-ardoise-800 flex-1">{evt.label}</p>
                   {evt.estimatedAmount != null && evt.estimatedAmount > 0 ? (
-                    <span className="text-xs font-semibold text-gray-700 shrink-0">~{formatCurrency(evt.estimatedAmount)}</span>
+                    <span className="text-xs font-semibold text-ardoise-700 shrink-0 font-mono">~{formatCurrency(evt.estimatedAmount)}</span>
                   ) : null}
                   <span className={`text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0 ${EVENT_BADGE[evt.type]}`}>
                     {EVENT_LABEL[evt.type]}
@@ -482,7 +482,7 @@ export function DeadlinesClient() {
         )}
 
         {/* Legend */}
-        <div className="flex flex-wrap gap-x-5 gap-y-2 px-4 py-3 border-t border-gray-100 text-xs text-gray-400">
+        <div className="flex flex-wrap gap-x-5 gap-y-2 px-4 py-3 border-t border-ardoise-100 text-xs text-ardoise-400">
           {Object.entries(EVENT_DOT).map(([key, color]) => (
             <span key={key} className="flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full ${color}`} /> {EVENT_LABEL[key]}
@@ -553,15 +553,15 @@ function getEstimateTooltip(
       <div className="space-y-1.5 text-[11px] text-white/70 mt-2">
         <div className="flex justify-between gap-4">
           <span>{isUrssaf ? baseLabel : "Votre CA encaissé, annualisé sur 12 mois"}</span>
-          <span className="text-white font-medium shrink-0">{formatCurrency(isUrssaf ? baseRevenu : estimate.revenuAnnualise)}</span>
+          <span className="text-white font-medium shrink-0 font-mono">{formatCurrency(isUrssaf ? baseRevenu : estimate.revenuAnnualise)}</span>
         </div>
         <div className="flex justify-between gap-4">
           <span>Cotisation annuelle estimée</span>
-          <span className="text-white font-medium shrink-0">{formatCurrency(annuel)}</span>
+          <span className="text-white font-medium shrink-0 font-mono">{formatCurrency(annuel)}</span>
         </div>
         <div className="border-t border-white/10 pt-1.5 flex justify-between gap-4">
           <span>Montant par échéance ({freq})</span>
-          <span className="text-white font-semibold shrink-0">{formatCurrency(echeance)}</span>
+          <span className="text-white font-semibold shrink-0 font-mono">{formatCurrency(echeance)}</span>
         </div>
       </div>
     </>

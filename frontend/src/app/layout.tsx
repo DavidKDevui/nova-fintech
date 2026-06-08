@@ -1,19 +1,19 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
+import { DM_Sans, JetBrains_Mono } from "next/font/google";
 import { ToastProvider } from "@/providers/toast-provider";
 import "./globals.css";
 
-const geist = localFont({
-  src: "./fonts/Geist-Variable.woff2",
-  variable: "--font-geist",
+// DM Sans — police d'interface (charte ActiDec v3) — version Google officielle, bien hintée
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  variable: "--font-dm-sans",
   display: "swap",
-  weight: "100 900",
 });
-const sora = localFont({
-  src: "./fonts/Sora-Variable.woff2",
-  variable: "--font-sora",
+// JetBrains Mono — tout ce qui est chiffré : montants, dates, identifiants (charte ActiDec v3)
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
   display: "swap",
-  weight: "100 800",
 });
 
 export const metadata: Metadata = {
@@ -27,8 +27,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className={`${geist.variable} ${sora.variable} h-full`}>
-      <body className="min-h-full bg-[#FFFCF9] font-[family-name:var(--font-sora)] text-gray-900">
+    <html lang="fr" className={`${dmSans.variable} ${jetbrainsMono.variable} h-full`}>
+      <body className="min-h-full bg-[#FCFBFE] font-[family-name:var(--font-dm-sans)] text-ardoise-900">
         {children}
         <ToastProvider />
       </body>

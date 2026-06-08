@@ -41,7 +41,7 @@ function StatusBadge({ p }: { p: Practitioner }) {
     return <span className="inline-block rounded-full bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-600">Supprimé</span>;
   }
   if (p.isVerified) {
-    return <span className="inline-block rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-600">Actif</span>;
+    return <span className="inline-block rounded-full bg-menthe-500/10 px-2.5 py-1 text-xs font-medium text-menthe-600">Actif</span>;
   }
   return <span className="inline-block rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600">En attente</span>;
 }
@@ -49,8 +49,8 @@ function StatusBadge({ p }: { p: Practitioner }) {
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between py-3">
-      <span className="text-sm text-gray-500">{label}</span>
-      <span className="text-sm font-medium text-gray-900">{value}</span>
+      <span className="text-sm text-ardoise-500">{label}</span>
+      <span className="text-sm font-medium text-ardoise-900">{value}</span>
     </div>
   );
 }
@@ -63,7 +63,7 @@ export function PractitionerTable({ practitioners }: { practitioners: Practition
       <div className="bg-white/70 backdrop-blur-xl border border-white/50 rounded-lg overflow-x-auto">
         <table className="w-full text-sm min-w-[600px]">
           <thead>
-            <tr className="border-b border-gray-200/50 text-left text-gray-500">
+            <tr className="border-b border-ardoise-200/50 text-left text-ardoise-500">
               <th className="px-4 md:px-6 py-4 font-medium">Nom</th>
               <th className="px-4 md:px-6 py-4 font-medium">Email</th>
               <th className="px-4 md:px-6 py-4 font-medium">Régime fiscal</th>
@@ -76,20 +76,20 @@ export function PractitionerTable({ practitioners }: { practitioners: Practition
               <tr
                 key={p.id}
                 onClick={() => setSelected(p)}
-                className="border-b border-gray-100/50 last:border-0 transition-colors hover:bg-white/40 cursor-pointer"
+                className="border-b border-ardoise-100/50 last:border-0 transition-colors hover:bg-white/40 cursor-pointer"
               >
                 <td className="px-4 md:px-6 py-4 font-medium whitespace-nowrap">{p.firstName} {p.lastName}</td>
-                <td className="px-4 md:px-6 py-4 text-gray-500">{p.email}</td>
-                <td className="px-4 md:px-6 py-4 text-gray-500">{TAX_REGIME_LABELS[p.taxRegime] ?? p.taxRegime}</td>
+                <td className="px-4 md:px-6 py-4 text-ardoise-500">{p.email}</td>
+                <td className="px-4 md:px-6 py-4 text-ardoise-500">{TAX_REGIME_LABELS[p.taxRegime] ?? p.taxRegime}</td>
                 <td className="px-4 md:px-6 py-4"><StatusBadge p={p} /></td>
-                <td className="px-4 md:px-6 py-4 text-gray-500 whitespace-nowrap">
+                <td className="px-4 md:px-6 py-4 text-ardoise-500 whitespace-nowrap">
                   {new Date(p.createdAt).toLocaleDateString("fr-FR")}
                 </td>
               </tr>
             ))}
             {practitioners.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 md:px-6 py-8 text-center text-gray-400">
+                <td colSpan={5} className="px-4 md:px-6 py-8 text-center text-ardoise-400">
                   Aucun praticien
                 </td>
               </tr>
@@ -102,16 +102,16 @@ export function PractitionerTable({ practitioners }: { practitioners: Practition
         {selected && (
           <div>
             <div className="flex items-center gap-3 mb-5">
-              <div className="flex items-center justify-center w-11 h-11 rounded-full bg-gray-900 text-white text-sm font-bold">
+              <div className="flex items-center justify-center w-11 h-11 rounded-full bg-ardoise-900 text-white text-sm font-bold">
                 {(selected.firstName[0]! + selected.lastName[0]!).toUpperCase()}
               </div>
               <div>
-                <h3 className="text-lg font-bold text-gray-900">{selected.firstName} {selected.lastName}</h3>
-                <p className="text-xs text-gray-400">{selected.email}</p>
+                <h3 className="text-lg font-bold text-ardoise-900">{selected.firstName} {selected.lastName}</h3>
+                <p className="text-xs text-ardoise-400">{selected.email}</p>
               </div>
             </div>
 
-            <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg px-4">
+            <div className="divide-y divide-ardoise-100 border border-ardoise-200 rounded-lg px-4">
               <DetailRow label="Profession" value={PROFESSION_LABELS[selected.profession] ?? selected.profession} />
               <DetailRow label="Régime fiscal" value={TAX_REGIME_LABELS[selected.taxRegime] ?? selected.taxRegime} />
               <DetailRow label="Rétrocession" value={selected.retrocessionValue ? `${selected.retrocessionValue} ${selected.retrocessionType === "percentage" ? "%" : "€"}` : "Aucune"} />
@@ -121,7 +121,7 @@ export function PractitionerTable({ practitioners }: { practitioners: Practition
               <DetailRow label="Début d'activité" value={new Date(selected.activityStartDate).toLocaleDateString("fr-FR")} />
               <DetailRow label="Inscription" value={new Date(selected.createdAt).toLocaleDateString("fr-FR")} />
               <div className="flex items-center justify-between py-3">
-                <span className="text-sm text-gray-500">Statut</span>
+                <span className="text-sm text-ardoise-500">Statut</span>
                 <StatusBadge p={selected} />
               </div>
             </div>

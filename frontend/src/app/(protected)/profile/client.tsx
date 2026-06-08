@@ -8,8 +8,9 @@ import { changePasswordAction, deleteAccountAction, logoutAction } from "@/actio
 import { exportMyDataAction } from "@/actions/data-export";
 import { getBankAlertAction } from "@/actions/bank-alert";
 import { Modal } from "@/components/modal";
+import { Button } from "@/components/button";
 
-const INPUT_CLASS = "w-full border border-gray-200 bg-transparent px-3 py-2 rounded-md text-[0.9rem] transition-all placeholder:text-gray-400 hover:border-gray-400 focus:border-gray-900 focus:outline-none";
+const INPUT_CLASS = "w-full border border-ardoise-200 bg-transparent px-3 py-2 rounded-lg text-[0.9rem] transition-all placeholder:text-ardoise-400 hover:border-ardoise-400 focus:border-violet-500 focus:outline-none";
 
 const SELECT_CLASS = INPUT_CLASS + " appearance-none cursor-pointer";
 
@@ -137,12 +138,12 @@ export function ProfileClient() {
       <h1 className="text-xl md:text-2xl font-bold mb-6 md:mb-8">Mon profil</h1>
 
       {/* Tabs */}
-      <div className="flex items-center gap-0 border-b border-gray-100 mb-6">
+      <div className="flex items-center gap-0 border-b border-ardoise-100 mb-6">
         <button
           type="button"
           onClick={() => setTab("profile")}
           className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
-            tab === "profile" ? "border-brand-600 text-brand-600" : "border-transparent text-gray-400 hover:text-gray-600"
+            tab === "profile" ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
           }`}
         >
           Profil professionnel
@@ -151,7 +152,7 @@ export function ProfileClient() {
           type="button"
           onClick={() => setTab("payments")}
           className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
-            tab === "payments" ? "border-brand-600 text-brand-600" : "border-transparent text-gray-400 hover:text-gray-600"
+            tab === "payments" ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
           }`}
         >
           Préférences de paiement
@@ -160,7 +161,7 @@ export function ProfileClient() {
           type="button"
           onClick={() => setTab("notifications")}
           className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
-            tab === "notifications" ? "border-brand-600 text-brand-600" : "border-transparent text-gray-400 hover:text-gray-600"
+            tab === "notifications" ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
           }`}
         >
           Notifications
@@ -169,7 +170,7 @@ export function ProfileClient() {
           type="button"
           onClick={() => setTab("account")}
           className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
-            tab === "account" ? "border-brand-600 text-brand-600" : "border-transparent text-gray-400 hover:text-gray-600"
+            tab === "account" ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
           }`}
         >
           Compte
@@ -206,7 +207,7 @@ export function ProfileClient() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-gray-500 mb-1.5">Prénom</label>
+                <label className="block text-sm text-ardoise-500 mb-1.5">Prénom</label>
                 <input
                   type="text"
                   name="firstName"
@@ -217,7 +218,7 @@ export function ProfileClient() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-500 mb-1.5">Nom</label>
+                <label className="block text-sm text-ardoise-500 mb-1.5">Nom</label>
                 <input
                   type="text"
                   name="lastName"
@@ -229,7 +230,7 @@ export function ProfileClient() {
               </div>
             </div>
             <div>
-              <label className="block text-sm text-gray-500 mb-1.5">Profession</label>
+              <label className="block text-sm text-ardoise-500 mb-1.5">Profession</label>
               <select
                 name="profession"
                 value={profession}
@@ -242,18 +243,18 @@ export function ProfileClient() {
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-500 mb-1.5">Début d&apos;activité</label>
+              <label className="block text-sm text-ardoise-500 mb-1.5">Début d&apos;activité</label>
               <input
                 type="date"
                 name="activityStartDate"
                 value={activityStartDate}
                 onChange={(e) => setActivityStartDate(e.target.value)}
                 max={new Date().toISOString().split("T")[0]}
-                className={INPUT_CLASS}
+                className={INPUT_CLASS + " font-mono"}
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-500 mb-1.5">Régime fiscal</label>
+              <label className="block text-sm text-ardoise-500 mb-1.5">Régime fiscal</label>
               <select
                 name="taxRegime"
                 value={taxRegime}
@@ -275,11 +276,11 @@ export function ProfileClient() {
                     setHasRetrocession((v) => !v);
                     if (hasRetrocession) { setRetrocessionValue(""); }
                   }}
-                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${hasRetrocession ? "bg-brand-600" : "bg-gray-200"}`}
+                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${hasRetrocession ? "bg-brand-600" : "bg-ardoise-200"}`}
                 >
                   <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${hasRetrocession ? "translate-x-4" : "translate-x-0"}`} />
                 </button>
-                <span className="text-sm text-gray-500">Je verse une rétrocession mensuelle</span>
+                <span className="text-sm text-ardoise-500">Je verse une rétrocession mensuelle</span>
               </label>
               {hasRetrocession && (
                 <div className="mt-3 grid grid-cols-2 gap-4">
@@ -308,7 +309,7 @@ export function ProfileClient() {
                       setRetrocessionValue(v);
                     }}
                     placeholder={retrocessionType === "percentage" ? "Ex : 12.5" : "Ex : 800"}
-                    className={INPUT_CLASS}
+                    className={INPUT_CLASS + " font-mono"}
                   />
                 </div>
               )}
@@ -320,7 +321,7 @@ export function ProfileClient() {
               )}
             </div>
             <div>
-              <label className="block text-sm text-gray-500 mb-1.5">Jours travaillés par semaine</label>
+              <label className="block text-sm text-ardoise-500 mb-1.5">Jours travaillés par semaine</label>
               <select
                 name="daysPerWeekWorked"
                 value={daysPerWeekWorked}
@@ -331,7 +332,7 @@ export function ProfileClient() {
                   <option key={n} value={n}>{n} jour{n > 1 ? "s" : ""} / semaine</option>
                 ))}
               </select>
-              <p className="mt-1.5 text-xs text-gray-400">
+              <p className="mt-1.5 text-xs text-ardoise-400">
                 Sert au calcul du taux journalier et des projections de chiffre d&apos;affaires sur la page Gestion.
               </p>
             </div>
@@ -343,10 +344,10 @@ export function ProfileClient() {
           <div className="space-y-6">
             {/* URSSAF */}
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">URSSAF</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-ardoise-400 mb-3">URSSAF</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1.5">Fréquence</label>
+                  <label className="block text-sm text-ardoise-500 mb-1.5">Fréquence</label>
                   <select
                     name="urssafFrequency"
                     value={urssafFrequency}
@@ -359,7 +360,7 @@ export function ProfileClient() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1.5">Jour de prélèvement</label>
+                  <label className="block text-sm text-ardoise-500 mb-1.5">Jour de prélèvement</label>
                   {urssafFrequency === "monthly" ? (
                     <select
                       name="urssafPayDay"
@@ -374,20 +375,20 @@ export function ProfileClient() {
                   ) : (
                     <>
                       <input type="hidden" name="urssafPayDay" value={urssafPayDay} />
-                      <p className="px-3 py-2 rounded-md text-[0.9rem] text-gray-400 border border-gray-100 bg-gray-50">Non applicable en trimestriel</p>
+                      <p className="px-3 py-2 rounded-lg text-[0.9rem] text-ardoise-400 border border-ardoise-100 bg-ardoise-50">Non applicable en trimestriel</p>
                     </>
                   )}
                 </div>
               </div>
-              <p className="mt-1 text-xs text-gray-400">Vous pouvez modifier la fréquence et le jour de<br />prélèvement depuis votre espace URSSAF.</p>
+              <p className="mt-1 text-xs text-ardoise-400">Vous pouvez modifier la fréquence et le jour de<br />prélèvement depuis votre espace URSSAF.</p>
             </div>
 
             {/* Impôt sur le revenu (PAS) */}
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Impôt sur le revenu (PAS)</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-ardoise-400 mb-3">Impôt sur le revenu (PAS)</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1.5">Fréquence</label>
+                  <label className="block text-sm text-ardoise-500 mb-1.5">Fréquence</label>
                   <select
                     name="pasFrequency"
                     value={pasFrequency}
@@ -400,7 +401,7 @@ export function ProfileClient() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1.5">Taux (%)</label>
+                  <label className="block text-sm text-ardoise-500 mb-1.5">Taux (%)</label>
                   <input
                     type="number"
                     name="pasRate"
@@ -410,19 +411,19 @@ export function ProfileClient() {
                     value={pasRate}
                     onChange={(e) => setPasRate(e.target.value)}
                     placeholder="Ex : 12.5"
-                    className={INPUT_CLASS}
+                    className={INPUT_CLASS + " font-mono"}
                   />
-                  <p className="mt-1 text-xs text-gray-400">Visible sur votre espace impots.gouv ou échéancier URSSAF.</p>
+                  <p className="mt-1 text-xs text-ardoise-400">Visible sur votre espace impots.gouv ou échéancier URSSAF.</p>
                 </div>
               </div>
             </div>
 
             {/* CARPIMKO */}
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">CARPIMKO</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-ardoise-400 mb-3">CARPIMKO</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1.5">Fréquence</label>
+                  <label className="block text-sm text-ardoise-500 mb-1.5">Fréquence</label>
                   <select
                     name="carpimkoFrequency"
                     value={carpimkoFrequency}
@@ -435,7 +436,7 @@ export function ProfileClient() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1.5">Jour de prélèvement</label>
+                  <label className="block text-sm text-ardoise-500 mb-1.5">Jour de prélèvement</label>
                   <select
                     name="carpimkoPayDay"
                     value={carpimkoPayDay}
@@ -458,17 +459,17 @@ export function ProfileClient() {
               <p className="bg-red-50 p-3 text-sm text-red-600">{state.error}</p>
             )}
             {state?.success && (
-              <p className="bg-green-50 p-3 text-sm text-green-600">Profil mis à jour avec succès.</p>
+              <p className="bg-menthe-50 p-3 text-sm text-menthe-600">Profil mis à jour avec succès.</p>
             )}
 
-            <button
+            <Button
+              variant="cta"
               type="submit"
               disabled={pending || !hasChanges || !formValid}
-              className="flex items-center gap-2 bg-gray-900 px-5 py-3 rounded-md text-sm font-medium text-white transition-all hover:bg-black active:scale-[0.98] disabled:bg-gray-300 disabled:opacity-60 disabled:hover:bg-gray-300 disabled:active:scale-100 disabled:cursor-not-allowed"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
               {pending ? "Enregistrement..." : "Enregistrer les modifications"}
-            </button>
+            </Button>
           </>
         )}
       </form>
@@ -483,36 +484,36 @@ export function ProfileClient() {
         <div className="space-y-6">
           <ChangePasswordSection />
 
-          <div className="border-t border-gray-200 pt-6">
-            <h3 className="text-sm font-medium text-gray-900 mb-1">Déconnexion</h3>
-            <p className="text-sm text-gray-500 mb-3">
+          <div className="border-t border-ardoise-200 pt-6">
+            <h3 className="text-sm font-medium text-ardoise-900 mb-1">Déconnexion</h3>
+            <p className="text-sm text-ardoise-500 mb-3">
               Vous serez redirigé vers la page de connexion.
             </p>
             <form action={logoutAction}>
-              <button
+              <Button
+                variant="danger"
                 type="submit"
-                className="flex items-center gap-2 border-2 border-gray-300 rounded-lg px-5 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 hover:border-gray-400 active:scale-[0.98]"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                 Se déconnecter
-              </button>
+              </Button>
             </form>
           </div>
 
-          <div className="border-t border-gray-200 pt-6">
-            <h3 className="text-sm font-medium text-gray-900 mb-1">Exporter mes données</h3>
-            <p className="text-sm text-gray-500 mb-3">
+          <div className="border-t border-ardoise-200 pt-6">
+            <h3 className="text-sm font-medium text-ardoise-900 mb-1">Exporter mes données</h3>
+            <p className="text-sm text-ardoise-500 mb-3">
               Récupérez toutes les données personnelles qu&apos;Actidec traite à votre sujet, au format JSON (RGPD&nbsp;Art.&nbsp;20).
             </p>
-            <button
+            <Button
+              variant="secondary"
               type="button"
               onClick={handleExportData}
               disabled={exportPending}
-              className="inline-flex items-center gap-2 border-2 border-gray-300 rounded-lg px-5 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 hover:border-gray-400 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-300"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               {exportPending ? "Génération en cours…" : "Télécharger mes données"}
-            </button>
+            </Button>
             {exportError && (
               <p className="bg-red-50 mt-3 p-3 rounded-md text-sm text-red-600">{exportError}</p>
             )}
@@ -520,17 +521,17 @@ export function ProfileClient() {
 
           <div className="border-t border-red-200 pt-6">
             <h3 className="text-sm font-medium text-red-600 mb-1">Zone de danger</h3>
-            <p className="text-sm text-gray-500 mb-3">
+            <p className="text-sm text-ardoise-500 mb-3">
               La suppression de votre compte est définitive. Toutes vos données seront perdues.
             </p>
-            <button
+            <Button
+              variant="danger"
               type="button"
               onClick={() => setShowDeleteModal(true)}
-              className="flex items-center gap-2 border-2 border-red-600 bg-red-600 rounded-lg px-5 py-2 text-sm font-medium text-white transition-all hover:bg-red-700 hover:border-red-700 active:scale-[0.98]"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
               Supprimer mon compte
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -538,11 +539,11 @@ export function ProfileClient() {
       <Modal open={showDeleteModal} onClose={() => { setShowDeleteModal(false); setDeleteConfirm(""); }}>
         <div className="flex items-center gap-3 mb-4">
           <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </div>
-          <h3 className="text-lg font-bold text-gray-900">Supprimer votre compte</h3>
+          <h3 className="text-lg font-bold text-ardoise-900">Supprimer votre compte</h3>
         </div>
-        <div className="space-y-3 text-sm text-gray-500">
+        <div className="space-y-3 text-sm text-ardoise-500">
           <p>Vous êtes sur le point de supprimer définitivement votre compte. Cette action est <strong className="text-red-600">irréversible</strong>.</p>
           <ul className="list-disc pl-5 space-y-1">
             <li>Toutes vos données personnelles seront supprimées</li>
@@ -552,7 +553,7 @@ export function ProfileClient() {
           </ul>
         </div>
         <div className="mt-5">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <label className="block text-sm font-medium text-ardoise-700 mb-1.5">
             Tapez <strong className="text-red-600">supprimer</strong> pour confirmer
           </label>
           <input
@@ -560,25 +561,26 @@ export function ProfileClient() {
             value={deleteConfirm}
             onChange={(e) => setDeleteConfirm(e.target.value)}
             placeholder="supprimer"
-            className="w-full border-2 border-gray-200 bg-transparent px-4 py-2.5 text-sm transition-all placeholder:text-gray-400 hover:border-gray-400 focus:border-red-500 focus:outline-none"
+            className="w-full border-2 border-ardoise-200 bg-transparent px-4 py-2.5 text-sm transition-all placeholder:text-ardoise-400 hover:border-ardoise-400 focus:border-red-500 focus:outline-none"
             autoComplete="off"
           />
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <button
+          <Button
+            variant="secondary"
             onClick={() => { setShowDeleteModal(false); setDeleteConfirm(""); }}
-            className="border-2 border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
           >
             Annuler
-          </button>
+          </Button>
           <form action={deleteAccountAction}>
-            <button
+            <Button
+              variant="danger"
               type="submit"
               disabled={deleteConfirm !== "supprimer"}
-              className="w-full border-2 border-red-600 bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-red-700 hover:border-red-700 active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-red-600 disabled:hover:border-red-600"
+              className="w-full"
             >
               Supprimer mon compte
-            </button>
+            </Button>
           </form>
         </div>
       </Modal>
@@ -601,7 +603,7 @@ function Switch({ checked, onChange, disabled = false }: { checked: boolean; onC
       aria-checked={checked}
       disabled={disabled}
       onClick={onChange}
-      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${checked ? "bg-brand-600" : "bg-gray-200"} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${checked ? "bg-brand-600" : "bg-ardoise-200"} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
     >
       <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0"}`} />
     </button>
@@ -672,8 +674,8 @@ function NotificationsForm() {
 
   return (
     <div>
-      <h3 className="text-sm font-medium text-gray-900 mb-1">Notifications</h3>
-      <p className="text-sm text-gray-500 mb-4">
+      <h3 className="text-sm font-medium text-ardoise-900 mb-1">Notifications</h3>
+      <p className="text-sm text-ardoise-500 mb-4">
         Choisissez les emails que vous souhaitez recevoir.
       </p>
       <form action={action} className="space-y-5 max-w-sm">
@@ -681,7 +683,7 @@ function NotificationsForm() {
         <div>
           <label className="flex items-center gap-3 cursor-pointer">
             <Switch checked={recapEnabled} onChange={() => setRecapEnabled((v) => !v)} />
-            <span className="text-sm text-gray-500">Récapitulatif d&apos;activité</span>
+            <span className="text-sm text-ardoise-500">Récapitulatif d&apos;activité</span>
           </label>
           <input type="hidden" name="recapEnabled" value={recapEnabled ? "on" : "off"} />
           <input type="hidden" name="recapFrequency" value={recapFrequency} />
@@ -698,7 +700,7 @@ function NotificationsForm() {
               </select>
             </div>
           )}
-          <p className="mt-1.5 text-xs text-gray-400">
+          <p className="mt-1.5 text-xs text-ardoise-400">
             Email synthétique de votre activité sur la période choisie.
           </p>
         </div>
@@ -707,10 +709,10 @@ function NotificationsForm() {
         <div>
           <label className="flex items-center gap-3 cursor-pointer">
             <Switch checked={deadlinesReminderEnabled} onChange={() => setDeadlinesReminderEnabled((v) => !v)} />
-            <span className="text-sm text-gray-500">Rappel hebdomadaire des échéances à venir</span>
+            <span className="text-sm text-ardoise-500">Rappel hebdomadaire des échéances à venir</span>
           </label>
           <input type="hidden" name="deadlinesReminderEnabled" value={deadlinesReminderEnabled ? "on" : "off"} />
-          <p className="mt-1.5 text-xs text-gray-400">
+          <p className="mt-1.5 text-xs text-ardoise-400">
             Email envoyé chaque lundi listant les échéances des 2 prochaines semaines.
           </p>
         </div>
@@ -723,7 +725,7 @@ function NotificationsForm() {
               disabled={!hasDefaultBank}
               onChange={() => setTreasuryEnabled((v) => !v)}
             />
-            <span className={`text-sm ${hasDefaultBank ? "text-gray-500" : "text-gray-300"}`}>
+            <span className={`text-sm ${hasDefaultBank ? "text-ardoise-500" : "text-ardoise-300"}`}>
               Alerte de seuil de trésorerie
             </span>
           </label>
@@ -739,16 +741,16 @@ function NotificationsForm() {
                   value={treasuryThreshold}
                   onChange={(e) => setTreasuryThreshold(e.target.value)}
                   placeholder="Ex : 1500"
-                  className={INPUT_CLASS + " pr-8"}
+                  className={INPUT_CLASS + " pr-8 font-mono"}
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">€</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ardoise-400 pointer-events-none">€</span>
               </div>
               {treasuryInvalid && (
                 <p className="mt-1 text-xs text-red-500">Le seuil doit être un nombre positif.</p>
               )}
             </div>
           )}
-          <p className="mt-1.5 text-xs text-gray-400">
+          <p className="mt-1.5 text-xs text-ardoise-400">
             {hasDefaultBank
               ? "Email envoyé quand le solde de votre compte par défaut passe sous ce seuil."
               : "Connectez d'abord un compte bancaire dans Transactions pour activer cette alerte."}
@@ -759,7 +761,7 @@ function NotificationsForm() {
         <div>
           <label className="flex items-center gap-3 cursor-pointer">
             <Switch checked={rejectionEnabled} onChange={() => setRejectionEnabled((v) => !v)} />
-            <span className="text-sm text-gray-500">Alerte de taux de rejet trop élevé</span>
+            <span className="text-sm text-ardoise-500">Alerte de taux de rejet trop élevé</span>
           </label>
           <input type="hidden" name="rejectionAlertEnabled" value={rejectionEnabled ? "on" : "off"} />
           <input type="hidden" name="rejectionAlertThreshold" value={rejectionThreshold} />
@@ -774,16 +776,16 @@ function NotificationsForm() {
                   value={rejectionThreshold}
                   onChange={(e) => setRejectionThreshold(e.target.value)}
                   placeholder="Ex : 5"
-                  className={INPUT_CLASS + " pr-8"}
+                  className={INPUT_CLASS + " pr-8 font-mono"}
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">%</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ardoise-400 pointer-events-none">%</span>
               </div>
               {rejectionInvalid && (
                 <p className="mt-1 text-xs text-red-500">Le seuil doit être compris entre 0,5 et 50 %.</p>
               )}
             </div>
           )}
-          <p className="mt-1.5 text-xs text-gray-400">
+          <p className="mt-1.5 text-xs text-ardoise-400">
             Email envoyé quand votre taux de rejet mensuel dépasse ce seuil.
           </p>
         </div>
@@ -792,41 +794,41 @@ function NotificationsForm() {
           <p className="bg-red-50 p-3 rounded-md text-sm text-red-600">{state.error}</p>
         )}
         {state?.success && (
-          <p className="bg-green-50 p-3 rounded-md text-sm text-green-600">Préférences mises à jour.</p>
+          <p className="bg-menthe-50 p-3 rounded-md text-sm text-menthe-600">Préférences mises à jour.</p>
         )}
 
-        <button
+        <Button
+          variant="cta"
           type="submit"
           disabled={pending || !hasChanges || !formValid}
-          className="flex items-center gap-2 bg-gray-900 px-5 py-3 rounded-md text-sm font-medium text-white transition-all hover:bg-black active:scale-[0.98] disabled:bg-gray-300 disabled:opacity-60 disabled:hover:bg-gray-300 disabled:active:scale-100 disabled:cursor-not-allowed"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           {pending ? "Enregistrement..." : "Enregistrer"}
-        </button>
+        </Button>
       </form>
     </div>
   );
 }
 
-const PASSWORD_INPUT_CLASS = "w-full border border-gray-200 bg-transparent px-3 py-2 rounded-md text-[0.9rem] transition-all placeholder:text-gray-400 hover:border-gray-400 focus:border-gray-900 focus:outline-none";
+const PASSWORD_INPUT_CLASS = "w-full border border-ardoise-200 bg-transparent px-3 py-2 rounded-lg text-[0.9rem] transition-all placeholder:text-ardoise-400 hover:border-ardoise-400 focus:border-violet-500 focus:outline-none";
 
 function ChangePasswordSection() {
   const [open, setOpen] = useState(false);
 
   return (
     <div>
-      <h3 className="text-sm font-medium text-gray-900 mb-1">Mot de passe</h3>
-      <p className="text-sm text-gray-500 mb-3">
+      <h3 className="text-sm font-medium text-ardoise-900 mb-1">Mot de passe</h3>
+      <p className="text-sm text-ardoise-500 mb-3">
         Vous pouvez modifier votre mot de passe à tout moment.
       </p>
-      <button
+      <Button
+        variant="secondary"
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 border-2 border-gray-300 rounded-lg px-5 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 hover:border-gray-400 active:scale-[0.98]"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         Modifier le mot de passe
-      </button>
+      </Button>
       <Modal open={open} onClose={() => setOpen(false)}>
         <ChangePasswordModal onClose={() => setOpen(false)} />
       </Modal>
@@ -859,17 +861,17 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   return (
     <>
       <div className="flex items-center gap-3 mb-4">
-        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-700"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-ardoise-100 shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-ardoise-700"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         </div>
-        <h3 className="text-lg font-bold text-gray-900">Modifier le mot de passe</h3>
+        <h3 className="text-lg font-bold text-ardoise-900">Modifier le mot de passe</h3>
       </div>
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-ardoise-500 mb-4">
         Minimum 8 caractères, avec au moins une majuscule, une minuscule et un chiffre.
       </p>
       <form action={pwAction} className="space-y-3">
         <div>
-          <label className="block text-sm text-gray-500 mb-1.5">Mot de passe actuel</label>
+          <label className="block text-sm text-ardoise-500 mb-1.5">Mot de passe actuel</label>
           <input
             type="password"
             name="currentPassword"
@@ -881,7 +883,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-500 mb-1.5">Nouveau mot de passe</label>
+          <label className="block text-sm text-ardoise-500 mb-1.5">Nouveau mot de passe</label>
           <input
             type="password"
             name="newPassword"
@@ -904,7 +906,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
         <div>
-          <label className="block text-sm text-gray-500 mb-1.5">Confirmer le nouveau mot de passe</label>
+          <label className="block text-sm text-ardoise-500 mb-1.5">Confirmer le nouveau mot de passe</label>
           <input
             type="password"
             name="confirmPassword"
@@ -923,25 +925,25 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
           <p className="bg-red-50 p-3 rounded-md text-sm text-red-600">{pwState.error}</p>
         )}
         {pwState?.success && (
-          <p className="bg-green-50 p-3 rounded-md text-sm text-green-600">Mot de passe modifié avec succès.</p>
+          <p className="bg-menthe-50 p-3 rounded-md text-sm text-menthe-600">Mot de passe modifié avec succès.</p>
         )}
 
         <div className="grid grid-cols-2 gap-3 pt-2">
-          <button
+          <Button
+            variant="secondary"
             type="button"
             onClick={onClose}
             disabled={pwPending}
-            className="border-2 border-gray-200 rounded-md px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Annuler
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="cta"
             type="submit"
             disabled={pwPending || !canSubmit}
-            className="flex items-center justify-center gap-2 bg-gray-900 rounded-md px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-black active:scale-[0.98] disabled:bg-gray-300 disabled:opacity-60 disabled:hover:bg-gray-300 disabled:active:scale-100 disabled:cursor-not-allowed"
           >
             {pwPending ? "Modification..." : "Modifier"}
-          </button>
+          </Button>
         </div>
       </form>
     </>
@@ -952,11 +954,11 @@ function PasswordRule({ ok, label }: { ok: boolean; label: string }) {
   return (
     <div className="flex items-center gap-1.5 text-xs">
       {ok ? (
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-green-500"><polyline points="20 6 9 17 4 12"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-menthe-500"><polyline points="20 6 9 17 4 12"/></svg>
       ) : (
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300"><circle cx="12" cy="12" r="10"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-ardoise-300"><circle cx="12" cy="12" r="10"/></svg>
       )}
-      <span className={ok ? "text-green-600" : "text-gray-400"}>{label}</span>
+      <span className={ok ? "text-menthe-600" : "text-ardoise-400"}>{label}</span>
     </div>
   );
 }

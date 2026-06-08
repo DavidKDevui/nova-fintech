@@ -30,13 +30,13 @@ export default async function LegalLayout({ children }: { children: React.ReactN
       <main className="max-w-5xl mx-auto px-6 py-10">
         {children}
       </main>
-      <footer className="border-t border-gray-200 bg-white/60 mt-12 py-6">
-        <div className="max-w-5xl mx-auto px-6 text-xs text-gray-500 flex items-center justify-between flex-wrap gap-2">
+      <footer className="border-t border-ardoise-200 bg-white/60 mt-12 py-6">
+        <div className="max-w-5xl mx-auto px-6 text-xs text-ardoise-500 flex items-center justify-between flex-wrap gap-2">
           <span>Actidec — outil de gestion fiscale et comptable pour infirmiers libéraux.</span>
           <span>
-            <Link href="/legal" className="hover:text-gray-900 transition-colors">Mentions légales</Link>
+            <Link href="/legal" className="hover:text-ardoise-900 transition-colors">Mentions légales</Link>
             <span className="mx-2">·</span>
-            <Link href="/privacy" className="hover:text-gray-900 transition-colors">Confidentialité</Link>
+            <Link href="/privacy" className="hover:text-ardoise-900 transition-colors">Confidentialité</Link>
           </span>
         </div>
       </footer>
@@ -62,13 +62,13 @@ export default async function LegalLayout({ children }: { children: React.ReactN
 
   // Header minimal pour les visiteurs non connectés
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
+    <div className="min-h-screen bg-ardoise-50">
+      <header className="border-b border-ardoise-200 bg-white">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/" className="inline-flex">
             <Logo size="default" />
           </Link>
-          <Link href="/login" className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
+          <Link href="/login" className="text-sm font-medium text-ardoise-700 hover:text-ardoise-900 transition-colors">
             Se connecter
           </Link>
         </div>
