@@ -226,6 +226,12 @@ export async function refreshSession(refreshToken: string) {
     }
 
     const tokenHash = hashToken(refreshToken);
+    console.log("[REFRESH] verify OK", {
+      userId: user.id,
+      matchesCurrent: tokenHash === user.refreshToken,
+      matchesPrevious: tokenHash === user.previousRefreshToken,
+      prevExpiresAt: user.previousRefreshTokenExpiresAt,
+    });
 
     // Check current refresh token — rotation ATOMIQUE (compare-and-swap) pour éviter
     // les races de concurrence : le dashboard praticien déclenche plusieurs refresh

@@ -30,13 +30,23 @@ export async function proxy(request: NextRequest) {
   const accessToken = request.cookies.get("accessToken")?.value;
   const refreshToken = request.cookies.get("refreshToken")?.value;
 
+  const log = (...args: unknown[]) => console.log(`[PROXY] ${request.method} ${pathname} ::`, ...args);
+  log("start", {
+    hasAccess: !!accessToken,
+    hasRefresh: !!refreshToken,
+    referer: request.headers.get("referer") || "",
+  });
+
   // Pages légales : accessibles à tous, jamais de redirection
   if (alwaysAccessiblePaths.some((p) => pathname.startsWith(p))) {
+    log("alwaysAccessible → next");
     return NextResponse.next();
   }
 
-  const hasValidAccess = accessToken && !isTokenExpired(accessToken);
+  const accessExpired = accessToken ? isTokenExpired(accessToken) : true;
+  const hasValidAccess = !!accessToken && !accessExpired;
   const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
+  log("tokenCheck", { accessExpired, hasValidAccess, isPublicPath });
 
   // Valid access token — proceed normally
   if (hasValidAccess) {
@@ -44,20 +54,25 @@ export async function proxy(request: NextRequest) {
       // Don't redirect to dashboard if we just came from there (prevents loop when DB is down)
       const referer = request.headers.get("referer") || "";
       if (referer.includes("/dashboard")) {
+        log("⚠️ valid access + public path + dashboard referer → CLEAR cookies (anti-loop)", { referer });
         const response = NextResponse.next();
         response.cookies.set("accessToken", "", { path: "/", maxAge: 0 });
         response.cookies.set("refreshToken", "", { path: "/", maxAge: 0 });
         return response;
       }
+      log("valid access + public path → redirect /dashboard");
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
+    log("valid access → next ✅");
     return NextResponse.next();
   }
 
   // No valid access token — try refresh
   if (refreshToken) {
+    log("no valid access, refresh present → calling refreshSession()");
     try {
       const tokens = await refreshSession(refreshToken);
+      log("refreshSession OK", { rotated: !!tokens.refreshToken });
       const response = isPublicPath
         ? NextResponse.redirect(new URL("/dashboard", request.url))
         : NextResponse.next();
@@ -80,8 +95,12 @@ export async function proxy(request: NextRequest) {
         });
       }
 
+      log("refresh applied → proceeding ✅", { isPublicPath });
       return response;
-    } catch {
+    } catch (err) {
+      log("❌ refreshSession FAILED → CLEAR cookies + redirect /login", {
+        error: err instanceof Error ? err.message : String(err),
+      });
       // Refresh failed — clear cookies and redirect to login
       const response = isPublicPath
         ? NextResponse.next()
@@ -94,9 +113,11 @@ export async function proxy(request: NextRequest) {
 
   // No tokens at all
   if (!isPublicPath) {
+    log("❌ no tokens at all → redirect /login");
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
+  log("no tokens, public path → next");
   return NextResponse.next();
 }
 
