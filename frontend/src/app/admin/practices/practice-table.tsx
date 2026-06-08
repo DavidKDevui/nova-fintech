@@ -98,7 +98,7 @@ export function PracticeTable({
                       className="w-full border border-ardoise-200/50 bg-white/50 px-3 py-1.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
                     />
                   </td>
-                  <td className="px-4 md:px-6 py-4 text-ardoise-500">
+                  <td className="px-4 md:px-6 py-4 text-ardoise-500 font-mono">
                     {new Date(practice.createdAt).toLocaleDateString("fr-FR")}
                   </td>
                   <td className="px-4 md:px-6 py-3 text-right">
@@ -124,8 +124,8 @@ export function PracticeTable({
               ) : (
                 <>
                   <td className="px-4 md:px-6 py-4 font-medium">{practice.name}</td>
-                  <td className="px-4 md:px-6 py-4 text-ardoise-500">{practice.finess}</td>
-                  <td className="px-4 md:px-6 py-4 text-ardoise-500">
+                  <td className="px-4 md:px-6 py-4 text-ardoise-500 font-mono">{practice.finess}</td>
+                  <td className="px-4 md:px-6 py-4 text-ardoise-500 font-mono">
                     {new Date(practice.createdAt).toLocaleDateString("fr-FR")}
                   </td>
                   <td className="px-4 md:px-6 py-4 text-right">

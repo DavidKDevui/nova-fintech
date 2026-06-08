@@ -2,6 +2,7 @@
 
 import { useState, useRef, type DragEvent } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/button";
 import { importBordereauAction, importNoemieAction, createPracticeFromBordereau } from "@/actions/bordereaux";
 import type { ParsedCarePassage } from "@/lib/parsers/parse-rattrapages";
 import type { ParsedNoemiePayment } from "@/lib/parsers/parse-noemie";
@@ -217,11 +218,13 @@ export function BordereauUpload({
               </div>
               <div className="text-center">
                 <p className="text-sm font-medium text-ardoise-900">{file.name}</p>
-                <p className="text-xs text-ardoise-500 mt-0.5">
+                <p className="text-xs text-ardoise-500 mt-0.5 font-mono">
                   {(file.size / 1024).toFixed(1)} Ko
                 </p>
               </div>
-              <button
+              <Button
+                variant="danger"
+                size="compact"
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -230,10 +233,9 @@ export function BordereauUpload({
                   setDetectedCabinet("");
                   if (inputRef.current) inputRef.current.value = "";
                 }}
-                className="text-xs text-red-500 hover:text-red-700 transition-colors"
               >
                 Retirer le fichier
-              </button>
+              </Button>
             </>
           ) : (
             <>
@@ -252,14 +254,14 @@ export function BordereauUpload({
 
         {/* Bouton analyser */}
         <div className="mt-4 flex items-center gap-3">
-          <button
+          <Button
+            variant="cta"
             onClick={handleParse}
             disabled={!file || parsing}
-            className="flex items-center gap-2 bg-violet-600 px-5 py-2.5 text-sm font-medium text-white rounded-md transition-all hover:bg-violet-700 disabled:opacity-50"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             {parsing ? "Analyse en cours..." : "Analyser le fichier"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -275,7 +277,7 @@ export function BordereauUpload({
           )}
           {detectedFiness && (
             <p className="text-xs text-ardoise-500 mb-2">
-              FINESS detecte : <span className="font-medium text-ardoise-900">{detectedFiness}</span>
+              FINESS detecte : <span className="font-medium text-ardoise-900 font-mono">{detectedFiness}</span>
             </p>
           )}
 
@@ -325,7 +327,8 @@ export function BordereauUpload({
                   className="w-full border border-ardoise-200/50 bg-white/50 px-3 py-2 text-sm rounded-md focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
                 />
               </div>
-              <button
+              <Button
+                variant="cta"
                 type="button"
                 disabled={creatingPractice || !newPracticeName.trim() || !newPracticeFiness.trim()}
                 onClick={async () => {
@@ -346,10 +349,9 @@ export function BordereauUpload({
                   }
                   setCreatingPractice(false);
                 }}
-                className="flex items-center gap-2 bg-violet-600 px-4 py-2 text-sm font-medium text-white rounded-md transition-all hover:bg-violet-700 disabled:opacity-50"
               >
                 {creatingPractice ? "Création..." : "Créer le cabinet"}
-              </button>
+              </Button>
             </div>
           )}
 
@@ -379,14 +381,14 @@ export function BordereauUpload({
             )}
           </h2>
           {hasData && (
-            <button
+            <Button
+              variant="cta"
               onClick={handleImport}
               disabled={importing || !selectedPractice || selectedPractice === "__new__"}
-              className="flex items-center gap-2 bg-menthe-600 px-4 py-2 text-sm font-medium text-white rounded-md transition-all hover:bg-menthe-700 disabled:opacity-50"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               {importing ? "Import en cours..." : "Importer"}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -420,26 +422,26 @@ export function BordereauUpload({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
               <div className="bg-ardoise-50/50 rounded-md p-3">
                 <p className="text-xs text-ardoise-500">Facture</p>
-                <p className="text-sm font-semibold text-ardoise-900">
+                <p className="text-sm font-semibold text-ardoise-900 font-mono">
                   {formatCurrency(noemieRows.reduce((s, r) => s + parseFloat(r.amountBilled), 0))}
                 </p>
               </div>
               <div className="bg-menthe-50/50 rounded-md p-3">
                 <p className="text-xs text-menthe-600">Paye</p>
-                <p className="text-sm font-bold text-menthe-700">
+                <p className="text-sm font-bold text-menthe-700 font-mono">
                   {formatCurrency(noemieRows.filter((r) => r.status === "paid").reduce((s, r) => s + parseFloat(r.amountPaid), 0))}
                 </p>
               </div>
               <div className="bg-red-50/50 rounded-md p-3">
                 <p className="text-xs text-red-600">Rejete</p>
-                <p className="text-sm font-bold text-red-700">
+                <p className="text-sm font-bold text-red-700 font-mono">
                   {formatCurrency(noemieRows.filter((r) => r.status === "rejected").reduce((s, r) => s + parseFloat(r.amountBilled), 0))}
                 </p>
                 <p className="text-xs text-ardoise-400">{noemieRows.filter((r) => r.status === "rejected").length} rejet{noemieRows.filter((r) => r.status === "rejected").length > 1 ? "s" : ""}</p>
               </div>
               <div className="bg-ardoise-50/50 rounded-md p-3">
                 <p className="text-xs text-ardoise-500">Ecart</p>
-                <p className="text-sm font-semibold text-ardoise-900">
+                <p className="text-sm font-semibold text-ardoise-900 font-mono">
                   {formatCurrency(noemieRows.reduce((s, r) => s + parseFloat(r.amountBilled) - parseFloat(r.amountPaid), 0))}
                 </p>
               </div>
@@ -462,16 +464,16 @@ export function BordereauUpload({
                   {noemieRows.map((row, i) => (
                     <tr key={i} className="border-b border-ardoise-100/50 last:border-0 hover:bg-white/40">
                       <td className="px-3 py-3 text-ardoise-500">{row.invoiceType}</td>
-                      <td className="px-3 py-3 font-medium">{row.invoiceNumber}</td>
+                      <td className="px-3 py-3 font-medium font-mono">{row.invoiceNumber}</td>
                       <td className="px-3 py-3 text-ardoise-900">{row.clientName || "—"}</td>
-                      <td className="px-3 py-3 text-ardoise-500">{formatDateFr(row.paymentDate)}</td>
+                      <td className="px-3 py-3 text-ardoise-500 font-mono">{formatDateFr(row.paymentDate)}</td>
                       <td className="px-3 py-3">
                         <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${row.status === "paid" ? "bg-menthe-100 text-menthe-700" : "bg-red-100 text-red-700"}`}>
                           {row.status === "paid" ? "Paye" : "Rejete"}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-ardoise-500 text-right">{formatCurrency(parseFloat(row.amountBilled))}</td>
-                      <td className="px-3 py-3 font-medium text-right">{formatCurrency(parseFloat(row.amountPaid))}</td>
+                      <td className="px-3 py-3 text-ardoise-500 text-right font-mono">{formatCurrency(parseFloat(row.amountBilled))}</td>
+                      <td className="px-3 py-3 font-medium text-right font-mono">{formatCurrency(parseFloat(row.amountPaid))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -484,31 +486,31 @@ export function BordereauUpload({
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
               <div className="bg-ardoise-50/50 rounded-md p-3">
                 <p className="text-xs text-ardoise-500">Honoraires</p>
-                <p className="text-sm font-semibold text-ardoise-900">
+                <p className="text-sm font-semibold text-ardoise-900 font-mono">
                   {formatCurrency(filteredRows.reduce((s, r) => s + parseFloat(r.honoraires), 0))}
                 </p>
               </div>
               <div className="bg-ardoise-50/50 rounded-md p-3">
                 <p className="text-xs text-ardoise-500">Majoration</p>
-                <p className="text-sm font-semibold text-ardoise-900">
+                <p className="text-sm font-semibold text-ardoise-900 font-mono">
                   {formatCurrency(filteredRows.reduce((s, r) => s + parseFloat(r.majoration), 0))}
                 </p>
               </div>
               <div className="bg-ardoise-50/50 rounded-md p-3">
                 <p className="text-xs text-ardoise-500">Ferie/Dim/Nuit</p>
-                <p className="text-sm font-semibold text-ardoise-900">
+                <p className="text-sm font-semibold text-ardoise-900 font-mono">
                   {formatCurrency(filteredRows.reduce((s, r) => s + parseFloat(r.ferieDimNuit), 0))}
                 </p>
               </div>
               <div className="bg-ardoise-50/50 rounded-md p-3">
                 <p className="text-xs text-ardoise-500">IFD</p>
-                <p className="text-sm font-semibold text-ardoise-900">
+                <p className="text-sm font-semibold text-ardoise-900 font-mono">
                   {formatCurrency(filteredRows.reduce((s, r) => s + parseFloat(r.ifd), 0))}
                 </p>
               </div>
               <div className="bg-violet-50/50 rounded-md p-3">
                 <p className="text-xs text-violet-600">Total</p>
-                <p className="text-sm font-bold text-violet-700">
+                <p className="text-sm font-bold text-violet-700 font-mono">
                   {formatCurrency(filteredRows.reduce((s, r) => s + parseFloat(r.total), 0))}
                 </p>
               </div>
@@ -535,16 +537,16 @@ export function BordereauUpload({
                   {filteredRows.map((row, i) => (
                     <tr key={i} className="border-b border-ardoise-100/50 last:border-0 hover:bg-white/40">
                       <td className="px-3 py-3 text-ardoise-900">{row.clientName || "—"}</td>
-                      <td className="px-3 py-3 font-medium">{row.invoiceNumber}</td>
-                      <td className="px-3 py-3 text-ardoise-500">{formatDateFr(row.careDate)}</td>
+                      <td className="px-3 py-3 font-medium font-mono">{row.invoiceNumber}</td>
+                      <td className="px-3 py-3 text-ardoise-500 font-mono">{formatDateFr(row.careDate)}</td>
                       <td className="px-3 py-3 text-ardoise-500">{row.careMoment}</td>
                       <td className="px-3 py-3 text-ardoise-500">{row.practitioner}</td>
-                      <td className="px-3 py-3 text-ardoise-500">{row.cotation}</td>
-                      <td className="px-3 py-3 text-ardoise-500 text-right">{formatCurrency(parseFloat(row.honoraires))}</td>
-                      <td className="px-3 py-3 text-ardoise-500 text-right">{formatCurrency(parseFloat(row.majoration))}</td>
-                      <td className="px-3 py-3 text-ardoise-500 text-right">{formatCurrency(parseFloat(row.ferieDimNuit))}</td>
-                      <td className="px-3 py-3 text-ardoise-500 text-right">{formatCurrency(parseFloat(row.ifd))}</td>
-                      <td className="px-3 py-3 font-medium text-right">{formatCurrency(parseFloat(row.total))}</td>
+                      <td className="px-3 py-3 text-ardoise-500 font-mono">{row.cotation}</td>
+                      <td className="px-3 py-3 text-ardoise-500 text-right font-mono">{formatCurrency(parseFloat(row.honoraires))}</td>
+                      <td className="px-3 py-3 text-ardoise-500 text-right font-mono">{formatCurrency(parseFloat(row.majoration))}</td>
+                      <td className="px-3 py-3 text-ardoise-500 text-right font-mono">{formatCurrency(parseFloat(row.ferieDimNuit))}</td>
+                      <td className="px-3 py-3 text-ardoise-500 text-right font-mono">{formatCurrency(parseFloat(row.ifd))}</td>
+                      <td className="px-3 py-3 font-medium text-right font-mono">{formatCurrency(parseFloat(row.total))}</td>
                     </tr>
                   ))}
                 </tbody>

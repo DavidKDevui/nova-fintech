@@ -59,7 +59,7 @@ export function UserTable({ users, emptyMessage }: { users: User[]; emptyMessage
               >
                 <td className="px-4 md:px-6 py-4 font-medium">{user.email}</td>
                 <td className="px-4 md:px-6 py-4"><StatusBadge user={user} /></td>
-                <td className="px-4 md:px-6 py-4 text-ardoise-500">
+                <td className="px-4 md:px-6 py-4 text-ardoise-500 font-mono">
                   {new Date(user.createdAt).toLocaleDateString("fr-FR")}
                 </td>
               </tr>

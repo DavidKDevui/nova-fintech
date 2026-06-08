@@ -82,7 +82,7 @@ export function PractitionerTable({ practitioners }: { practitioners: Practition
                 <td className="px-4 md:px-6 py-4 text-ardoise-500">{p.email}</td>
                 <td className="px-4 md:px-6 py-4 text-ardoise-500">{TAX_REGIME_LABELS[p.taxRegime] ?? p.taxRegime}</td>
                 <td className="px-4 md:px-6 py-4"><StatusBadge p={p} /></td>
-                <td className="px-4 md:px-6 py-4 text-ardoise-500 whitespace-nowrap">
+                <td className="px-4 md:px-6 py-4 text-ardoise-500 whitespace-nowrap font-mono">
                   {new Date(p.createdAt).toLocaleDateString("fr-FR")}
                 </td>
               </tr>

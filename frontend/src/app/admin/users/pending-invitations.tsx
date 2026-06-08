@@ -2,6 +2,7 @@
 
 import { useState, useActionState, useEffect, useRef } from "react";
 import { createUserAction, cancelInvitationAction } from "@/actions/admin";
+import { Button } from "@/components/button";
 import { toast } from "sonner";
 
 export interface Invitation {
@@ -75,14 +76,14 @@ export function InvitationsSection({
             className="flex-1 border border-ardoise-200/50 bg-white/50 px-4 py-2.5 text-sm rounded-md backdrop-blur-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
           />
           <input type="hidden" name="accountType" value={accountType} />
-          <button
+          <Button
+            variant="cta"
             type="submit"
             disabled={pending}
-            className="flex items-center gap-2 bg-violet-600 px-5 py-2.5 text-sm font-medium text-white rounded-md transition-all hover:bg-violet-700 disabled:opacity-50"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
             {pending ? "Envoi..." : "Inviter"}
-          </button>
+          </Button>
         </form>
       </div>
 

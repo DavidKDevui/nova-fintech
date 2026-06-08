@@ -50,41 +50,22 @@ const adminItems = [
   {
     href: "/admin/users",
     label: "Praticiens",
-    icon: <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <circle cx="9" cy="7" r="4" fill="currentColor" opacity="0.6" />
-      <path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2" fill="currentColor" opacity="0.3" />
-      <circle cx="17" cy="7" r="3" fill="currentColor" opacity="0.4" />
-      <path d="M17 14a4 4 0 0 1 4 4v3h-4" fill="currentColor" opacity="0.2" />
-    </svg>,
+    icon: <svg {...ICON_PROPS}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
   },
   {
     href: "/admin/practices",
     label: "Cabinets",
-    icon: <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <rect x="3" y="8" width="18" height="13" rx="2" fill="currentColor" opacity="0.4" />
-      <path d="M3 10a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2H3z" fill="currentColor" opacity="0.55" />
-      <path d="M12 3L4 8h16L12 3z" fill="currentColor" opacity="0.3" />
-      <rect x="9" y="14" width="6" height="7" rx="1" fill="currentColor" opacity="0.15" />
-    </svg>,
+    icon: <svg {...ICON_PROPS}><rect width="16" height="20" x="4" y="2" rx="2" /><path d="M9 22v-4h6v4" /><path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01" /></svg>,
   },
   {
     href: "/admin/statements",
     label: "Bordereaux",
-    icon: <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" fill="currentColor" opacity="0.45" />
-      <path d="M14 2v6h6" fill="currentColor" opacity="0.25" />
-      <line x1="8" y1="13" x2="16" y2="13" stroke="currentColor" strokeWidth="1.5" opacity="0.2" />
-      <line x1="8" y1="17" x2="13" y2="17" stroke="currentColor" strokeWidth="1.5" opacity="0.2" />
-    </svg>,
+    icon: <svg {...ICON_PROPS}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>,
   },
   {
     href: "/admin/admins",
     label: "Administrateurs",
-    icon: <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <path d="M12 2L4 5.5v5.5c0 5.5 3.5 9 8 11 4.5-2 8-5.5 8-11V5.5L12 2z" fill="currentColor" opacity="0.45" />
-      <path d="M12 2L4 5.5v5.5c0 5.5 3.5 9 8 11V2z" fill="currentColor" opacity="0.6" />
-      <path d="m9 12 2 2 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.2" />
-    </svg>,
+    icon: <svg {...ICON_PROPS}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></svg>,
   },
 ];
 

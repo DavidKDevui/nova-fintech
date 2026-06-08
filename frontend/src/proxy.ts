@@ -10,8 +10,15 @@ const alwaysAccessiblePaths = ["/legal", "/privacy"];
 
 function isTokenExpired(token: string): boolean {
   try {
-    const [, payloadB64] = token.split(".");
-    const payload = JSON.parse(atob(payloadB64));
+    const payloadB64 = token.split(".")[1];
+    if (!payloadB64) return true;
+    // Un JWT est encodé en base64URL (avec - et _, sans padding). `atob` attend du
+    // base64 standard et plante sur - / _ : on convertit d'abord, sinon un token
+    // valide est vu comme « expiré » → refresh inutile à chaque requête (prefetch
+    // inclus) → rotation du refresh token → déconnexion.
+    const base64 = payloadB64.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    const payload = JSON.parse(atob(padded));
     return typeof payload.exp === "number" && payload.exp * 1000 < Date.now();
   } catch {
     return true;

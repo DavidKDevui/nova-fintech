@@ -18,8 +18,8 @@ const VARIANTS: Record<Variant, string> = {
   secondary: "bg-white text-ardoise-900 border border-ardoise-200 hover:bg-ardoise-50",
   // Ghost — texte seul (ex. « Annuler »)
   ghost: "text-ardoise-600 hover:text-ardoise-900 hover:bg-ardoise-50",
-  // Danger — fond rosé, texte rouge (charte)
-  danger: "bg-alerte-50 text-alerte-600 hover:bg-alerte-100",
+  // Danger — fond rosé, bordure rosée, texte rouge (charte p.10)
+  danger: "bg-alerte-50 text-alerte-600 border border-alerte-100 hover:bg-alerte-100",
 };
 
 const SIZES: Record<Size, string> = {

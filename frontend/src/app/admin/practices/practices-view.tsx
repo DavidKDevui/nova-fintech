@@ -3,6 +3,7 @@
 import { useState, useActionState, useEffect, useRef } from "react";
 import { createPracticeAction } from "@/actions/admin";
 import { toast } from "sonner";
+import { Button } from "@/components/button";
 import { PracticeTable, type Practice } from "./practice-table";
 
 export function PracticesView({ initialPractices }: { initialPractices: Practice[] }) {
@@ -42,14 +43,14 @@ export function PracticesView({ initialPractices }: { initialPractices: Practice
             maxLength={9}
             className="sm:w-48 border border-ardoise-200/50 bg-white/50 px-4 py-2.5 text-sm rounded-md backdrop-blur-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
           />
-          <button
+          <Button
+            variant="cta"
             type="submit"
             disabled={pending}
-            className="flex items-center gap-2 bg-violet-600 px-5 py-2.5 text-sm font-medium text-white rounded-md transition-all hover:bg-violet-700 disabled:opacity-50"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             {pending ? "Création..." : "Ajouter"}
-          </button>
+          </Button>
         </form>
       </div>
       <PracticeTable

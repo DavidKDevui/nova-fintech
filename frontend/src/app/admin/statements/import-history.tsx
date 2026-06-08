@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Button } from "@/components/button";
 import { deleteImportAction } from "@/actions/bordereaux";
 
 interface ImportRecord {
@@ -43,7 +44,7 @@ export function ImportHistory({ imports }: { imports: ImportRecord[] }) {
     <div className="bg-white/70 backdrop-blur-xl border border-white/50 rounded-lg p-4 md:p-6">
       <h2 className="text-sm font-medium text-ardoise-700 mb-4">
         Historique des imports
-        <span className="ml-2 text-xs text-ardoise-400">({imports.length})</span>
+        <span className="ml-2 text-xs text-ardoise-400 font-mono">({imports.length})</span>
       </h2>
 
       <div className="overflow-x-auto">
@@ -62,7 +63,7 @@ export function ImportHistory({ imports }: { imports: ImportRecord[] }) {
           <tbody>
             {imports.map((imp) => (
               <tr key={imp.id} className="border-b border-ardoise-100/50 last:border-0 hover:bg-white/40">
-                <td className="px-3 py-3 text-ardoise-500">
+                <td className="px-3 py-3 text-ardoise-500 font-mono">
                   {new Date(imp.createdAt).toLocaleDateString("fr-FR", {
                     day: "numeric",
                     month: "short",
@@ -78,35 +79,38 @@ export function ImportHistory({ imports }: { imports: ImportRecord[] }) {
                     {imp.documentType === "rattrapage" ? "Rattrapage" : imp.documentType === "noemie" ? "Retours Noemie" : imp.documentType}
                   </span>
                 </td>
-                <td className="px-3 py-3 text-right font-medium">{imp.passageCount}</td>
-                <td className="px-3 py-3 text-right font-medium">
+                <td className="px-3 py-3 text-right font-medium font-mono">{imp.passageCount}</td>
+                <td className="px-3 py-3 text-right font-medium font-mono">
                   {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(parseFloat(imp.totalAmount))}
                 </td>
                 <td className="px-3 py-3 text-right">
                   {confirmId === imp.id ? (
                     <div className="flex items-center justify-end gap-2">
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="compact"
                         onClick={() => setConfirmId(null)}
                         disabled={deleting === imp.id}
-                        className="text-xs text-ardoise-500 hover:text-ardoise-700 transition-colors"
                       >
                         Annuler
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="compact"
                         onClick={() => handleDelete(imp.id)}
                         disabled={deleting === imp.id}
-                        className="text-xs text-red-600 font-medium hover:text-red-700 transition-colors disabled:opacity-50"
                       >
                         {deleting === imp.id ? "..." : "Confirmer"}
-                      </button>
+                      </Button>
                     </div>
                   ) : (
-                    <button
+                    <Button
+                      variant="danger"
+                      size="compact"
                       onClick={() => setConfirmId(imp.id)}
-                      className="text-xs text-red-500 hover:text-red-700 transition-colors"
                     >
                       Supprimer
-                    </button>
+                    </Button>
                   )}
                 </td>
               </tr>

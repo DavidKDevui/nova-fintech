@@ -312,7 +312,7 @@ function KpiTile({ label, value, sub, icon, iconColor = "text-violet-700", value
       </p>
       <p className={`text-lg font-bold ${valueClass} font-mono`}>{value}</p>
       {sub && (
-        <span className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${sub.startsWith("+") || /économ/i.test(sub) ? "bg-menthe-50 text-menthe-700" : "bg-ardoise-100 text-ardoise-500"}`}>{sub}</span>
+        <span className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium font-mono ${sub.startsWith("+") || /économ/i.test(sub) ? "bg-menthe-50 text-menthe-700" : "bg-ardoise-100 text-ardoise-500"}`}>{sub}</span>
       )}
     </div>
   );
