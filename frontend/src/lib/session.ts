@@ -29,8 +29,10 @@ async function getUserFromToken(token: string): Promise<SessionUser | null> {
       .from(users)
       .where(and(eq(users.id, payload.userId), isNull(users.deletedAt)));
 
+    if (!user) console.log("[SESSION] getUserFromToken: token valide mais user introuvable en DB", { userId: payload.userId });
     return user ?? null;
-  } catch {
+  } catch (err) {
+    console.log("[SESSION] getUserFromToken: jwt.verify / DB a échoué →", err instanceof Error ? err.message : String(err));
     return null;
   }
 }
@@ -41,16 +43,22 @@ async function getUserFromToken(token: string): Promise<SessionUser | null> {
 export async function getSession(): Promise<SessionUser | null> {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get("accessToken")?.value;
+  console.log("[SESSION] getSession", { hasAccessToken: !!accessToken });
 
   if (accessToken) {
     const user = await getUserFromToken(accessToken);
-    if (user) return user;
+    if (user) {
+      console.log("[SESSION] getSession → user ✅", { userId: user.id, accountType: user.accountType });
+      return user;
+    }
   }
 
+  console.log("[SESSION] getSession → NULL (le layout protégé va rediriger vers /login)");
   return null;
 }
 
 export async function setSessionCookies(accessToken: string, refreshToken: string) {
+  console.log("[SESSION] setSessionCookies → pose accessToken + refreshToken", { secure: IS_PROD, sameSite: "lax", env: process.env.NODE_ENV });
   const cookieStore = await cookies();
 
   cookieStore.set("accessToken", accessToken, {
@@ -71,6 +79,7 @@ export async function setSessionCookies(accessToken: string, refreshToken: strin
 }
 
 export async function clearSessionCookies() {
+  console.log("[SESSION] clearSessionCookies → suppression accessToken + refreshToken");
   const cookieStore = await cookies();
   cookieStore.delete("accessToken");
   cookieStore.delete("refreshToken");

@@ -56,6 +56,7 @@ export async function loginAction(_prevState: unknown, formData: FormData) {
     return { error: "Une erreur est survenue, veuillez réessayer plus tard" };
   }
 
+  console.log(`[LOGIN] uid=${uid} accountType=${accountType} → redirection`);
   if (accountType === "admin") {
     redirect("/admin/users?toast=login");
   } else if (accountType === "practitioner") {

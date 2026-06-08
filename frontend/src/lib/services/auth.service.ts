@@ -255,10 +255,12 @@ export async function refreshSession(refreshToken: string) {
         .returning({ id: users.id });
 
       if (rotated.length > 0) {
+        console.log("[REFRESH] CAS rotated ✅ (new refresh issued)", { userId: user.id });
         return { accessToken, refreshToken: newRefreshToken };
       }
       // Race perdue : une concurrente a déjà tourné depuis ce token. Le nôtre est
       // devenu "previous" → on émet juste un access token, sans toucher au cookie refresh.
+      console.log("[REFRESH] CAS lost (concurrent rotation) → access-only, cookie unchanged", { userId: user.id });
       return { accessToken, refreshToken: null };
     }
 
@@ -270,12 +272,15 @@ export async function refreshSession(refreshToken: string) {
       tokenHash === user.previousRefreshToken
     ) {
       // Don't rotate again — just issue a fresh access token
+      console.log("[REFRESH] token === previous within grace → access-only", { userId: user.id });
       const accessToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
       return { accessToken, refreshToken: null };
     }
 
+    console.log("[REFRESH] ❌ token matches NEITHER current NOR valid previous → INVALID (will logout)");
     throw new Error("Invalid refresh token");
-  } catch {
+  } catch (err) {
+    console.log("[REFRESH] ❌ threw:", err instanceof Error ? err.message : String(err));
     throw new Error("Invalid refresh token");
   }
 }
