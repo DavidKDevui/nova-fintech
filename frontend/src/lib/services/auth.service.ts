@@ -227,9 +227,33 @@ export async function refreshSession(refreshToken: string) {
 
     const tokenHash = hashToken(refreshToken);
 
-    // Check current refresh token
+    // Check current refresh token — rotation ATOMIQUE (compare-and-swap) pour éviter
+    // les races de concurrence : le dashboard praticien déclenche plusieurs refresh
+    // simultanés (prefetch + actions). Sans CAS, une double rotation concurrente perd
+    // le token → une requête échoue → cookies effacés → déconnexion (pas l'admin, qui
+    // fait moins de requêtes simultanées).
     if (tokenHash === user.refreshToken) {
-      return generateTokens(user.id);
+      const accessToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+      const newRefreshToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
+      const rotated = await db
+        .update(users)
+        .set({
+          refreshToken: hashToken(newRefreshToken),
+          previousRefreshToken: tokenHash,
+          previousRefreshTokenExpiresAt: new Date(Date.now() + GRACE_PERIOD_SECONDS * 1000),
+          updatedAt: new Date(),
+        })
+        // Ne tourne que si le token courant est TOUJOURS celui-ci (sinon une autre
+        // requête a déjà tourné depuis ce même token).
+        .where(and(eq(users.id, user.id), eq(users.refreshToken, tokenHash)))
+        .returning({ id: users.id });
+
+      if (rotated.length > 0) {
+        return { accessToken, refreshToken: newRefreshToken };
+      }
+      // Race perdue : une concurrente a déjà tourné depuis ce token. Le nôtre est
+      // devenu "previous" → on émet juste un access token, sans toucher au cookie refresh.
+      return { accessToken, refreshToken: null };
     }
 
     // Grace period: accept the previous token for 30s after rotation
