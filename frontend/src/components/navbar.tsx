@@ -85,10 +85,24 @@ export function Navbar() {
   const router = useRouter();
   const isAdmin = user.accountType === "admin";
   const displayName = hp?.firstName || user.email;
-  const { pendingSuggestionsCount: pendingCount, uncategorizedCount, defaultBankAccountMissing } = useData();
+  const { pendingSuggestionsCount: pendingCount, uncategorizedCount, defaultBankAccountMissing, refreshAll } = useData();
   const [showMenu, setShowMenu] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Recharge les données client du provider (facturation, comptes, suggestions, fiscal…)
+  // ET les Server Components (profil praticien via router.refresh()).
+  async function handleRefresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await refreshAll();
+      router.refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }
   const menuRef = useRef<HTMLDivElement>(null);
 
   const items = isAdmin ? adminItems : navItems;
@@ -218,8 +232,8 @@ export function Navbar() {
           <Link href="/help" title="Aide" className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </Link>
-          <button type="button" onClick={() => router.refresh()} title="Actualiser les données" className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 4 21 10 15 10"/></svg>
+          <button type="button" onClick={handleRefresh} disabled={refreshing} title="Actualiser les données" className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all disabled:opacity-60 disabled:cursor-default">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={refreshing ? "animate-spin" : ""}><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 4 21 10 15 10"/></svg>
           </button>
         </div>
         </div>

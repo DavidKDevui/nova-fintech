@@ -27,7 +27,7 @@ export default async function LegalLayout({ children }: { children: React.ReactN
 
   const inner = (
     <>
-      <main className="max-w-5xl mx-auto px-6 py-10">
+      <main className="app-content max-w-5xl mx-auto px-6 py-10">
         {children}
       </main>
       <footer className="border-t border-ardoise-200 bg-white/60 mt-12 py-6">

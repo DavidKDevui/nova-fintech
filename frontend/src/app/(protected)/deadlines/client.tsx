@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { useData } from "@/providers/data-provider";
-import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
+import { type CotisationsEstimate } from "@/actions/cotisations-estimate";
 import {
   buildCalendar,
   MONTH_NAMES,
@@ -19,7 +19,6 @@ import { downloadCSV, downloadPDF } from "@/lib/export";
 import { ExportButtons } from "@/components/export-buttons";
 import { DataMissingOverlay } from "@/components/data-missing-overlay";
 import { CASourceIndicator } from "@/components/ca-source-indicator";
-import { getEffectiveCAAction, type EffectiveCA } from "@/actions/effective-ca";
 
 const DAY_NAMES = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -36,11 +35,10 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 export function DeadlinesClient() {
   const hp = usePractitioner();
-  const { facturationSummary } = useData();
+  const { facturationSummary, effectiveCA, cotisationsEstimate: estimate } = useData();
   const [filter, setFilter] = useState<Filter>("all");
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
   const [calExporting, setCalExporting] = useState(false);
   const calendarCardRef = useRef<HTMLDivElement>(null);
 
@@ -79,20 +77,7 @@ export function DeadlinesClient() {
     }
   }
 
-  const [effectiveCA, setEffectiveCA] = useState<EffectiveCA>({ ca: 0, source: "none" });
-  const totalCAForEstimate = effectiveCA.ca;
-
-  useEffect(() => {
-    const year = new Date().getFullYear();
-    getEffectiveCAAction(year, "bordereaux").then(setEffectiveCA).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (totalCAForEstimate <= 0) return;
-    getCotisationsEstimate(totalCAForEstimate).then((res) => {
-      if (res) setEstimate(res);
-    }).catch(() => {});
-  }, [totalCAForEstimate]);
+  // effectiveCA + estimation cotisations : centralisés dans DataProvider (useData ci-dessus).
 
   const now = new Date();
   const currentMonth = now.getMonth();

@@ -5,6 +5,8 @@ import { getPendingSuggestions, getPendingSuggestionsCount } from "@/actions/pra
 import { getFacturationData, type FacturationSummary, type CarePassageRow } from "@/actions/facturation";
 import { fetchLocalAccountsAction } from "@/actions/bridge";
 import { getUncategorizedCountAction } from "@/actions/transaction";
+import { getEffectiveCAAction, type EffectiveCA } from "@/actions/effective-ca";
+import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
 import { usePractitioner } from "./practitioner-provider";
 import { useUser } from "./user-provider";
 
@@ -59,10 +61,18 @@ interface DataContextValue {
   setUncategorizedCount: React.Dispatch<React.SetStateAction<number>>;
   defaultBankAccountMissing: boolean;
 
+  // Fiscal (CA effectif + estimation cotisations, année courante)
+  effectiveCA: EffectiveCA;
+  cotisationsEstimate: CotisationsEstimate | null;
+  fiscalLoading: boolean;
+
   // Refresh
   refresh: () => Promise<void>;
   refreshFacturation: () => Promise<void>;
   refreshTransactions: () => Promise<void>;
+  refreshFiscal: () => Promise<void>;
+  /** Recharge toutes les données client du provider (utilisé par le bouton « Actualiser »). */
+  refreshAll: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextValue>({
@@ -80,9 +90,14 @@ const DataContext = createContext<DataContextValue>({
   uncategorizedCount: 0,
   setUncategorizedCount: () => {},
   defaultBankAccountMissing: false,
+  effectiveCA: { ca: 0, source: "none" },
+  cotisationsEstimate: null,
+  fiscalLoading: true,
   refresh: async () => {},
   refreshFacturation: async () => {},
   refreshTransactions: async () => {},
+  refreshFiscal: async () => {},
+  refreshAll: async () => {},
 });
 
 export function DataProvider({ children }: { children: ReactNode }) {
@@ -106,6 +121,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [transactionsError, setTransactionsError] = useState("");
   const [uncategorizedCount, setUncategorizedCount] = useState(0);
+
+  // Fiscal (CA effectif + estimation cotisations, année courante)
+  const [effectiveCA, setEffectiveCA] = useState<EffectiveCA>({ ca: 0, source: "none" });
+  const [cotisationsEstimate, setCotisationsEstimate] = useState<CotisationsEstimate | null>(null);
+  const [fiscalLoading, setFiscalLoading] = useState(true);
 
   const refreshFacturation = useCallback(async () => {
     if (isAdmin || !hp) {
@@ -143,6 +163,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setTransactionsLoading(false);
   }, [isAdmin, hp?.bridgeUserUuid]);
 
+  const refreshFiscal = useCallback(async () => {
+    if (isAdmin || !hp) {
+      setFiscalLoading(false);
+      return;
+    }
+    const year = new Date().getFullYear();
+    const ca = await getEffectiveCAAction(year, "bordereaux");
+    setEffectiveCA(ca);
+    if (ca.ca > 0) {
+      const est = await getCotisationsEstimate(ca.ca);
+      if (est) setCotisationsEstimate(est);
+    }
+    setFiscalLoading(false);
+  }, [isAdmin, hp]);
+
   const refresh = useCallback(async () => {
     if (isAdmin || !hp) return;
     const [count, sug] = await Promise.all([
@@ -160,13 +195,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return !accounts.some((a) => a.id === hp.defaultBankAccountId);
   }, [transactionsLoading, hp, accounts]);
 
+  const refreshAll = useCallback(async () => {
+    await Promise.all([
+      refresh(),
+      refreshFacturation(),
+      refreshTransactions(),
+      refreshFiscal(),
+    ]);
+  }, [refresh, refreshFacturation, refreshTransactions, refreshFiscal]);
+
   // Initial load
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch
     refresh();
     refreshFacturation();
     refreshTransactions();
-  }, [refresh, refreshFacturation, refreshTransactions]);
+    refreshFiscal();
+  }, [refresh, refreshFacturation, refreshTransactions, refreshFiscal]);
 
   return (
     <DataContext.Provider value={{
@@ -184,9 +229,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       uncategorizedCount,
       setUncategorizedCount,
       defaultBankAccountMissing,
+      effectiveCA,
+      cotisationsEstimate,
+      fiscalLoading,
       refresh,
       refreshFacturation,
       refreshTransactions,
+      refreshFiscal,
+      refreshAll,
     }}>
       {children}
     </DataContext.Provider>

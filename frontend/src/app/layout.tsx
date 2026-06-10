@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DM_Sans, JetBrains_Mono } from "next/font/google";
+import { DM_Sans, Sora } from "next/font/google";
 import { ToastProvider } from "@/providers/toast-provider";
 import "./globals.css";
 
@@ -9,10 +9,11 @@ const dmSans = DM_Sans({
   variable: "--font-dm-sans",
   display: "swap",
 });
-// JetBrains Mono — tout ce qui est chiffré : montants, dates, identifiants (charte ActiDec v3)
-const jetbrainsMono = JetBrains_Mono({
+// Sora — tout ce qui est chiffré : montants, dates, identifiants (charte ActiDec v3).
+// Sans-serif géométrique (PAS monospace → chiffres non alignés en colonnes). Police variable.
+const sora = Sora({
   subsets: ["latin"],
-  variable: "--font-jetbrains-mono",
+  variable: "--font-sora",
   display: "swap",
 });
 
@@ -27,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className={`${dmSans.variable} ${jetbrainsMono.variable} h-full`}>
+    <html lang="fr" className={`${dmSans.variable} ${sora.variable} h-full`}>
       <body className="min-h-full bg-[#FCFBFE] font-[family-name:var(--font-dm-sans)] text-ardoise-900">
         {children}
         <ToastProvider />

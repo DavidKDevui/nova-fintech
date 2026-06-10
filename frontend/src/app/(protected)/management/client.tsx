@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback, useMemo, useRef, useActionState, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, useActionState, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, ReferenceLine, LabelList } from "recharts";
 import { getMonthlyActivityAction, getTransactionKpisAction, getCategoryTransactionsAction, type MonthlyActivityMonth, type CategoryTransaction } from "@/actions/transaction";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
@@ -39,11 +39,94 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(amount);
 }
 
+// ── Cache de données partagé entre les onglets ──
+// Les onglets se montent un par un et refetchaient chacun le même cœur de
+// données (CA effectif "transactions" + activité mensuelle + estimation cotis.)
+// à chaque visite. Ces données sont read-only et stables pendant la session de
+// page (rien dans /management ne mute les transactions/bordereaux), donc on les
+// met en cache par année. Le cache est réinitialisé si la connexion bancaire
+// change (les montants en dépendent) : les Maps sont recréées au render, donc
+// avant que les effets des onglets ne tournent — pas de lecture périmée.
+
+type YearCore = {
+  effectiveCA: EffectiveCA;
+  months: MonthlyActivityMonth[];
+  totalCA: number;
+  /** true = fallback bordereaux (CA réel issu des passages, cotisations estimées). */
+  isEstimated: boolean;
+};
+
+type ManagementDataValue = {
+  /** Cœur partagé pour une année : CA effectif + activité mensuelle (avec fallback). */
+  loadYearCore: (year: number) => Promise<YearCore>;
+  /** Estimation cotisations pour une année (null si CA nul). */
+  loadEstimate: (year: number) => Promise<CotisationsEstimate | null>;
+};
+
+const ManagementDataContext = createContext<ManagementDataValue | null>(null);
+
+function useManagementData(): ManagementDataValue {
+  const ctx = useContext(ManagementDataContext);
+  if (!ctx) throw new Error("useManagementData doit être utilisé dans ManagementDataProvider");
+  return ctx;
+}
+
+// Le provider est remonté (via `key`) quand la connexion bancaire change, donc
+// les caches repartent vides automatiquement — pas de logique d'invalidation ici.
+function ManagementDataProvider({ children }: { children: ReactNode }) {
+  const coreCacheRef = useRef(new Map<number, Promise<YearCore>>());
+  const estimateCacheRef = useRef(new Map<number, Promise<CotisationsEstimate | null>>());
+
+  const loadYearCore = useCallback((year: number) => {
+    const cache = coreCacheRef.current;
+    const cached = cache.get(year);
+    if (cached) return cached;
+    const p = (async (): Promise<YearCore> => {
+      const effectiveCA = await getEffectiveCAAction(year, "transactions");
+      const useFallback = effectiveCA.source === "bordereaux";
+      const monthly = useFallback
+        ? await getMonthlyActivityFromBordereauxAction(year)
+        : await getMonthlyActivityAction(year);
+      const months = monthly.months ?? [];
+      const totalCA = months.reduce((s, m) => s + m.income, 0);
+      return { effectiveCA, months, totalCA, isEstimated: useFallback };
+    })().catch((err) => {
+      // Échec : on retire l'entrée pour permettre une nouvelle tentative.
+      coreCacheRef.current.delete(year);
+      throw err;
+    });
+    cache.set(year, p);
+    return p;
+  }, []);
+
+  const loadEstimate = useCallback((year: number) => {
+    const cache = estimateCacheRef.current;
+    const cached = cache.get(year);
+    if (cached) return cached;
+    const p = (async (): Promise<CotisationsEstimate | null> => {
+      const { totalCA } = await loadYearCore(year);
+      if (totalCA <= 0) return null;
+      return getCotisationsEstimate(totalCA, 0, year);
+    })().catch((err) => {
+      estimateCacheRef.current.delete(year);
+      throw err;
+    });
+    cache.set(year, p);
+    return p;
+  }, [loadYearCore]);
+
+  const value = useMemo(() => ({ loadYearCore, loadEstimate }), [loadYearCore, loadEstimate]);
+  return <ManagementDataContext.Provider value={value}>{children}</ManagementDataContext.Provider>;
+}
+
 export function ManagementClient() {
+  const hp = usePractitioner();
   const [tab, setTab] = useState<Tab>("activity");
 
   return (
-    <div>
+    // key = connexion bancaire : un changement remonte tout le sous-arbre et
+    // vide le cache de données partagé (les montants CA/cotisations en dépendent).
+    <ManagementDataProvider key={hp?.bridgeUserUuid ?? "none"}><div>
       {/* Tabs */}
       <div className="flex items-center gap-0 border-b border-ardoise-100 mb-6">
         {TABS.map((t) => (
@@ -72,7 +155,7 @@ export function ManagementClient() {
       {tab === "remainder" && <RemainderTab />}
 
       {tab === "simulation" && <SimulationTab />}
-    </div>
+    </div></ManagementDataProvider>
   );
 }
 
@@ -80,6 +163,7 @@ export function ManagementClient() {
 
 function ActivityTab() {
   const hp = usePractitioner();
+  const { loadYearCore } = useManagementData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
@@ -99,54 +183,14 @@ function ActivityTab() {
 
   const fetchData = useCallback(async (y: number) => {
     setLoading(true);
-    const [vacationsResult, effectiveCAResult] = await Promise.all([
+    const [vacationsResult, core] = await Promise.all([
       getVacationsAction(y),
-      getEffectiveCAAction(y, "transactions"),
+      loadYearCore(y),
     ]);
+    const { effectiveCA: effectiveCAResult, months, totalCA, isEstimated: useFallback } = core;
 
-    // Fallback dès que le CA effectif provient des bordereaux : on dérive le CA
-    // mensuel depuis les passages et on n'estime *rien d'autre* — dépenses,
-    // cotisations sociales et provision d'impôt restent à 0 (affichées "—").
-    // Le forfaitaire URSSAF/CARPIMKO début d'activité produisait des montants
-    // disproportionnés par rapport au CA réel des bordereaux, donc on les masque
-    // ici. Les autres tabs (Cotisations, Impôts, Synthèse) gardent l'estimation
-    // car elle a du sens en projection annuelle complète.
-    const useFallback = effectiveCAResult.source === "bordereaux";
-    if (useFallback) {
-      const monthlyResult = await getMonthlyActivityFromBordereauxAction(y);
-      const totalCA = monthlyResult.months.reduce((s, m) => s + m.income, 0);
-      setKpis({ encaissement: totalCA, decaissement: 0, cotisations: 0, remuneration: 0 });
-      setEffectiveCA(effectiveCAResult);
-      setChartData(
-        monthlyResult.months.map((m) => ({
-          name: MONTH_LABELS[m.month - 1]!,
-          revenus: m.income,
-          cotisations: m.cotisations,
-          autresDepenses: m.autresDepenses,
-          urssaf: m.urssaf,
-          carpimko: m.carpimko,
-          chargesPro: m.chargesPro,
-          retrocession: m.retrocession,
-          madelin: m.madelin,
-          impots: m.impots,
-          remuneration: m.remuneration,
-        })),
-      );
-      setVacations(vacationsResult);
-      setIsEstimated(true);
-      setLoading(false);
-      return;
-    }
-
-    // Flux normal : transactions bancaires.
-    const [kpiResult, monthlyResult] = await Promise.all([
-      getTransactionKpisAction(null, y),
-      getMonthlyActivityAction(y),
-    ]);
-    setKpis({ encaissement: kpiResult.encaissement, decaissement: kpiResult.decaissement, cotisations: kpiResult.cotisations ?? 0, remuneration: kpiResult.remuneration ?? 0 });
-    setEffectiveCA(effectiveCAResult);
-    setChartData(
-      monthlyResult.months.map((m) => ({
+    const toChartData = (ms: MonthlyActivityMonth[]) =>
+      ms.map((m) => ({
         name: MONTH_LABELS[m.month - 1]!,
         revenus: m.income,
         cotisations: m.cotisations,
@@ -158,12 +202,35 @@ function ActivityTab() {
         madelin: m.madelin,
         impots: m.impots,
         remuneration: m.remuneration,
-      })),
-    );
+      }));
+
+    // Fallback dès que le CA effectif provient des bordereaux : CA mensuel dérivé
+    // des passages, et on n'estime *rien d'autre* — dépenses, cotisations sociales
+    // et provision d'impôt restent à 0 (affichées "—"). Le forfaitaire
+    // URSSAF/CARPIMKO début d'activité produisait des montants disproportionnés
+    // par rapport au CA réel des bordereaux, donc on les masque ici. Les autres
+    // tabs (Cotisations, Impôts, Synthèse) gardent l'estimation car elle a du sens
+    // en projection annuelle complète.
+    if (useFallback) {
+      setKpis({ encaissement: totalCA, decaissement: 0, cotisations: 0, remuneration: 0 });
+      setEffectiveCA(effectiveCAResult);
+      setChartData(toChartData(months));
+      setVacations(vacationsResult);
+      setIsEstimated(true);
+      setLoading(false);
+      return;
+    }
+
+    // Flux normal : transactions bancaires. Les KPIs encaissement/décaissement
+    // proviennent d'une agrégation dédiée (distincte de l'activité mensuelle).
+    const kpiResult = await getTransactionKpisAction(null, y);
+    setKpis({ encaissement: kpiResult.encaissement, decaissement: kpiResult.decaissement, cotisations: kpiResult.cotisations ?? 0, remuneration: kpiResult.remuneration ?? 0 });
+    setEffectiveCA(effectiveCAResult);
+    setChartData(toChartData(months));
     setVacations(vacationsResult);
     setIsEstimated(false);
     setLoading(false);
-  }, [bankConnected]);
+  }, [loadYearCore]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
@@ -679,6 +746,7 @@ function ActivityTab() {
 
 function ContributionsTab() {
   const hp = usePractitioner();
+  const { loadYearCore, loadEstimate } = useManagementData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
   const [cardsLoading, setCardsLoading] = useState(true);
@@ -717,29 +785,20 @@ function ContributionsTab() {
     setCardsLoading(true);
     setEstimate(null);
     (async () => {
-      const effectiveCAResult = await getEffectiveCAAction(year, "transactions");
-      const useFallback = effectiveCAResult.source === "bordereaux";
-      setIsEstimated(useFallback);
-
-      const monthly = useFallback
-        ? await getMonthlyActivityFromBordereauxAction(year)
-        : await getMonthlyActivityAction(year);
-      const months = monthly.months ?? [];
-      setMonthlyData(months.map((m) => ({ urssaf: m.urssaf, carpimko: m.carpimko })));
+      const core = await loadYearCore(year);
+      setIsEstimated(core.isEstimated);
+      setMonthlyData(core.months.map((m) => ({ urssaf: m.urssaf, carpimko: m.carpimko })));
       setTableLoading(false);
 
       // Estimation calée sur l'année sélectionnée : getCotisationsEstimate
-      // utilise désormais le paramètre `year` pour PASS, annualisation, début
-      // d'activité et N-2 — fonctionne donc aussi sur les années passées (où
-      // le CA passé est déjà la valeur annuelle complète, pas d'extrapolation).
-      const totalCA = months.reduce((s, m) => s + m.income, 0);
-      if (totalCA > 0) {
-        const est = await getCotisationsEstimate(totalCA, 0, year);
-        if (est) setEstimate(est);
-      }
+      // utilise le paramètre `year` pour PASS, annualisation, début d'activité
+      // et N-2 — fonctionne donc aussi sur les années passées (où le CA passé est
+      // déjà la valeur annuelle complète, pas d'extrapolation).
+      const est = await loadEstimate(year);
+      if (est) setEstimate(est);
       setCardsLoading(false);
     })().catch(() => { setTableLoading(false); setCardsLoading(false); });
-  }, [year, currentYear, bankConnected]);
+  }, [year, loadYearCore, loadEstimate, bankConnected]);
 
   // Totals réels (déjà versés) pour l'année sélectionnée
   const { totalUrssafReel, totalCarpimkoReel } = useMemo(() => {
@@ -1163,6 +1222,7 @@ function TransactionsList({
 
 function TaxesTab() {
   const hp = usePractitioner();
+  const { loadYearCore, loadEstimate } = useManagementData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
@@ -1217,30 +1277,27 @@ function TaxesTab() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setMonthlyLoading(true);
     (async () => {
-      const effectiveCAResult = await getEffectiveCAAction(year, "transactions");
-      const useFallback = effectiveCAResult.source === "bordereaux";
-      setIsEstimated(useFallback);
-
-      const [m, v] = await Promise.all([
-        useFallback ? getMonthlyActivityFromBordereauxAction(year) : getMonthlyActivityAction(year),
+      const [core, v] = await Promise.all([
+        loadYearCore(year),
         getVacationsAction(year),
       ]);
-      let months = m.months;
+      const useFallback = core.isEstimated;
+      setIsEstimated(useFallback);
 
-      // Enrichit avec URSSAF/CARPIMKO estimés en fallback (calage sur le
-      // sélecteur d'année — getCotisationsEstimate est désormais year-aware).
-      if (useFallback) {
-        const totalCA = months.reduce((s, mm) => s + mm.income, 0);
-        if (totalCA > 0) {
-          const est = await getCotisationsEstimate(totalCA, 0, year);
-          if (est) {
-            months = months.map((mm) => {
-              const ratio = mm.income / totalCA;
-              const urssaf = Math.round(est.urssafAnnuel * ratio);
-              const carpimko = Math.round(est.carpimkoAnnuel * ratio);
-              return { ...mm, urssaf, carpimko };
-            });
-          }
+      let months = core.months;
+
+      // Enrichit avec URSSAF/CARPIMKO estimés en fallback, au prorata du CA
+      // mensuel (calage sur le sélecteur d'année — getCotisationsEstimate est
+      // year-aware).
+      if (useFallback && core.totalCA > 0) {
+        const est = await loadEstimate(year);
+        if (est) {
+          months = months.map((mm) => {
+            const ratio = mm.income / core.totalCA;
+            const urssaf = Math.round(est.urssafAnnuel * ratio);
+            const carpimko = Math.round(est.carpimkoAnnuel * ratio);
+            return { ...mm, urssaf, carpimko };
+          });
         }
       }
 
@@ -1248,7 +1305,7 @@ function TaxesTab() {
       setVacations(v);
       setMonthlyLoading(false);
     })().catch(() => setMonthlyLoading(false));
-  }, [year, bankConnected, currentYear]);
+  }, [year, loadYearCore, loadEstimate, bankConnected]);
 
   // For future years with no data yet, fall back on the current year as reference for daily rate.
   // Source alignée sur effectiveCA pour rester cohérent avec le flux principal.
@@ -1259,14 +1316,10 @@ function TaxesTab() {
       return;
     }
     (async () => {
-      const eff = await getEffectiveCAAction(currentYear, "transactions");
-      const loader = eff.source === "bordereaux"
-        ? getMonthlyActivityFromBordereauxAction(currentYear)
-        : getMonthlyActivityAction(currentYear);
-      const m = await loader;
-      setPastReference(m.months);
+      const core = await loadYearCore(currentYear);
+      setPastReference(core.months);
     })().catch(() => {});
-  }, [year, currentYear]);
+  }, [year, currentYear, loadYearCore]);
 
   const { parts, partsDeReference } = useMemo(
     () => computeParts({ maritalStatus: situation, dependentChildren: enfants, isSingleParent }),
@@ -1701,6 +1754,7 @@ function TaxesTab() {
 
 function SummaryTab() {
   const hp = usePractitioner();
+  const { loadYearCore, loadEstimate } = useManagementData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const { accounts, transactionsLoading } = useData();
   const currentYear = new Date().getFullYear();
@@ -1732,17 +1786,17 @@ function SummaryTab() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setLoading(true);
     (async () => {
-      const effectiveCAResult = await getEffectiveCAAction(currentYear, "transactions");
-      const useFallback = effectiveCAResult.source === "bordereaux";
-      setIsEstimated(useFallback);
+      const core = await loadYearCore(currentYear);
+      setIsEstimated(core.isEstimated);
 
-      const monthlyLoader = useFallback ? getMonthlyActivityFromBordereauxAction : getMonthlyActivityAction;
-      const [currentMonthly, prevMonthly, prevFiscal] = await Promise.all([
-        monthlyLoader(currentYear),
+      // prevYear : même source/loader que l'année courante pour rester cohérent.
+      const monthlyLoader = core.isEstimated ? getMonthlyActivityFromBordereauxAction : getMonthlyActivityAction;
+      const [prevMonthly, prevFiscal, est] = await Promise.all([
         monthlyLoader(prevYear),
         getFiscalSituationAction(prevYear),
+        loadEstimate(currentYear),
       ]);
-      const monthly = currentMonthly.months.map((m) => ({
+      const monthly = core.months.map((m) => ({
         income: m.income,
         urssaf: m.urssaf,
         carpimko: m.carpimko,
@@ -1751,8 +1805,6 @@ function SummaryTab() {
         retrocession: m.retrocession,
         madelin: m.madelin,
       }));
-      const totalCAFromBank = monthly.reduce((s, m) => s + m.income, 0);
-      const est = await getCotisationsEstimate(totalCAFromBank, 0, currentYear);
       setMonthlyData(monthly);
       setEstimate(est);
       setPrevYearCA(prevMonthly.months.reduce((s, m) => s + m.income, 0));
@@ -1766,7 +1818,7 @@ function SummaryTab() {
       }
       setLoading(false);
     })().catch(() => setLoading(false));
-  }, [currentYear, prevYear, bankConnected]);
+  }, [currentYear, prevYear, loadYearCore, loadEstimate, bankConnected]);
 
   // 1. Trésorerie actuelle = balance du compte par défaut
   const defaultBalance = useMemo(() => {
@@ -2081,6 +2133,7 @@ function SummaryTab() {
 
 function RemainderTab() {
   const hp = usePractitioner();
+  const { loadYearCore, loadEstimate } = useManagementData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const { accounts, transactionsLoading, defaultBankAccountMissing } = useData();
   const currentYear = new Date().getFullYear();
@@ -2106,12 +2159,9 @@ function RemainderTab() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setLoading(true);
     (async () => {
-      const effectiveCAResult = await getEffectiveCAAction(currentYear, "transactions");
-      const useFallback = effectiveCAResult.source === "bordereaux";
-      setIsEstimated(useFallback);
-      const monthlyLoader = useFallback ? getMonthlyActivityFromBordereauxAction : getMonthlyActivityAction;
-      const monthly = await monthlyLoader(currentYear);
-      const months = monthly.months.map((m) => ({
+      const core = await loadYearCore(currentYear);
+      setIsEstimated(core.isEstimated);
+      const months = core.months.map((m) => ({
         income: m.income,
         urssaf: m.urssaf,
         carpimko: m.carpimko,
@@ -2120,13 +2170,12 @@ function RemainderTab() {
         retrocession: m.retrocession,
         madelin: m.madelin,
       }));
-      const totalCA = months.reduce((s, m) => s + m.income, 0);
-      const est = totalCA > 0 ? await getCotisationsEstimate(totalCA, 0, currentYear) : null;
+      const est = await loadEstimate(currentYear);
       setMonthlyData(months);
       setEstimate(est);
       setLoading(false);
     })().catch(() => setLoading(false));
-  }, [currentYear, bankConnected]);
+  }, [currentYear, loadYearCore, loadEstimate, bankConnected]);
 
   const prefs: PaymentPreferences = useMemo(() => {
     if (!hp) return DEFAULT_PREFERENCES;
@@ -2354,6 +2403,7 @@ function RemainderTab() {
 
 function SimulationTab() {
   const hp = usePractitioner();
+  const { loadYearCore, loadEstimate } = useManagementData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const currentYear = new Date().getFullYear();
   const chartRef = useRef<HTMLDivElement>(null);
@@ -2374,14 +2424,9 @@ function SimulationTab() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setLoading(true);
     (async () => {
-      const effectiveCAResult = await getEffectiveCAAction(currentYear, "transactions");
-      const useFallback = effectiveCAResult.source === "bordereaux";
-      setIsEstimated(useFallback);
-      const monthly = useFallback
-        ? await getMonthlyActivityFromBordereauxAction(currentYear)
-        : await getMonthlyActivityAction(currentYear);
-      const totalCAYTD = monthly.months.reduce((s, m) => s + m.income, 0);
-      const est = totalCAYTD > 0 ? await getCotisationsEstimate(totalCAYTD, 0, currentYear) : null;
+      const core = await loadYearCore(currentYear);
+      setIsEstimated(core.isEstimated);
+      const est = await loadEstimate(currentYear);
       const annualCA = est?.revenuAnnualise ?? 0;
       const baseSim = annualCA > 0 ? await simulateCotisations(annualCA) : null;
       setBaselineCA(annualCA);
@@ -2390,7 +2435,7 @@ function SimulationTab() {
       setSimulated(baseSim);
       setLoading(false);
     })().catch(() => setLoading(false));
-  }, [currentYear, bankConnected]);
+  }, [currentYear, loadYearCore, loadEstimate, bankConnected]);
 
   // Recalcul simulé (debounced sur 300 ms)
   useEffect(() => {

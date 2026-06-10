@@ -63,9 +63,9 @@
   --color-alerte-500: #E05252;
   --color-alerte-600: #C73E3E;
 
-  /* Polices charte ActiDec v3 — DM Sans (interface), JetBrains Mono (chiffres) */
+  /* Polices charte ActiDec v3 — DM Sans (interface), Sora (chiffres, sans-serif) */
   --font-sans: var(--font-dm-sans), system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", monospace;
+  --font-mono: var(--font-sora), ui-monospace, "SFMono-Regular", monospace;
 }
 
 /* DM Sans est posé sur le <body> (cf. layout.tsx) et hérité par tout le texte.
@@ -89,6 +89,27 @@ body {
   /* Fond « brume » charte ActiDec v3 — lavande/gris très clair teinté violet (pas blanc). */
   background: #FCFBFE;
   letter-spacing: -0.02em;
+}
+
+/* Agrandissement global de la typographie du contenu (PAS la navbar).
+   On redéfinit l'échelle typographique Tailwind v4 sur le conteneur de contenu :
+   `text-sm`, `text-lg`… compilent vers `font-size: var(--text-*)`, et les
+   line-heights par défaut sont des ratios sans unité (elles suivent donc la
+   taille automatiquement). Seuls les descendants de `.app-content` (le <main>)
+   héritent des tailles agrandies ; la navbar, rendue hors du <main>, garde
+   l'échelle par défaut. `--font-scale` = facteur d'agrandissement (un seul levier). */
+.app-content {
+  --font-scale: 1.125;
+  font-size: calc(1rem * var(--font-scale)); /* texte sans utilitaire de taille explicite */
+
+  --text-xs: calc(0.75rem * var(--font-scale));
+  --text-sm: calc(0.875rem * var(--font-scale));
+  --text-base: calc(1rem * var(--font-scale));
+  --text-lg: calc(1.125rem * var(--font-scale));
+  --text-xl: calc(1.25rem * var(--font-scale));
+  --text-2xl: calc(1.5rem * var(--font-scale));
+  --text-3xl: calc(1.875rem * var(--font-scale));
+  --text-4xl: calc(2.25rem * var(--font-scale));
 }
 
 @keyframes fade-up {

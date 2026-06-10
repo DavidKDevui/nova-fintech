@@ -22,7 +22,7 @@ export function Badge({
 }: {
   tone?: BadgeTone;
   dot?: boolean;
-  mono?: boolean; // badges-tags chiffrés/codes (URSSAF, CARPIMKO…) en JetBrains Mono
+  mono?: boolean; // badges-tags chiffrés/codes (URSSAF, CARPIMKO…) en Sora
   className?: string;
   children: ReactNode;
 }) {

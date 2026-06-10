@@ -8,9 +8,9 @@ import { useData } from "@/providers/data-provider";
 import { PracticeSuggestionBanner } from "@/components/practice-suggestion-banner";
 import { DataMissingOverlay } from "@/components/data-missing-overlay";
 import { getTransactionKpisAction } from "@/actions/transaction";
-import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
+import { type CotisationsEstimate } from "@/actions/cotisations-estimate";
 import { getHealthScoreAction, type HealthScore } from "@/actions/health-score";
-import { getEffectiveCAAction, type EffectiveCA, type EffectiveCASource } from "@/actions/effective-ca";
+import { type EffectiveCASource } from "@/actions/effective-ca";
 import { HealthScoreCard } from "@/components/health-score-card";
 import { CASourceIndicator } from "@/components/ca-source-indicator";
 import {
@@ -39,6 +39,8 @@ export function DashboardClient() {
     transactions,
     transactionsLoading: bankLoading,
     uncategorizedCount,
+    effectiveCA,
+    cotisationsEstimate: estimate,
   } = useData();
 
   const name = hp?.firstName || user.email.split("@")[0] || "";
@@ -55,8 +57,6 @@ export function DashboardClient() {
   const [kpiDecaissement, setKpiDecaissement] = useState(0);
   const [kpiNbDepenses, setKpiNbDepenses] = useState(0);
   const [kpiLoading, setKpiLoading] = useState(true);
-  const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
-  const [effectiveCA, setEffectiveCA] = useState<EffectiveCA>({ ca: 0, source: "none" });
   const [healthScore, setHealthScore] = useState<HealthScore | null>(null);
   const [healthScoreLoading, setHealthScoreLoading] = useState(true);
 
@@ -93,17 +93,7 @@ export function DashboardClient() {
     return count;
   }, [passages, currentYear]);
 
-  useEffect(() => {
-    getEffectiveCAAction(currentYear, "bordereaux").then(setEffectiveCA).catch(() => {});
-  }, [currentYear]);
-
-  // Cotisations estimate (annual URSSAF + CARPIMKO projected from YTD CA) — used by EcheancesCard.
-  useEffect(() => {
-    if (effectiveCA.ca <= 0) return;
-    getCotisationsEstimate(effectiveCA.ca).then((res) => {
-      if (res) setEstimate(res);
-    }).catch(() => {});
-  }, [effectiveCA.ca]);
+  // effectiveCA + estimation cotisations : centralisés dans DataProvider (useData ci-dessus).
 
   const hasWarnings = !bankConnected || uncategorizedCount > 0;
 
@@ -123,7 +113,7 @@ export function DashboardClient() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-start">
       <div>
-        <h1 className="text-xl md:text-2xl font-extrabold mb-1">Hello {name},</h1>
+        <h1 className="text-xl md:text-2xl font-extrabold mb-1">Bonjour {name},</h1>
         <p className="text-sm text-ardoise-400 mb-4">On fait le point ensemble ?</p>
 
         <HealthScoreCard loading={healthScoreLoading} data={healthScore} />

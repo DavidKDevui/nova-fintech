@@ -22,7 +22,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <UserProvider user={session}>
       <div className="flex min-h-screen flex-col">
         <Navbar />
-        <main className="flex-1 p-4 md:p-6 lg:mt-6 lg:mx-auto lg:p-8 w-full max-w-7xl"><PageTransition>{children}</PageTransition></main>
+        <main className="app-content flex-1 p-4 md:p-6 lg:mt-6 lg:mx-auto lg:p-8 w-full max-w-7xl"><PageTransition>{children}</PageTransition></main>
       </div>
     </UserProvider>
   );

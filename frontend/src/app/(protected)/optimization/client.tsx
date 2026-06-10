@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { usePractitioner } from "@/providers/practitioner-provider";
+import { useData } from "@/providers/data-provider";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
-import { getEffectiveCAAction, type EffectiveCA } from "@/actions/effective-ca";
 import { getFiscalSituationAction } from "@/actions/fiscal-situation";
 import { getOptimizationContextAction, type OptimizationContext } from "@/actions/optimization-context";
 import { getRecommendationsAction, type Recommendation } from "@/actions/recommendations";
@@ -114,29 +114,20 @@ const cards: OptimCard[] = [
 
 export function OptimizationClient() {
   const hp = usePractitioner();
+  const { effectiveCA, cotisationsEstimate: estimate } = useData();
   const [selected, setSelected] = useState<Set<OptimKey>>(new Set());
   const [amounts, setAmounts] = useState<Record<string, number>>({});
-  const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
   const [fiscal, setFiscal] = useState<FiscalSituation>(null);
   const [ctx, setCtx] = useState<OptimizationContext | null>(null);
   const [urssafAfter, setUrssafAfter] = useState<number | null>(null);
   const [urssafLoading, setUrssafLoading] = useState(false);
-  const [effectiveCA, setEffectiveCA] = useState<EffectiveCA>({ ca: 0, source: "none" });
 
   const currentYear = new Date().getFullYear();
   const totalCA = effectiveCA.ca;
   const bankConnected = !!hp?.bridgeUserUuid;
 
-  useEffect(() => {
-    getEffectiveCAAction(currentYear, "bordereaux").then(setEffectiveCA).catch(() => {});
-  }, [currentYear]);
-
-  useEffect(() => {
-    if (totalCA <= 0) return;
-    getCotisationsEstimate(totalCA)
-      .then((res) => { if (res) setEstimate(res); })
-      .catch(() => {});
-  }, [totalCA]);
+  // effectiveCA + estimation cotisations de base : centralisés dans DataProvider (useData ci-dessus).
+  // Le recalcul URSSAF dynamique (avec déductionSociale) reste local plus bas.
 
   useEffect(() => {
     getFiscalSituationAction(currentYear).then(setFiscal).catch(() => {});
