@@ -6,10 +6,12 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { getMonthlyActivityAction, getTransactionKpisAction, getCategoryTransactionsAction, type MonthlyActivityMonth, type CategoryTransaction } from "@/actions/transaction";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
 import { simulateCotisations, type SimulationResult } from "@/actions/simulate-cotisations";
+import { getCAForecastAction, type CAForecastResult } from "@/actions/ca-history";
 import { getFiscalSituationAction, upsertFiscalSituationAction } from "@/actions/fiscal-situation";
 import { getVacationsAction, upsertVacationDayAction } from "@/actions/vacations";
 import { useData } from "@/providers/data-provider";
 import { usePractitioner } from "@/providers/practitioner-provider";
+import { useAssistant } from "@/providers/assistant-provider";
 import { getEffectiveCAAction, type EffectiveCA } from "@/actions/effective-ca";
 import { getMonthlyActivityFromBordereauxAction } from "@/actions/monthly-activity-bordereaux";
 import { DataMissingOverlay } from "@/components/data-missing-overlay";
@@ -2526,17 +2528,25 @@ function SimulationTab() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      {/* ── Section 1 : Estimation du C.A. ── */}
+      <CAForecastSection
+        onApply={(ca) => setSimulatedCA(Math.round(ca / 1000) * 1000)}
+        appliedCA={simulatedCA}
+      />
+
+      {/* ── Section 2 : Estimation du reste à régler ── */}
+      <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-bold text-ardoise-900">Simulation de cotisations</h2>
+          <h3 className="text-sm font-bold text-ardoise-900">Estimation du reste à régler</h3>
           <InfoTooltip text="Calcul via OpenFisca (régime PAMC IDEL) + barème CARPIMKO. À titre indicatif : en pratique, l'URSSAF est calculée sur le revenu N-2 ; cette simulation suppose que le revenu indiqué est celui de l'année en cours." />
         </div>
         <ExportButtons onCsv={handleExportCsv} onPdf={handleExportPdf} disabled={!baseline || !simulated} />
       </div>
       {isEstimated && (
-        <div className="px-4 py-1.5 text-[11px] text-ardoise-400 flex items-center gap-1.5">
+        <div className="text-[11px] text-ardoise-400 flex items-center gap-1.5">
           <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 16v-4" />
@@ -2599,8 +2609,8 @@ function SimulationTab() {
         />
       </div>
 
-      {/* KPI list + chart side-by-side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* KPI list + chart (empilés dans la colonne) */}
+      <div className="space-y-3">
         <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 divide-y divide-ardoise-100">
           {cards.map((c) => {
             const diff = c.after - c.before;
@@ -2652,6 +2662,299 @@ function SimulationTab() {
           Régime micro-BNC : abattement forfaitaire de 34 % appliqué automatiquement sur le CA pour le calcul des cotisations.
         </p>
       )}
+      </div>
+    </div>
+  );
+}
+
+// ── Prévision de C.A. ──
+
+// Outils chat qui modifient le scénario → on rafraîchit le graphe quand l'un
+// d'eux est exécuté depuis l'encart IA.
+const MUTATING_FORECAST_TOOLS = new Set([
+  "set_availability",
+  "set_days_per_week",
+  "add_ca_adjustment",
+  "clear_ca_adjustments",
+  "estimate_month_from_acts",
+]);
+
+type AiMessage = { role: "user" | "assistant"; content: string };
+
+const CONFIDENCE_LABEL: Record<"low" | "medium" | "high", { text: string; cls: string }> = {
+  high: { text: "Fiabilité élevée", cls: "bg-menthe-100 text-menthe-700" },
+  medium: { text: "Fiabilité moyenne", cls: "bg-ardoise-100 text-ardoise-700" },
+  low: { text: "Fiabilité faible", cls: "bg-alerte-100 text-alerte-700" },
+};
+
+function CAForecastSection({
+  onApply,
+  appliedCA,
+}: {
+  onApply: (ca: number) => void;
+  appliedCA: number;
+}) {
+  const { dataVersion } = useAssistant();
+  const [data, setData] = useState<CAForecastResult | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Encart IA — vraie conversation (avec mémoire), pas un one-shot.
+  const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [question, setQuestion] = useState("");
+
+  const refetch = useCallback(() => {
+    setLoading(true);
+    return getCAForecastAction()
+      .then((res) => setData(res))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Recharge au montage ET quand l'assistant global a modifié le scénario.
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getCAForecastAction()
+      .then((res) => { if (!cancelled) setData(res); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [dataVersion]);
+
+  const forecast = data?.forecast ?? null;
+  const baseForecast = data?.baseForecast ?? null;
+  const hasScenario = data?.hasScenario ?? false;
+  const monthsElapsed = data?.monthsElapsed ?? 0;
+  const scenarioDelta = hasScenario && forecast && baseForecast
+    ? forecast.annualProbable - baseForecast.annualProbable
+    : 0;
+
+  // Graphe mensuel : réalisé (mois révolus) vs projeté (mois à venir).
+  const monthlyChart = useMemo(() => {
+    if (!forecast) return [];
+    return forecast.monthly.map((v, i) => ({
+      name: MONTH_LABELS[i],
+      ca: v,
+      projete: i >= monthsElapsed,
+    }));
+  }, [forecast, monthsElapsed]);
+
+  // Met à jour le contenu du dernier message (l'assistant en cours de stream).
+  const setLastAssistant = useCallback((updater: (prev: string) => string) => {
+    setAiMessages((prev) => prev.map((m, i) =>
+      i === prev.length - 1 ? { ...m, content: updater(m.content) } : m,
+    ));
+  }, []);
+
+  // Conversation en streaming (réutilise /api/chat : forecast_ca + outils scénario).
+  // Envoie TOUT l'historique → Nova peut enchaîner (confirmations, suites).
+  const askAI = useCallback(async (content: string) => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    const history: AiMessage[] = [...aiMessages, { role: "user", content }];
+    setAiMessages([...history, { role: "assistant", content: "" }]);
+    let usedMutating = false;
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history }),
+      });
+      if (!response.ok || !response.body) {
+        setLastAssistant(() => "Impossible de récupérer la réponse pour le moment.");
+        return;
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice(6);
+          if (payload === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(payload);
+            if (Array.isArray(parsed.tools) && parsed.tools.some((t: string) => MUTATING_FORECAST_TOOLS.has(t))) {
+              usedMutating = true;
+            }
+            if (parsed.content) setLastAssistant((prev) => prev + parsed.content);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } catch {
+      setLastAssistant(() => "Une erreur est survenue. Réessayez.");
+    } finally {
+      setAiLoading(false);
+      // Un outil a modifié le scénario → le graphe se met à jour.
+      if (usedMutating) refetch();
+    }
+  }, [aiLoading, aiMessages, setLastAssistant, refetch]);
+
+  if (loading) {
+    return (
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
+        <p className="text-sm text-ardoise-400 text-center">Chargement de la prévision…</p>
+      </div>
+    );
+  }
+
+  // Pas assez de données : message clair, pas de faux chiffre.
+  if (!forecast || forecast.basis === "insufficient") {
+    return (
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4 space-y-1">
+        <h3 className="text-sm font-bold text-ardoise-900">Estimation du C.A.</h3>
+        <p className="text-xs text-ardoise-500">
+          Historique insuffisant pour une prévision fiable. Il faut au moins une douzaine de mois
+          d&apos;activité (encaissements bancaires ou bordereaux payés) pour projeter votre chiffre d&apos;affaires.
+        </p>
+      </div>
+    );
+  }
+
+  const conf = CONFIDENCE_LABEL[forecast.confidence];
+  const growth = forecast.trendGrowthRate;
+  const applied = Math.abs(appliedCA - forecast.annualProbable) < 600;
+
+  return (
+    <div className="space-y-3">
+      {/* Header au-dessus de la section */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-bold text-ardoise-900">Estimation du C.A. {forecast.targetYear}</h3>
+          <InfoTooltip text="Estimation calculée à partir de la tendance de vos années précédentes, de la saisonnalité de votre activité et de votre chiffre d'affaires déjà réalisé cette année. Indicatif." />
+        </div>
+        <span className={`px-2 py-0.5 text-[11px] font-medium rounded-full ${conf.cls}`}>{conf.text}</span>
+      </div>
+
+      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4 space-y-4">
+      {/* Cartes fourchette */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-[12px] bg-ardoise-50 border border-ardoise-100 px-3 py-2.5">
+          <p className="text-[11px] uppercase tracking-wide text-ardoise-500">Basse</p>
+          <p className="text-base font-bold text-ardoise-700 font-mono">{formatCurrency(forecast.annualLow)}</p>
+        </div>
+        <div className="rounded-[12px] bg-brand-50 border border-brand-200 px-3 py-2.5">
+          <p className="text-[11px] uppercase tracking-wide text-brand-600">Probable</p>
+          <p className="text-lg font-bold text-brand-700 font-mono">{formatCurrency(forecast.annualProbable)}</p>
+        </div>
+        <div className="rounded-[12px] bg-ardoise-50 border border-ardoise-100 px-3 py-2.5">
+          <p className="text-[11px] uppercase tracking-wide text-ardoise-500">Haute</p>
+          <p className="text-base font-bold text-ardoise-700 font-mono">{formatCurrency(forecast.annualHigh)}</p>
+        </div>
+      </div>
+
+      {growth != null && (
+        <p className="text-xs text-ardoise-600">
+          Évolution vs dernière année complète :{" "}
+          <span className={`font-medium ${growth >= 0 ? "text-menthe-600" : "text-alerte-600"}`}>
+            {growth >= 0 ? "+" : ""}{(growth * 100).toFixed(1)} %
+          </span>
+        </p>
+      )}
+
+      {hasScenario && baseForecast && (
+        <div className="rounded-[12px] bg-brand-50/70 border border-brand-200 px-3 py-2 text-xs text-ardoise-700 flex items-center gap-2 flex-wrap">
+          <span className="font-semibold text-brand-700">Scénario actif</span>
+          <span className="text-ardoise-500">
+            sans scénario : {formatCurrency(baseForecast.annualProbable)}
+          </span>
+          <span className={`font-medium ${scenarioDelta >= 0 ? "text-menthe-600" : "text-alerte-600"}`}>
+            ({scenarioDelta >= 0 ? "+" : ""}{formatCurrency(scenarioDelta)})
+          </span>
+        </div>
+      )}
+
+      {/* Graphe mensuel réalisé vs projeté */}
+      <div className="w-full h-52">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={monthlyChart} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E1DBEC" />
+            <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} />
+            <YAxis tickFormatter={(v) => `${Math.round(v / 1000)} k`} tick={{ fontSize: 11 }} width={36} />
+            <Tooltip
+              formatter={(v, _n, item) => [formatCurrency(Number(v ?? 0)), item?.payload?.projete ? "Projeté" : "Réalisé"]}
+              cursor={{ fill: "rgba(0,0,0,0.04)" }}
+            />
+            <Bar dataKey="ca" radius={[4, 4, 0, 0]}>
+              {monthlyChart.map((d, i) => (
+                <Cell key={i} fill={d.projete ? "#C4A3DE" : "#9060B6"} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="flex items-center gap-4 text-[11px] text-ardoise-500">
+        <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#9060B6]" /> Réalisé</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#C4A3DE]" /> Projeté</span>
+      </div>
+
+      {/* Appliquer au simulateur — temporairement désactivé */}
+      {/*
+      <Button
+        type="button"
+        onClick={() => onApply(forecast.annualProbable)}
+        disabled={applied}
+        className="w-full"
+      >
+        {applied ? "Prévision appliquée au simulateur ✓" : "Appliquer cette prévision au simulateur"}
+      </Button>
+      */}
+
+      {/* Encart IA */}
+      <div className="rounded-[12px] border border-ardoise-100 bg-white/60 p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <p className="text-xs font-semibold text-ardoise-700">Analyse de Nova</p>
+          <button
+            type="button"
+            onClick={() => askAI("Explique-moi ma prévision de chiffre d'affaires pour cette année : tendance, saisonnalité, mois forts et faibles, et ce que je peux en faire.")}
+            disabled={aiLoading}
+            className="px-2.5 py-1 text-xs font-medium rounded-md bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40"
+          >
+            {aiLoading ? "Analyse…" : "Expliquer ma prévision"}
+          </button>
+        </div>
+        {aiMessages.length > 0 && (
+          <div className="space-y-1.5 max-h-64 overflow-y-auto">
+            {aiMessages.map((m, i) => (
+              <div key={i} className={m.role === "user" ? "text-right" : ""}>
+                <span className={`inline-block text-xs whitespace-pre-wrap leading-relaxed rounded-md px-2 py-1 ${
+                  m.role === "user" ? "bg-brand-100 text-brand-800" : "text-ardoise-600"
+                }`}>
+                  {m.content || (aiLoading && i === aiMessages.length - 1 ? "…" : "")}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && question.trim()) { askAI(question.trim()); setQuestion(""); } }}
+            placeholder="Poser une question sur ma prévision…"
+            disabled={aiLoading}
+            className="flex-1 min-w-0 px-3 py-1.5 text-xs rounded-md border border-ardoise-200 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 disabled:opacity-40"
+          />
+          <button
+            type="button"
+            onClick={() => { if (question.trim()) { askAI(question.trim()); setQuestion(""); } }}
+            disabled={aiLoading || !question.trim()}
+            className="px-2.5 py-1.5 text-xs font-medium rounded-md bg-ardoise-100 text-ardoise-700 hover:bg-ardoise-200 disabled:opacity-40"
+          >
+            Envoyer
+          </button>
+        </div>
+      </div>
+      </div>
     </div>
   );
 }

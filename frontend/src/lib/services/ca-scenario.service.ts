@@ -1,0 +1,260 @@
+import { eq, and } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  practitioners,
+  practitionerVacations,
+  practitionerCaAdjustments,
+} from "@/lib/db/schema";
+import { countWorkingDays } from "@/lib/data/fr-holidays";
+import { getCAHistoryForPractitioner, type CAHistory } from "./ca-history.service";
+import {
+  forecastFromHistory,
+  applyScenarioToForecast,
+  type CAForecast,
+  type CAAdjustment,
+  type CAAdjustmentKind,
+} from "./ca-forecast.service";
+
+type Practitioner = typeof practitioners.$inferSelect;
+
+export type StoredAdjustment = {
+  id: string;
+  kind: CAAdjustmentKind;
+  value: number;
+  startMonth: number;
+  endMonth: number;
+  label: string | null;
+};
+
+/**
+ * Facteur de disponibilité par mois (12 valeurs, 0..1) pour l'année cible :
+ * (jours travaillables − jours de congés saisis) / jours travaillables.
+ * Un mois entièrement off → 0, un mois normal → 1.
+ */
+export async function buildAvailabilityFactor(
+  practitionerId: string,
+  year: number,
+  daysPerWeek: number,
+): Promise<number[]> {
+  const rows = await db
+    .select()
+    .from(practitionerVacations)
+    .where(and(
+      eq(practitionerVacations.practitionerId, practitionerId),
+      eq(practitionerVacations.year, year),
+    ));
+
+  const vacationDays = Array<number>(12).fill(0);
+  for (const r of rows) {
+    if (r.month >= 1 && r.month <= 12) vacationDays[r.month - 1] = r.days;
+  }
+
+  const factor = Array<number>(12).fill(1);
+  for (let m = 1; m <= 12; m++) {
+    const workable = countWorkingDays(year, m, daysPerWeek);
+    if (workable <= 0) { factor[m - 1] = 1; continue; }
+    const worked = Math.max(0, workable - vacationDays[m - 1]);
+    factor[m - 1] = worked / workable;
+  }
+  return factor;
+}
+
+/** Indique si une disponibilité est non triviale (au moins un mois réduit). */
+function hasReducedAvailability(factor: number[]): boolean {
+  return factor.some((f) => f < 0.999);
+}
+
+// ── CRUD leviers de C.A. ──
+
+export async function listCaAdjustments(
+  practitionerId: string,
+  year: number,
+): Promise<StoredAdjustment[]> {
+  const rows = await db
+    .select()
+    .from(practitionerCaAdjustments)
+    .where(and(
+      eq(practitionerCaAdjustments.practitionerId, practitionerId),
+      eq(practitionerCaAdjustments.year, year),
+    ));
+  return rows.map((r) => ({
+    id: r.id,
+    kind: r.kind as CAAdjustmentKind,
+    value: Number(r.value),
+    startMonth: r.startMonth,
+    endMonth: r.endMonth,
+    label: r.label,
+  }));
+}
+
+export async function addCaAdjustment(
+  practitionerId: string,
+  year: number,
+  input: { kind: CAAdjustmentKind; value: number; startMonth: number; endMonth: number; label?: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { kind, value, startMonth, endMonth, label } = input;
+  if (!["rate_pct", "volume_pct", "fixed_monthly", "fixed_oneoff", "month_override"].includes(kind)) {
+    return { ok: false, error: "Type de levier invalide" };
+  }
+  if (!Number.isFinite(value)) return { ok: false, error: "Valeur invalide" };
+  if (!Number.isInteger(startMonth) || startMonth < 1 || startMonth > 12) return { ok: false, error: "Mois de début invalide" };
+  if (!Number.isInteger(endMonth) || endMonth < 1 || endMonth > 12 || endMonth < startMonth) return { ok: false, error: "Mois de fin invalide" };
+
+  await db.insert(practitionerCaAdjustments).values({
+    practitionerId,
+    year,
+    kind,
+    value: String(value),
+    startMonth,
+    endMonth,
+    label: label ?? null,
+  });
+  return { ok: true };
+}
+
+/**
+ * Impose la valeur de CA d'un mois (remplace tout scénario pour ce mois).
+ * Un seul `month_override` par mois : on retire l'ancien avant d'insérer.
+ */
+export async function setMonthOverride(
+  practitionerId: string,
+  year: number,
+  month: number,
+  value: number,
+  label?: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!Number.isInteger(month) || month < 1 || month > 12) return { ok: false, error: "Mois invalide" };
+  if (!Number.isFinite(value) || value < 0) return { ok: false, error: "Montant invalide" };
+
+  const existing = await db
+    .select({ id: practitionerCaAdjustments.id, startMonth: practitionerCaAdjustments.startMonth, kind: practitionerCaAdjustments.kind })
+    .from(practitionerCaAdjustments)
+    .where(and(
+      eq(practitionerCaAdjustments.practitionerId, practitionerId),
+      eq(practitionerCaAdjustments.year, year),
+    ));
+  for (const e of existing) {
+    if (e.kind === "month_override" && e.startMonth === month) {
+      await db.delete(practitionerCaAdjustments).where(eq(practitionerCaAdjustments.id, e.id));
+    }
+  }
+
+  await db.insert(practitionerCaAdjustments).values({
+    practitionerId,
+    year,
+    kind: "month_override",
+    value: String(value),
+    startMonth: month,
+    endMonth: month,
+    label: label ?? null,
+  });
+  return { ok: true };
+}
+
+export async function clearCaAdjustments(practitionerId: string, year: number): Promise<number> {
+  const rows = await db
+    .delete(practitionerCaAdjustments)
+    .where(and(
+      eq(practitionerCaAdjustments.practitionerId, practitionerId),
+      eq(practitionerCaAdjustments.year, year),
+    ))
+    .returning({ id: practitionerCaAdjustments.id });
+  return rows.length;
+}
+
+// ── Disponibilité : écritures ──
+
+/** Upsert du nombre de jours de congés d'un mois donné. */
+export async function setVacationMonth(
+  practitionerId: string,
+  year: number,
+  month: number,
+  days: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!Number.isInteger(month) || month < 1 || month > 12) return { ok: false, error: "Mois invalide" };
+  const daysInMonth = new Date(year, month, 0).getDate();
+  if (!Number.isInteger(days) || days < 0 || days > daysInMonth) return { ok: false, error: "Nombre de jours invalide" };
+
+  const [existing] = await db
+    .select()
+    .from(practitionerVacations)
+    .where(and(
+      eq(practitionerVacations.practitionerId, practitionerId),
+      eq(practitionerVacations.year, year),
+      eq(practitionerVacations.month, month),
+    ));
+
+  if (existing) {
+    await db.update(practitionerVacations)
+      .set({ days, updatedAt: new Date() })
+      .where(eq(practitionerVacations.id, existing.id));
+  } else {
+    await db.insert(practitionerVacations).values({ practitionerId, year, month, days });
+  }
+  return { ok: true };
+}
+
+export async function setDaysPerWeek(
+  practitionerId: string,
+  days: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!Number.isInteger(days) || days < 1 || days > 7) return { ok: false, error: "Jours/semaine invalide (1 à 7)" };
+  await db.update(practitioners)
+    .set({ daysPerWeekWorked: days, updatedAt: new Date() })
+    .where(eq(practitioners.id, practitionerId));
+  return { ok: true };
+}
+
+// ── Orchestration : prévision avec scénario persistant ──
+
+export type ScenarioForecast = {
+  history: CAHistory;
+  forecast: CAForecast | null;
+  /** Prévision de base AVANT scénario (référence pour comparaison). */
+  baseForecast: CAForecast | null;
+  monthsElapsed: number;
+  /** true si une dispo réduite ou des leviers sont actifs. */
+  hasScenario: boolean;
+  adjustments: StoredAdjustment[];
+};
+
+/**
+ * Prévision de l'année courante en appliquant le scénario persisté du praticien
+ * (congés/jours par semaine + leviers de C.A.).
+ *
+ * @param monthsElapsed Mois révolus de l'année courante (mois en cours exclu).
+ */
+export async function buildScenarioForecast(
+  hp: Practitioner,
+  monthsElapsed: number,
+): Promise<ScenarioForecast> {
+  const history = await getCAHistoryForPractitioner(hp);
+  const year = history.currentYear;
+
+  if (history.years.length === 0) {
+    return { history, forecast: null, baseForecast: null, monthsElapsed, hasScenario: false, adjustments: [] };
+  }
+
+  const baseForecast = forecastFromHistory(history.years, year, monthsElapsed);
+
+  const [availabilityFactor, adjustments] = await Promise.all([
+    buildAvailabilityFactor(hp.id, year, hp.daysPerWeekWorked),
+    listCaAdjustments(hp.id, year),
+  ]);
+
+  const scenarioAdjustments: CAAdjustment[] = adjustments.map((a) => ({
+    kind: a.kind,
+    value: a.value,
+    startMonth: a.startMonth,
+    endMonth: a.endMonth,
+    label: a.label ?? undefined,
+  }));
+
+  const hasScenario = hasReducedAvailability(availabilityFactor) || scenarioAdjustments.length > 0;
+
+  const forecast = hasScenario
+    ? applyScenarioToForecast(baseForecast, { availabilityFactor, adjustments: scenarioAdjustments }, monthsElapsed)
+    : baseForecast;
+
+  return { history, forecast, baseForecast, monthsElapsed, hasScenario, adjustments };
+}

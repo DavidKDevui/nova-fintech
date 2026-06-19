@@ -38,12 +38,18 @@ function displayStatus(status: string): string {
 
 import type { CarePassageRow } from "@/actions/facturation";
 import { downloadCSV, downloadPDF } from "@/lib/export";
+import { buildPrestationBreakdown, principalCode, principalToken, prestationKey } from "@/lib/ngap/parse-cotation";
+import { actLabel } from "@/lib/ngap/acts";
+
+// Palette pour la ventilation NGAP (réutilise les teintes de la charte).
+const NGAP_COLORS = ["#7C5CFC", "#2FA169", "#d97706", "#0EA5E9", "#dc2626", "#8B5CF6", "#14B8A6", "#F59E0B", "#EC4899", "#64748B"];
 
 export function FacturationClient() {
   const hp = usePractitioner();
   const { facturationPassages: passages, facturationSummary: summary, facturationLoading: loading } = useData();
   const [filterStatus, setFilterStatus] = useState("");
   const [filterPractice, setFilterPractice] = useState("");
+  const [filterPrestation, setFilterPrestation] = useState(""); // clé prestation NGAP (code:coef)
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sortColumn, setSortColumn] = useState<string>("careDate");
@@ -107,15 +113,23 @@ export function FacturationClient() {
       if (parseInt(p.careDate.split("-")[0]!, 10) !== chartYear) return false;
       if (filterStatus && displayStatus(p.status) !== filterStatus) return false;
       if (filterPractice && p.practiceId !== filterPractice) return false;
+      if (filterPrestation && prestationKey(p.cotation) !== filterPrestation) return false;
       if (dateFrom && p.careDate < dateFrom) return false;
       if (dateTo && p.careDate > dateTo) return false;
       return true;
     });
-  }, [passages, chartYear, filterStatus, filterPractice, dateFrom, dateTo]);
+  }, [passages, chartYear, filterStatus, filterPractice, filterPrestation, dateFrom, dateTo]);
 
   // Sorted passages
   const sortedPassages = useMemo(() => {
     return [...filteredPassages].sort((a, b) => {
+      // Colonne dérivée (non présente sur la ligne) : tri sur le libellé de prestation.
+      if (sortColumn === "prestation") {
+        const la = prestationLabelOf(a.cotation);
+        const lb = prestationLabelOf(b.cotation);
+        return sortDirection === "asc" ? la.localeCompare(lb) : lb.localeCompare(la);
+      }
+
       const col = sortColumn as keyof CarePassageRow;
       let valA = a[col] ?? "";
       let valB = b[col] ?? "";
@@ -146,7 +160,7 @@ export function FacturationClient() {
   }
 
   // Reset page when filters change
-  const filterKey = `${chartYear}-${filterStatus}-${filterPractice}-${dateFrom}-${dateTo}`;
+  const filterKey = `${chartYear}-${filterStatus}-${filterPractice}-${filterPrestation}-${dateFrom}-${dateTo}`;
   useEffect(() => {
     setPage(1);
   }, [filterKey]);
@@ -209,6 +223,19 @@ export function FacturationClient() {
       payeCount, attenteCount, rejeteCount,
       pct: (v: number) => declared > 0 ? (v / declared) * 100 : 0,
     };
+  }, [passages, chartYear]);
+
+  // Ventilation par prestation NGAP (même périmètre que la vue globale : année sélectionnée).
+  // Chaque passage est rattaché à UNE prestation (acte principal) → la somme des CA = CA total.
+  const ngapData = useMemo(() => {
+    const yearPassages = passages.filter(
+      (p) => parseInt(p.careDate.split("-")[0]!, 10) === chartYear,
+    );
+    const rows = buildPrestationBreakdown(
+      yearPassages.map((p) => ({ cotation: p.cotation, totalAmount: p.totalAmount })),
+    );
+    const totalCA = rows.reduce((s, r) => s + r.amount, 0);
+    return { rows, totalCA };
   }, [passages, chartYear]);
 
   const chartData = useMemo(() => {
@@ -529,6 +556,103 @@ export function FacturationClient() {
       )}
       </div>
 
+      {/* Ventilation par prestation (NGAP) */}
+      {ngapData.rows.length > 0 && (
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+            <div>
+              <h2 className="text-base font-bold text-ardoise-900">Ventilation par prestation (NGAP)</h2>
+              <p className="text-xs text-ardoise-400">
+                CA {chartYear} par acte (lettre-clé + coefficient) — Métropole. Cliquez une ligne pour filtrer le détail.
+              </p>
+            </div>
+            {filterPrestation && (
+              <Button variant="ghost" size="compact" type="button" onClick={() => setFilterPrestation("")}>
+                Filtre : {ngapData.rows.find((r) => r.key === filterPrestation)?.short ?? filterPrestation} ✕
+              </Button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+            {/* Graphe */}
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1}>
+                <BarChart data={ngapData.rows} layout="vertical" margin={{ left: 8, right: 16 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#EFEAF6" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tick={{ fontSize: 11, fill: "#A79EB5" }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="short"
+                    tick={{ fontSize: 11, fill: "#6B6478" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={62}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "#F5F2FB" }}
+                    contentStyle={{ background: "white", border: "1px solid #E1DBEC", borderRadius: 4, fontSize: 12 }}
+                    formatter={(value: unknown) => [formatCurrency(Number(value)), "CA"]}
+                    labelFormatter={(short: unknown) => ngapData.rows.find((r) => r.short === short)?.label ?? String(short)}
+                  />
+                  <Bar dataKey="amount" radius={[0, 4, 4, 0]} className="cursor-pointer"
+                    onClick={(d) => { const key = (d as unknown as { key: string }).key; setFilterPrestation((c) => (c === key ? "" : key)); }}>
+                    {ngapData.rows.map((r, i) => (
+                      <Cell key={r.key} fill={NGAP_COLORS[i % NGAP_COLORS.length]} opacity={filterPrestation && filterPrestation !== r.key ? 0.35 : 1} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Tableau */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-wider text-ardoise-400 border-b border-ardoise-200/60">
+                    <th className="text-left font-medium py-2 pr-2">Prestation</th>
+                    <th className="text-right font-medium py-2 px-2">Passages</th>
+                    <th className="text-right font-medium py-2 pl-2">CA</th>
+                    <th className="text-right font-medium py-2 pl-2">%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ngapData.rows.map((r, i) => {
+                    const pct = ngapData.totalCA > 0 ? (r.amount / ngapData.totalCA) * 100 : 0;
+                    const active = filterPrestation === r.key;
+                    return (
+                      <tr
+                        key={r.key}
+                        onClick={() => setFilterPrestation((c) => (c === r.key ? "" : r.key))}
+                        className={`border-b border-ardoise-100 last:border-b-0 cursor-pointer transition-colors ${active ? "bg-brand-50" : "hover:bg-ardoise-50"}`}
+                      >
+                        <td className="py-2 pr-2">
+                          <span className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: NGAP_COLORS[i % NGAP_COLORS.length] }} />
+                            <span className="min-w-0">
+                              <span className="block text-ardoise-900 leading-tight">{r.label}</span>
+                              <span className="block text-[10px] text-ardoise-400 font-mono">{r.short}</span>
+                            </span>
+                          </span>
+                        </td>
+                        <td className="text-right py-2 px-2 text-ardoise-500 font-mono align-top">{r.passageCount}</td>
+                        <td className="text-right py-2 pl-2 font-semibold text-ardoise-900 font-mono align-top">{formatCurrency(r.amount)}</td>
+                        <td className="text-right py-2 pl-2 text-ardoise-400 font-mono align-top">{pct.toFixed(0)}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1">
         {/* Header */}
@@ -547,11 +671,11 @@ export function FacturationClient() {
                   size="compact"
                   type="button"
                   onClick={() => {
-                    const headers = ["Date", "Moment", "Cabinet", "N° facture", "Statut", "Cotation", "Honoraires", "Majoration", "Férié/Dim/Nuit", "IFD", "Total"];
+                    const headers = ["Date", "Moment", "Cabinet", "N° facture", "Statut", "Cotation", "Lettre-clé", "Prestation", "Honoraires", "Majoration", "Férié/Dim/Nuit", "IFD", "Total"];
                     const rows = sortedPassages.map((p) => [
                       formatDateFr(p.careDate), p.careMoment, p.practiceName, p.invoiceNumber,
                       STATUS_CONFIG[displayStatus(p.status)]?.label || p.status,
-                      p.cotation, p.baseAmount, p.adj1, p.adj2, p.adj3, p.totalAmount,
+                      p.cotation, principalCode(p.cotation) ?? "", prestationLabelOf(p.cotation), p.baseAmount, p.adj1, p.adj2, p.adj3, p.totalAmount,
                     ]);
                     downloadCSV("facturation", headers, rows);
                   }}
@@ -564,11 +688,11 @@ export function FacturationClient() {
                   size="compact"
                   type="button"
                   onClick={() => {
-                    const headers = ["Date", "Cabinet", "N° facture", "Statut", "Cotation", "Total"];
+                    const headers = ["Date", "Cabinet", "N° facture", "Statut", "Cotation", "Prestation", "Total"];
                     const rows = sortedPassages.map((p) => [
                       formatDateFr(p.careDate), p.practiceName, p.invoiceNumber,
                       STATUS_CONFIG[displayStatus(p.status)]?.label || p.status,
-                      p.cotation, formatCurrency(Number(p.totalAmount)),
+                      p.cotation, prestationLabelOf(p.cotation), formatCurrency(Number(p.totalAmount)),
                     ]);
                     downloadPDF("facturation", "Facturation — Détail des passages", headers, rows);
                   }}
@@ -640,12 +764,12 @@ export function FacturationClient() {
             className="px-2.5 py-1.5 text-xs border border-ardoise-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent font-mono"
           />
 
-          {(filterPractice || filterStatus || dateFrom || dateTo) && (
+          {(filterPractice || filterStatus || filterPrestation || dateFrom || dateTo) && (
             <Button
               variant="ghost"
               size="compact"
               type="button"
-              onClick={() => { setFilterPractice(""); setFilterStatus(""); setDateFrom(""); setDateTo(""); }}
+              onClick={() => { setFilterPractice(""); setFilterStatus(""); setFilterPrestation(""); setDateFrom(""); setDateTo(""); }}
             >
               Réinitialiser
             </Button>
@@ -660,9 +784,10 @@ export function FacturationClient() {
         ) : (
           <div className="md:overflow-x-auto">
             {/* Table header — desktop uniquement */}
-            <div className="hidden md:grid md:grid-cols-[16fr_12fr_10fr_12fr_11fr_12fr] md:min-w-[700px] border-b border-ardoise-200/60">
+            <div className="hidden md:grid md:grid-cols-[14fr_9fr_19fr_8fr_11fr_11fr_11fr] md:min-w-[760px] border-b border-ardoise-200/60">
               <SortableHeader column="practiceName" label="Cabinet" sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
               <SortableHeader column="careDate" label="Date" sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
+              <SortableHeader column="prestation" label="Prestation" sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
               <SortableHeader column="careMoment" label="Moment" sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
               <SortableHeader column="invoiceNumber" label="N° facture" sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
               <SortableHeader column="status" label="Statut" sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
@@ -672,13 +797,22 @@ export function FacturationClient() {
             {/* Rows */}
             {paginatedPassages.map((row) => {
               const style = STATUS_CONFIG[displayStatus(row.status)];
+              const tok = principalToken(row.cotation);
+              const prestation = tok ? actLabel(tok.code, tok.coefficient) : "—";
+              const short = tok ? (tok.coefficient === 1 ? tok.code : `${tok.code} ${tok.coefficient}`) : "";
               return (
-                <div key={row.id} className="grid grid-cols-2 md:grid-cols-[16fr_12fr_10fr_12fr_11fr_12fr] md:min-w-[700px] md:items-center gap-y-1.5 md:gap-y-0 px-4 py-3 md:p-0 border-b border-ardoise-200/60 last:border-b-0 hover:bg-white/50 transition-colors">
+                <div key={row.id} className="grid grid-cols-2 md:grid-cols-[14fr_9fr_19fr_8fr_11fr_11fr_11fr] md:min-w-[760px] md:items-center gap-y-1.5 md:gap-y-0 px-4 py-3 md:p-0 border-b border-ardoise-200/60 last:border-b-0 hover:bg-white/50 transition-colors">
                   <div className="order-3 col-span-2 md:order-1 md:col-span-1 text-sm font-medium text-ardoise-900 md:font-normal md:text-ardoise-500 md:truncate md:px-5 md:py-3.5">{row.practiceName}</div>
                   <div className="order-1 md:order-2 text-xs text-ardoise-500 whitespace-nowrap md:text-sm md:text-ardoise-900 md:px-5 md:py-3.5 font-mono">{formatDateFr(row.careDate)}</div>
-                  <div className="hidden md:block md:order-3 md:px-5 md:py-3.5 md:text-sm md:text-ardoise-500">{row.careMoment.charAt(0).toUpperCase() + row.careMoment.slice(1)}</div>
-                  <div className="order-4 md:order-4 text-xs text-ardoise-500 md:text-sm md:font-medium md:text-ardoise-900 md:px-5 md:py-3.5"><span className="md:hidden">N° </span>{row.invoiceNumber}</div>
-                  <div className="order-5 md:order-5 text-right md:text-left md:px-5 md:py-3.5">
+                  <div className="order-6 col-span-2 md:order-3 md:col-span-1 md:px-5 md:py-3.5 min-w-0">
+                    <span className="block text-xs md:text-sm text-ardoise-700 md:truncate" title={`${prestation}${short ? ` (${short})` : ""}`}>
+                      <span className="md:hidden text-ardoise-400">Prestation : </span>{prestation}
+                    </span>
+                    {short && <span className="hidden md:block text-[10px] text-ardoise-400 font-mono">{short}</span>}
+                  </div>
+                  <div className="hidden md:block md:order-4 md:px-5 md:py-3.5 md:text-sm md:text-ardoise-500">{row.careMoment.charAt(0).toUpperCase() + row.careMoment.slice(1)}</div>
+                  <div className="order-4 md:order-5 text-xs text-ardoise-500 md:text-sm md:font-medium md:text-ardoise-900 md:px-5 md:py-3.5"><span className="md:hidden">N° </span>{row.invoiceNumber}</div>
+                  <div className="order-5 md:order-6 text-right md:text-left md:px-5 md:py-3.5">
                     {style && (
                       <Badge tone={style.tone} dot>{style.label}</Badge>
                     )}
@@ -686,7 +820,7 @@ export function FacturationClient() {
                       <ReconciliationBadge reconciliation={row.reconciliation} paymentDate={row.paymentDate} />
                     )}
                   </div>
-                  <div className="order-2 md:order-6 text-base font-semibold text-right whitespace-nowrap text-ardoise-900 md:px-5 md:py-3.5 font-mono">{formatCurrency(parseFloat(row.totalAmount))}</div>
+                  <div className="order-2 md:order-7 text-base font-semibold text-right whitespace-nowrap text-ardoise-900 md:px-5 md:py-3.5 font-mono">{formatCurrency(parseFloat(row.totalAmount))}</div>
                 </div>
               );
             })}
@@ -704,6 +838,12 @@ function formatCurrency(amount: number) {
 function formatDateFr(dateStr: string) {
   const [y, m, d] = dateStr.split("-");
   return `${d}/${m}/${y}`;
+}
+
+// Libellé de la prestation (acte principal) d'une cotation, pour les exports.
+function prestationLabelOf(cotation: string): string {
+  const t = principalToken(cotation);
+  return t ? actLabel(t.code, t.coefficient) : "";
 }
 
 // Au-delà de ce délai sans virement détecté, on signale une anomalie discrète à l'utilisateur.

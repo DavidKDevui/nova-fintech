@@ -9,6 +9,17 @@ type Message = {
   tools?: string[];
 };
 
+// Outils qui MODIFIENT les données du praticien : quand l'un d'eux est exécuté
+// par l'assistant, on incrémente `dataVersion` pour que les vues concernées
+// (prévision de CA, cotisations…) se rafraîchissent automatiquement.
+const MUTATING_TOOLS = new Set([
+  "set_availability",
+  "set_days_per_week",
+  "add_ca_adjustment",
+  "clear_ca_adjustments",
+  "estimate_month_from_acts",
+]);
+
 interface AssistantContextValue {
   messages: Message[];
   input: string;
@@ -16,6 +27,8 @@ interface AssistantContextValue {
   loading: boolean;
   sendMessage: (content: string) => Promise<void>;
   resetConversation: () => void;
+  /** Incrémenté à chaque exécution d'un outil mutant : signal de rafraîchissement. */
+  dataVersion: number;
 }
 
 const AssistantContext = createContext<AssistantContextValue>({
@@ -25,12 +38,14 @@ const AssistantContext = createContext<AssistantContextValue>({
   loading: false,
   sendMessage: async () => {},
   resetConversation: () => {},
+  dataVersion: 0,
 });
 
 export function AssistantProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [dataVersion, setDataVersion] = useState(0);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || loading) return;
@@ -87,6 +102,10 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
               setMessages((prev) =>
                 prev.map((m) => m.id === assistantMessage.id ? { ...m, tools: parsed.tools } : m)
               );
+              // Un outil mutant a tourné → signal de rafraîchissement des vues.
+              if (Array.isArray(parsed.tools) && parsed.tools.some((t: string) => MUTATING_TOOLS.has(t))) {
+                setDataVersion((v) => v + 1);
+              }
             }
             if (parsed.content) {
               setMessages((prev) =>
@@ -121,7 +140,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AssistantContext.Provider value={{ messages, input, setInput, loading, sendMessage, resetConversation }}>
+    <AssistantContext.Provider value={{ messages, input, setInput, loading, sendMessage, resetConversation, dataVersion }}>
       {children}
     </AssistantContext.Provider>
   );

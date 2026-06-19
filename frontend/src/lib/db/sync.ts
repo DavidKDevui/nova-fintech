@@ -76,7 +76,9 @@ export async function syncDatabase(pool: pg.Pool) {
       const { rows } = await client.query(`SELECT 1 FROM pg_type WHERE typname = $1`, [e.enumName]);
       if (rows.length === 0) {
         const vals = e.enumValues.map((v) => `'${v}'`).join(", ");
-        await client.query(`CREATE TYPE "${e.enumName}" AS ENUM(${vals})`);
+        // DO/EXCEPTION : idempotent face aux courses (ex: workers de build
+        // concurrents qui tentent tous de créer le type en même temps).
+        await client.query(`DO $$ BEGIN CREATE TYPE "${e.enumName}" AS ENUM(${vals}); EXCEPTION WHEN duplicate_object THEN null; END $$`);
         changes.push(`+ enum "${e.enumName}"`);
       } else {
         const { rows: existing } = await client.query(
@@ -123,7 +125,7 @@ export async function syncDatabase(pool: pg.Pool) {
           colDefs.push(`CONSTRAINT "${tableName}_${u.name}_unique" UNIQUE("${u.name}")`);
         }
 
-        const createSQL = `CREATE TABLE "${tableName}" (\n  ${colDefs.join(",\n  ")}\n)`;
+        const createSQL = `CREATE TABLE IF NOT EXISTS "${tableName}" (\n  ${colDefs.join(",\n  ")}\n)`;
         console.log(`[SYNC] Creating table "${tableName}":`, createSQL);
         await client.query(createSQL);
         changes.push(`+ table "${tableName}" (${columns.length} colonnes)`);

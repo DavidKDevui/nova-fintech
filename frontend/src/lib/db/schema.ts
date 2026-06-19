@@ -340,3 +340,30 @@ export const practitionerVacations = pgTable("practitioner_vacations", {
 }, (table) => [
   index("idx_vacations_practitioner_year").on(table.practitionerId, table.year),
 ]);
+
+// ── Leviers de C.A. pour la prévision (scénarios "what-if" persistés) ──
+
+export const caAdjustmentKindEnum = pgEnum("ca_adjustment_kind", [
+  "rate_pct",       // variation de tarif (+/- %)
+  "volume_pct",     // variation de volume de patientèle (+/- %)
+  "fixed_monthly",  // montant fixe mensuel (ex: nouveau contrat)
+  "fixed_oneoff",   // montant ponctuel (ex: prime)
+  "month_override", // valeur imposée pour un mois (ex: estimation par actes prévus)
+]);
+
+export const practitionerCaAdjustments = pgTable("practitioner_ca_adjustments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  practitionerId: uuid("practitioner_id")
+    .notNull()
+    .references(() => practitioners.id, { onDelete: "cascade" }),
+  year: integer("year").notNull(),
+  kind: caAdjustmentKindEnum("kind").notNull(),
+  // rate_pct/volume_pct : ratio stocké en décimal (0.10 = +10 %). fixed_* : euros.
+  value: numeric("value", { precision: 12, scale: 4 }).notNull(),
+  startMonth: integer("start_month").notNull(),
+  endMonth: integer("end_month").notNull(),
+  label: varchar("label", { length: 200 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_ca_adjustments_practitioner_year").on(table.practitionerId, table.year),
+]);

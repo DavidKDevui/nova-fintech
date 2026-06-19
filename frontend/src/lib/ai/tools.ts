@@ -9,6 +9,16 @@ import {
   DEFAULT_PREFERENCES,
 } from "@/lib/data/fiscal-calendar";
 import { getCotisationsEstimate } from "@/actions/cotisations-estimate";
+import { countWorkingDays } from "@/lib/data/fr-holidays";
+import {
+  buildScenarioForecast,
+  addCaAdjustment,
+  clearCaAdjustments,
+  setVacationMonth,
+  setDaysPerWeek,
+  listCaAdjustments,
+} from "@/lib/services/ca-scenario.service";
+import { getActPricing, estimateMonthFromActs } from "@/lib/services/ca-acts.service";
 import { computeHealthScoreById } from "@/actions/health-score";
 import { computeRecommendationsById } from "@/actions/recommendations";
 import type OpenAI from "openai";
@@ -60,6 +70,114 @@ export const toolDefinitions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           revenu_annuel: { type: "number", description: "Le revenu annuel en euros" },
         },
         required: ["revenu_annuel"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "forecast_ca",
+      description:
+        "Prévoit le chiffre d'affaires de l'année en cours à partir de l'historique (tendance des années passées + saisonnalité mensuelle + réalisé de l'année). Retourne une estimation centrale ET une fourchette basse/haute. Le chiffre est calculé statistiquement — restitue-le tel quel, ne l'invente pas. Utile pour 'combien je vais faire cette année ?', 'mon CA prévisionnel', 'est-ce que je progresse ?'.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "set_availability",
+      description:
+        "Enregistre l'indisponibilité du praticien sur un mois de l'année en cours (congés). Ex: « je ne travaille pas en juin » → full_month=true ; « 3 semaines en août » → days_off=15. Met à jour la prévision de C.A. ET les cotisations. NE JAMAIS appeler sans confirmation explicite de l'utilisateur.",
+      parameters: {
+        type: "object",
+        properties: {
+          month: { type: "number", description: "Mois concerné, 1 (janvier) à 12 (décembre)" },
+          full_month: { type: "boolean", description: "true = mois entièrement non travaillé" },
+          days_off: { type: "number", description: "Nombre de jours ouvrés non travaillés (ignoré si full_month=true)" },
+        },
+        required: ["month"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "set_days_per_week",
+      description:
+        "Définit le rythme de travail en jours par semaine (ex: « je passe à 4 jours »). Impacte la prévision et les cotisations. NE JAMAIS appeler sans confirmation explicite.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: { type: "number", description: "Jours travaillés par semaine, 1 à 7" },
+        },
+        required: ["days"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "add_ca_adjustment",
+      description:
+        "Ajoute un levier de C.A. au scénario de prévision de l'année en cours. kind: 'rate_pct' (variation de tarif), 'volume_pct' (variation de patientèle), 'fixed_monthly' (montant mensuel, ex nouveau contrat), 'fixed_oneoff' (montant ponctuel). value: pour les pct, un pourcentage (ex 10 pour +10, -20 pour -20%) ; pour les fixed, un montant en euros. NE JAMAIS appeler sans confirmation explicite.",
+      parameters: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["rate_pct", "volume_pct", "fixed_monthly", "fixed_oneoff"], description: "Type de levier" },
+          value: { type: "number", description: "Pourcentage (pour rate_pct/volume_pct) ou euros (pour fixed_*)" },
+          start_month: { type: "number", description: "Mois de début 1-12 (défaut: 1)" },
+          end_month: { type: "number", description: "Mois de fin 1-12 (défaut: 12, ou = start_month pour fixed_oneoff)" },
+          label: { type: "string", description: "Libellé court (ex: « nouveau contrat EHPAD »)" },
+        },
+        required: ["kind", "value"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "clear_ca_adjustments",
+      description: "Supprime tous les leviers de C.A. du scénario de l'année en cours (remet la prévision sans leviers). NE JAMAIS appeler sans confirmation explicite.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_act_pricing",
+      description:
+        "Retourne le tarif MOYEN réellement facturé par type d'acte (depuis les passages payés du praticien) : libellé en clair, code court (ex 'AMI 1.5'), tarif moyen €, nombre de passages. Utilise-le pour faire correspondre un acte décrit en langage courant ('prise de sang' = AMI 1.5 = prélèvement sanguin) à son tarif réel, avant d'estimer un mois.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "estimate_month_from_acts",
+      description:
+        "Estime le C.A. d'un mois à partir d'actes prévus, au tarif moyen historique. D'abord appelle get_act_pricing pour traduire les termes du praticien en codes courts d'actes (ex 'prise de sang' -> 'AMI 1.5'). Passe `save: false` pour juste calculer et montrer le résultat ; passe `save: true` UNIQUEMENT après confirmation explicite du praticien pour fixer la prévision de ce mois (le graphe s'aligne).",
+      parameters: {
+        type: "object",
+        properties: {
+          acts: {
+            type: "array",
+            description: "Actes prévus",
+            items: {
+              type: "object",
+              properties: {
+                term: { type: "string", description: "Code court d'acte issu de get_act_pricing (ex 'AMI 1.5') ou terme courant" },
+                count: { type: "number", description: "Nombre d'actes prévus" },
+              },
+              required: ["term", "count"],
+            },
+          },
+          month: { type: "number", description: "Mois cible 1-12 (doit être à venir)" },
+          save: { type: "boolean", description: "true = fixer la prévision de ce mois (après confirmation). Défaut false." },
+        },
+        required: ["acts", "month"],
       },
     },
   },
@@ -352,6 +470,181 @@ export function createToolExecutors(practitionerId: string, accountIds: string[]
         `PAS (impôt sur le revenu) : ${formatEur(result.pasAnnuel)} (${formatEur(result.pasParEcheance)}/échéance)`,
         `Total cotisations : ${formatEur(total)} (estimé entre ${formatEur(totalLow)} et ${formatEur(totalHigh)}, ±${Math.round(COTISATIONS_MARGIN * 100)} %)`,
       ].join("\n");
+    },
+
+    async forecast_ca(): Promise<string> {
+      const practitioner = hp as unknown as Parameters<typeof buildScenarioForecast>[0];
+      const monthsElapsed = new Date().getMonth(); // mois révolus (mois en cours exclu)
+      const { history, forecast: f, baseForecast, hasScenario, adjustments } =
+        await buildScenarioForecast(practitioner, monthsElapsed);
+      if (history.years.length === 0 || !f) {
+        return "Aucun historique de CA disponible (ni transactions bancaires catégorisées, ni bordereaux payés). Impossible de faire une prévision.";
+      }
+
+      if (f.basis === "insufficient") {
+        return [
+          `Historique insuffisant pour une prévision fiable du CA ${f.targetYear}.`,
+          `Réalisé à ce jour : ${formatEur(history.years.find((y) => y.year === f.targetYear)?.total ?? 0)}.`,
+          "Précise au praticien qu'il faut plus d'historique (idéalement 12 mois) pour projeter.",
+        ].join("\n");
+      }
+
+      const lines: string[] = [];
+      // Historique année par année.
+      lines.push("Historique de CA :");
+      for (const y of history.years) {
+        const tag = y.isComplete ? "" : " (en cours)";
+        lines.push(`- ${y.year} : ${formatEur(y.total)}${tag} [source: ${y.source}]`);
+      }
+
+      // Prévision.
+      lines.push("");
+      lines.push(`Prévision CA ${f.targetYear} :`);
+      lines.push(
+        `- Estimation centrale : ${formatEur(f.annualProbable)} ` +
+          `(fourchette ${formatEur(f.annualLow)} → ${formatEur(f.annualHigh)})`,
+      );
+      if (f.trendGrowthRate != null) {
+        const pct = (f.trendGrowthRate * 100).toFixed(1);
+        const sign = f.trendGrowthRate >= 0 ? "+" : "";
+        lines.push(`- Évolution vs dernière année complète : ${sign}${pct} %`);
+      }
+      lines.push(`- Fiabilité : ${f.confidence === "high" ? "élevée" : f.confidence === "medium" ? "moyenne" : "faible"} (${f.monthsOfHistory} mois d'historique)`);
+
+      // Mois forts / faibles d'après la saisonnalité.
+      const ranked = f.seasonality.map((w, i) => ({ i, w })).sort((a, b) => b.w - a.w);
+      const strong = ranked.slice(0, 2).map((r) => MONTH_SHORT[r.i]);
+      const weak = ranked.slice(-2).map((r) => MONTH_SHORT[r.i]).reverse();
+      lines.push(`- Saisonnalité : mois forts ${strong.join(", ")} ; mois creux ${weak.join(", ")}`);
+
+      // Scénario actif (congés/leviers) : on précise l'écart vs la prévision de base.
+      if (hasScenario && baseForecast) {
+        lines.push("");
+        lines.push("Scénario appliqué (congés / leviers) :");
+        const delta = f.annualProbable - baseForecast.annualProbable;
+        const sign = delta >= 0 ? "+" : "";
+        lines.push(`- Prévision SANS scénario : ${formatEur(baseForecast.annualProbable)}`);
+        lines.push(`- Impact du scénario : ${sign}${formatEur(delta)}`);
+        const KIND_LABEL: Record<string, string> = {
+          rate_pct: "tarif", volume_pct: "volume", fixed_monthly: "montant mensuel", fixed_oneoff: "montant ponctuel",
+          month_override: "valeur imposée (estim. actes)",
+        };
+        for (const a of adjustments) {
+          const val = a.kind === "rate_pct" || a.kind === "volume_pct"
+            ? `${a.value >= 0 ? "+" : ""}${(a.value * 100).toFixed(0)} %`
+            : formatEur(a.value);
+          const period = a.startMonth === a.endMonth ? MONTH_SHORT[a.startMonth - 1] : `${MONTH_SHORT[a.startMonth - 1]}→${MONTH_SHORT[a.endMonth - 1]}`;
+          lines.push(`  • ${KIND_LABEL[a.kind] ?? a.kind} ${val} (${period})${a.label ? ` — ${a.label}` : ""}`);
+        }
+      }
+
+      return lines.join("\n");
+    },
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async set_availability(args: any): Promise<string> {
+      const year = new Date().getFullYear();
+      const month = Number(args.month);
+      if (!Number.isInteger(month) || month < 1 || month > 12) return "Mois invalide (1 à 12).";
+
+      const daysPerWeek = Number(hp.daysPerWeekWorked) || 5;
+      let days: number;
+      if (args.full_month) {
+        days = countWorkingDays(year, month, daysPerWeek);
+      } else if (args.days_off != null) {
+        days = Number(args.days_off);
+      } else {
+        return "Précise full_month=true ou un nombre de jours (days_off).";
+      }
+
+      const res = await setVacationMonth(practitionerId, year, month, days);
+      if (!res.ok) return `Échec : ${res.error}`;
+      return `Disponibilité mise à jour : ${days} jour(s) non travaillé(s) en ${MONTH_SHORT[month - 1]} ${year}. La prévision et les cotisations vont s'ajuster.`;
+    },
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async set_days_per_week(args: any): Promise<string> {
+      const days = Number(args.days);
+      const res = await setDaysPerWeek(practitionerId, days);
+      if (!res.ok) return `Échec : ${res.error}`;
+      return `Rythme de travail mis à jour : ${days} jour(s) par semaine. La prévision et les cotisations vont s'ajuster.`;
+    },
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async add_ca_adjustment(args: any): Promise<string> {
+      const year = new Date().getFullYear();
+      const kind = String(args.kind);
+      const isPct = kind === "rate_pct" || kind === "volume_pct";
+      // Les pct arrivent en pourcentage (10 = +10 %) → on stocke en ratio (0.1).
+      const rawValue = Number(args.value);
+      if (!Number.isFinite(rawValue)) return "Valeur invalide.";
+      const value = isPct ? rawValue / 100 : rawValue;
+      const startMonth = args.start_month != null ? Number(args.start_month) : 1;
+      const endMonth = args.end_month != null
+        ? Number(args.end_month)
+        : (kind === "fixed_oneoff" ? startMonth : 12);
+
+      const res = await addCaAdjustment(practitionerId, year, {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        kind: kind as any,
+        value,
+        startMonth,
+        endMonth,
+        label: args.label,
+      });
+      if (!res.ok) return `Échec : ${res.error}`;
+      const shown = isPct ? `${rawValue >= 0 ? "+" : ""}${rawValue} %` : formatEur(value);
+      return `Levier ajouté (${kind} ${shown}) pour ${year}. La prévision va s'ajuster.`;
+    },
+
+    async clear_ca_adjustments(): Promise<string> {
+      const year = new Date().getFullYear();
+      const n = await clearCaAdjustments(practitionerId, year);
+      const remaining = await listCaAdjustments(practitionerId, year);
+      return `${n} levier(s) supprimé(s) pour ${year}. Restants : ${remaining.length}.`;
+    },
+
+    async get_act_pricing(): Promise<string> {
+      const practitioner = hp as unknown as Parameters<typeof getActPricing>[0];
+      const prices = await getActPricing(practitioner);
+      if (prices.length === 0) {
+        return "Aucun passage payé dans l'historique : impossible d'établir des tarifs moyens par acte.";
+      }
+      const lines = ["Tarif moyen réel par acte (12 derniers mois) :"];
+      for (const p of prices) {
+        lines.push(`- ${p.short} — ${p.label} : ${formatEur(p.avgAmount)} / passage (${p.count} passages)`);
+      }
+      return lines.join("\n");
+    },
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async estimate_month_from_acts(args: any): Promise<string> {
+      const practitioner = hp as unknown as Parameters<typeof estimateMonthFromActs>[0];
+      const acts = Array.isArray(args.acts)
+        ? args.acts.map((a: { term: string; count: number }) => ({ term: String(a.term), count: Number(a.count) }))
+        : [];
+      if (acts.length === 0) return "Aucun acte fourni à estimer.";
+      const month = Number(args.month);
+      const save = args.save === true;
+
+      const res = await estimateMonthFromActs(practitioner, acts, month, save);
+      if ("error" in res) return `Échec : ${res.error}`;
+
+      const lines: string[] = [];
+      lines.push(`Estimation CA pour ${MONTH_SHORT[res.month - 1]} ${res.year} (tarif moyen historique) :`);
+      for (const l of res.lines) {
+        lines.push(`- ${l.count} × ${l.short} (${l.label}) à ${formatEur(l.unitAmount)} = ${formatEur(l.lineTotal)}`);
+      }
+      lines.push(`Total estimé : ${formatEur(res.total)}`);
+      if (res.unmatched.length > 0) {
+        lines.push(`Non chiffrés (aucun acte facturé correspondant) : ${res.unmatched.join(", ")}. Demande au praticien de préciser l'acte.`);
+      }
+      if (res.saved) {
+        lines.push(`✓ Prévision de ${MONTH_SHORT[res.month - 1]} fixée à ${formatEur(res.total)} — le graphe s'aligne.`);
+      } else if (!save) {
+        lines.push("(Non enregistré. Pour fixer la prévision de ce mois, confirme puis rappelle avec save=true.)");
+      }
+      return lines.join("\n");
     },
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

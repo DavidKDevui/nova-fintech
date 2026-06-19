@@ -70,7 +70,7 @@ export async function POST(request: Request) {
   const allToolsUsed: string[] = [];
   for (let round = 0; round < 3; round++) {
     const response = await openai().chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: allMessages,
       tools: toolDefinitions,
       stream: false,
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
     if (!message.tool_calls || message.tool_calls.length === 0) {
       // Re-do the call with streaming for the final response
       const stream = await openai().chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: allMessages,
         stream: true,
       });
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
 
   // If we exhausted rounds, do a final streaming call
   const stream = await openai().chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-4o",
     messages: allMessages,
     stream: true,
   });
