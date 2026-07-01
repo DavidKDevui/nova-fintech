@@ -1754,6 +1754,45 @@ function TaxesTab() {
 
 // ── Summary Tab ──
 
+// Tooltip détaillé : pour la barre "Reste à vivre", on affiche la décomposition
+// du calcul (solde + encaissements − échéances − charges) plutôt qu'un simple
+// montant, pour que l'utilisateur comprenne d'où sort le chiffre.
+// Défini au niveau module (pas dans le render) — reçoit les valeurs du calcul en props.
+function CashTooltip({ active, payload, defaultBalance, resteAVivre }: {
+  active?: boolean;
+  payload?: Array<{ payload: { key: string; value: number } }>;
+  defaultBalance: number;
+  resteAVivre: { projIncome: number; echeances: number; chargesProProjetees: number };
+}) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const line = (label: string, value: string, strong = false) => (
+    <div className={`flex items-center justify-between gap-6 ${strong ? "font-semibold text-ardoise-900" : "text-ardoise-600"}`}>
+      <span>{label}</span>
+      <span className="font-mono tabular-nums">{value}</span>
+    </div>
+  );
+  if (d.key === "reste") {
+    return (
+      <div className="rounded-lg border border-ardoise-200 bg-white px-3 py-2.5 text-[11px] shadow-lg space-y-1 min-w-[220px]">
+        <p className="font-semibold text-ardoise-900 mb-1.5">Reste à vivre — fin du mois</p>
+        {line("Trésorerie actuelle", formatCurrency(defaultBalance))}
+        {line("Encaissements estimés", `+ ${formatCurrency(resteAVivre.projIncome)}`)}
+        {line("Échéances fiscales/sociales", `− ${formatCurrency(resteAVivre.echeances)}`)}
+        {line("Charges pro. projetées", `− ${formatCurrency(resteAVivre.chargesProProjetees)}`)}
+        <div className="h-px bg-ardoise-100 my-1.5" />
+        {line("Reste à vivre", formatCurrency(d.value), true)}
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-ardoise-200 bg-white px-3 py-2 text-[11px] shadow-lg min-w-[180px]">
+      <p className="font-semibold text-ardoise-900 mb-1">Trésorerie actuelle</p>
+      {line("Solde du compte par défaut", formatCurrency(d.value))}
+    </div>
+  );
+}
+
 function SummaryTab() {
   const hp = usePractitioner();
   const { loadYearCore, loadEstimate } = useManagementData();
@@ -2032,42 +2071,6 @@ function SummaryTab() {
   const formatSigned = (v: number) => `${v > 0 ? "+" : ""}${formatCurrency(v)}`;
   const isLoading = loading || transactionsLoading;
 
-  // Tooltip détaillé : pour la barre "Reste à vivre", on affiche la décomposition
-  // du calcul (solde + encaissements − échéances − charges) plutôt qu'un simple
-  // montant, pour que l'utilisateur comprenne d'où sort le chiffre.
-  const CashTooltip = ({ active, payload }: {
-    active?: boolean;
-    payload?: Array<{ payload: { key: string; value: number } }>;
-  }) => {
-    if (!active || !payload?.length) return null;
-    const d = payload[0].payload;
-    const line = (label: string, value: string, strong = false) => (
-      <div className={`flex items-center justify-between gap-6 ${strong ? "font-semibold text-ardoise-900" : "text-ardoise-600"}`}>
-        <span>{label}</span>
-        <span className="font-mono tabular-nums">{value}</span>
-      </div>
-    );
-    if (d.key === "reste") {
-      return (
-        <div className="rounded-lg border border-ardoise-200 bg-white px-3 py-2.5 text-[11px] shadow-lg space-y-1 min-w-[220px]">
-          <p className="font-semibold text-ardoise-900 mb-1.5">Reste à vivre — fin du mois</p>
-          {line("Trésorerie actuelle", formatCurrency(defaultBalance))}
-          {line("Encaissements estimés", `+ ${formatCurrency(resteAVivre.projIncome)}`)}
-          {line("Échéances fiscales/sociales", `− ${formatCurrency(resteAVivre.echeances)}`)}
-          {line("Charges pro. projetées", `− ${formatCurrency(resteAVivre.chargesProProjetees)}`)}
-          <div className="h-px bg-ardoise-100 my-1.5" />
-          {line("Reste à vivre", formatCurrency(d.value), true)}
-        </div>
-      );
-    }
-    return (
-      <div className="rounded-lg border border-ardoise-200 bg-white px-3 py-2 text-[11px] shadow-lg min-w-[180px]">
-        <p className="font-semibold text-ardoise-900 mb-1">Trésorerie actuelle</p>
-        {line("Solde du compte par défaut", formatCurrency(d.value))}
-      </div>
-    );
-  };
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Trésorerie prévisionnelle — nécessite des vraies transactions bancaires
@@ -2103,7 +2106,7 @@ function SummaryTab() {
                 <ReferenceLine y={0} stroke="#2E2440" strokeWidth={1.5} />
                 <Tooltip
                   cursor={{ fill: "rgba(0,0,0,0.04)" }}
-                  content={<CashTooltip />}
+                  content={<CashTooltip defaultBalance={defaultBalance} resteAVivre={resteAVivre} />}
                 />
                 <Bar dataKey="value" radius={[4, 4, 4, 4]} maxBarSize={64}>
                   <LabelList
