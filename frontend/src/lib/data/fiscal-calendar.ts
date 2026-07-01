@@ -51,6 +51,15 @@ export const EVENT_LABEL: Record<string, string> = {
   declaration: "Décla",
 };
 
+// Sous-titre (nature de l'échéance) affiché sous le libellé.
+export const EVENT_SUBTITLE: Record<string, string> = {
+  urssaf: "Prélèvement automatique",
+  carpimko: "Prélèvement automatique",
+  ir: "Acompte impôt sur le revenu",
+  cfe: "Cotisation foncière des entreprises",
+  declaration: "Déclaration à effectuer",
+};
+
 // URSSAF quarterly months: Feb(1), May(4), Aug(7), Nov(10)
 const URSSAF_QUARTERLY_MONTHS = new Set([1, 4, 7, 10]);
 

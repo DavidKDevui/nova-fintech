@@ -25,10 +25,10 @@ import { ExportButtons } from "@/components/export-buttons";
 import { Button } from "@/components/button";
 
 const TABS = [
+  { key: "summary", label: "Ma synthèse" },
   { key: "activity", label: "Mon activité" },
   { key: "contributions", label: "Mes cotisations sociales" },
   { key: "taxes", label: "Mes impôts" },
-  { key: "summary", label: "Ma synthèse" },
   { key: "remainder", label: "Reste à vivre" },
   { key: "simulation", label: "Simulation" },
 ] as const;
@@ -123,7 +123,7 @@ function ManagementDataProvider({ children }: { children: ReactNode }) {
 
 export function ManagementClient() {
   const hp = usePractitioner();
-  const [tab, setTab] = useState<Tab>("activity");
+  const [tab, setTab] = useState<Tab>("summary");
 
   return (
     // key = connexion bancaire : un changement remonte tout le sous-arbre et
@@ -1772,13 +1772,14 @@ function SummaryTab() {
     retrocession: number; madelin: number;
   }[]>([]);
   const [prevYearCA, setPrevYearCA] = useState(0);
-  const [prevYearFiscal, setPrevYearFiscal] = useState<{
+  type FiscalSituation = {
     maritalStatus: string;
     dependentChildren: number;
     isSingleParent?: boolean;
     otherIncome: string;
-  } | null>(null);
-  const [includeRegul, setIncludeRegul] = useState(true);
+  };
+  const [prevYearFiscal, setPrevYearFiscal] = useState<FiscalSituation | null>(null);
+  const [currentYearFiscal, setCurrentYearFiscal] = useState<FiscalSituation | null>(null);
   // Fallback bordereaux : CA mensuel + CA N-1 issus des passages, cotisations
   // estimées via getCotisationsEstimate. La carte "Trésorerie prévisionnelle"
   // reste indisponible (besoin du solde bancaire).
@@ -1793,9 +1794,10 @@ function SummaryTab() {
 
       // prevYear : même source/loader que l'année courante pour rester cohérent.
       const monthlyLoader = core.isEstimated ? getMonthlyActivityFromBordereauxAction : getMonthlyActivityAction;
-      const [prevMonthly, prevFiscal, est] = await Promise.all([
+      const [prevMonthly, prevFiscal, currFiscal, est] = await Promise.all([
         monthlyLoader(prevYear),
         getFiscalSituationAction(prevYear),
+        getFiscalSituationAction(currentYear),
         loadEstimate(currentYear),
       ]);
       const monthly = core.months.map((m) => ({
@@ -1818,6 +1820,14 @@ function SummaryTab() {
           otherIncome: prevFiscal.otherIncome,
         });
       }
+      if (currFiscal) {
+        setCurrentYearFiscal({
+          maritalStatus: currFiscal.maritalStatus,
+          dependentChildren: currFiscal.dependentChildren,
+          isSingleParent: (currFiscal as { isSingleParent?: boolean }).isSingleParent,
+          otherIncome: currFiscal.otherIncome,
+        });
+      }
       setLoading(false);
     })().catch(() => setLoading(false));
   }, [currentYear, prevYear, loadYearCore, loadEstimate, bankConnected]);
@@ -1829,33 +1839,76 @@ function SummaryTab() {
     return acc ? parseFloat(acc.balance) : 0;
   }, [accounts, hp]);
 
-  // 2. Régularisation : (estimé annuel − payé à date) pour URSSAF + CARPIMKO.
-  // Convention : à payer (positif) → impact négatif sur la tréso.
-  const regulImpact = useMemo(() => {
-    if (!estimate) return 0;
-    const paidUrssaf = monthlyData.reduce((s, m) => s + m.urssaf, 0);
-    const paidCarpimko = monthlyData.reduce((s, m) => s + m.carpimko, 0);
-    const due = (estimate.urssafAnnuel - paidUrssaf) + (estimate.carpimkoAnnuel - paidCarpimko);
-    return -due;
-  }, [estimate, monthlyData]);
+  // 2. Reste à vivre projeté à fin du mois courant : solde bancaire +
+  // encaissements estimés (moyenne mensuelle des mois écoulés × fraction du mois
+  // restante) − échéances fiscales/sociales à venir (calendrier) − charges pro
+  // projetées. Même logique que l'onglet "Reste à vivre", à l'horizon fin du
+  // mois (le plus court) pour rester comparable à la trésorerie actuelle.
+  const prefs: PaymentPreferences = useMemo(() => {
+    if (!hp) return DEFAULT_PREFERENCES;
+    return {
+      urssafFrequency: hp.urssafFrequency,
+      urssafPayDay: hp.urssafPayDay,
+      pasFrequency: hp.pasFrequency,
+      carpimkoFrequency: hp.carpimkoFrequency,
+      carpimkoPayDay: hp.carpimkoPayDay,
+      activityStartDate: hp.activityStartDate,
+    };
+  }, [hp]);
+  const calendar = useMemo(() => buildCalendar(prefs), [prefs]);
 
-  // 3. Anticipation 3 mois = moyenne des 3 derniers mois passés de (autresDepenses + chargesPro) × 3.
-  const anticipation = useMemo(() => {
-    if (!monthlyData.length) return 0;
-    const currentMonth = new Date().getMonth();
-    let sum = 0;
-    let count = 0;
-    for (let i = currentMonth - 1; i >= Math.max(0, currentMonth - 3); i--) {
-      const m = monthlyData[i];
-      if (!m) continue;
-      sum += m.autresDepenses + m.chargesPro;
-      count++;
+  const resteAVivre = useMemo(() => {
+    const now = new Date();
+    const currentMonthIdx = now.getMonth();
+    const dayOfMonth = now.getDate();
+    const daysInMonth = new Date(currentYear, currentMonthIdx + 1, 0).getDate();
+    const fractionRemainingCurrentMonth = Math.max(0, (daysInMonth - dayOfMonth) / daysInMonth);
+    const targetIdx = currentMonthIdx; // fin du mois courant
+
+    const pastMonths = monthlyData.slice(0, currentMonthIdx);
+    // On ne moyenne que sur les mois réellement actifs (encaissements > 0).
+    // Les mois à zéro en début d'année (avant le démarrage d'activité) tiraient
+    // la moyenne vers le bas et sous-estimaient les projections. Fallback sur
+    // tous les mois écoulés, puis sur le premier mois, si aucun mois actif.
+    const activeMonths = pastMonths.filter((m) => m.income > 0);
+    const sample = activeMonths.length > 0
+      ? activeMonths
+      : pastMonths.length > 0 ? pastMonths : monthlyData.slice(0, 1);
+    const avg = (sel: (m: typeof monthlyData[number]) => number) =>
+      sample.length ? sample.reduce((s, m) => s + sel(m), 0) / sample.length : 0;
+    const avgIncome = avg((m) => m.income);
+    const avgChargesPro = avg((m) => m.chargesPro);
+    const avgAutres = avg((m) => m.autresDepenses);
+    const avgRetroMadelin = avg((m) => m.retrocession + m.madelin);
+
+    const monthsBetween = targetIdx > currentMonthIdx
+      ? fractionRemainingCurrentMonth + (targetIdx - currentMonthIdx)
+      : fractionRemainingCurrentMonth;
+
+    const projIncome = avgIncome * monthsBetween;
+    const projChargesPro = avgChargesPro * monthsBetween;
+    const projAutres = avgAutres * monthsBetween;
+    const projRetroMadelin = avgRetroMadelin * monthsBetween;
+
+    let urssafDue = 0;
+    let carpimkoDue = 0;
+    let pasDue = 0;
+    for (let m = currentMonthIdx; m <= targetIdx; m++) {
+      for (const e of calendar[m] || []) {
+        if (m === currentMonthIdx && e.day < dayOfMonth) continue;
+        if (e.type === "urssaf") urssafDue += estimate?.urssafParEcheance ?? 0;
+        else if (e.type === "carpimko") carpimkoDue += estimate?.carpimkoParEcheance ?? 0;
+        else if (e.type === "ir") pasDue += estimate?.pasParEcheance ?? 0;
+      }
     }
-    const avg = count > 0 ? sum / count : 0;
-    return -avg * 3;
-  }, [monthlyData]);
 
-  const solde = defaultBalance + (includeRegul ? regulImpact : 0) + anticipation;
+    const echeances = urssafDue + carpimkoDue + pasDue;
+    const chargesProProjetees = projChargesPro + projAutres + projRetroMadelin;
+    const total = defaultBalance + projIncome - echeances - chargesProProjetees;
+    return { total, projIncome, echeances, chargesProProjetees };
+  }, [calendar, estimate, monthlyData, defaultBalance, currentYear]);
+
+  const solde = resteAVivre.total;
 
   // ── Annual projections (year-end) ──
   const monthsElapsed = new Date().getMonth() + 1;
@@ -1864,13 +1917,8 @@ function SummaryTab() {
   const annualCA = estimate?.revenuAnnualise ?? 0;
   const ytdChargesPro = monthlyData.reduce((s, m) => s + m.chargesPro, 0);
   const annualChargesPro = annualize(ytdChargesPro);
-  // Cotisations sociales : 2 modes selon le toggle.
-  //   ON  : estimation annuelle ajustée OpenFisca/Carpimko (anticipe la régularisation)
-  //   OFF : extrapolation linéaire des paiements provisionnels YTD (sans anticipation)
-  const annualCotisationsAjustees = (estimate?.urssafAnnuel ?? 0) + (estimate?.carpimkoAnnuel ?? 0);
-  const ytdCotisationsPayees = monthlyData.reduce((s, m) => s + m.urssaf + m.carpimko, 0);
-  const annualCotisationsProvisionnelles = annualize(ytdCotisationsPayees);
-  const annualCotisations = includeRegul ? annualCotisationsAjustees : annualCotisationsProvisionnelles;
+  // Cotisations sociales : estimation annuelle ajustée OpenFisca/Carpimko.
+  const annualCotisations = (estimate?.urssafAnnuel ?? 0) + (estimate?.carpimkoAnnuel ?? 0);
   const ytdRetroMadelin = monthlyData.reduce((s, m) => s + m.retrocession + m.madelin, 0);
   const annualRetroMadelin = annualize(ytdRetroMadelin);
   // Même formule que la ligne "Rém. avant impôt" de l'onglet Mon activité :
@@ -1893,6 +1941,25 @@ function SummaryTab() {
     });
     return computeIR({ revenuImposable, parts, partsDeReference, incomeYear: irYear }).impot;
   }, [hp, prevYearCA, prevYearFiscal, irYear]);
+
+  // IR estimé sur les revenus de l'année en cours (généré cette année, payé en
+  // N+1). Sert au "Reste à vivre" = CA − charges − impôts : on retranche l'impôt
+  // que le praticien est en train de générer, pas celui de N-1 (nul pour un
+  // nouvel installé, ce qui rendait le reste à vivre = rémunération avant impôt).
+  const irCurrent = useMemo(() => {
+    if (!hp || annualCA <= 0) return 0;
+    const taxRegime = hp.taxRegime;
+    const revenuNet = taxRegime === "micro_bnc" ? annualCA * 0.66 : annualCA;
+    const otherIncome = currentYearFiscal ? Number(currentYearFiscal.otherIncome) : 0;
+    const revenuImposable = Math.round(revenuNet + otherIncome);
+    if (revenuImposable <= 0) return 0;
+    const { parts, partsDeReference } = computeParts({
+      maritalStatus: (currentYearFiscal?.maritalStatus as "celibataire" | "marie" | "pacse") ?? "celibataire",
+      dependentChildren: currentYearFiscal?.dependentChildren ?? 0,
+      isSingleParent: currentYearFiscal?.isSingleParent ?? false,
+    });
+    return computeIR({ revenuImposable, parts, partsDeReference, incomeYear: currentYear }).impot;
+  }, [hp, annualCA, currentYearFiscal, currentYear]);
 
   const metrics: {
     key: string;
@@ -1943,18 +2010,63 @@ function SummaryTab() {
         </svg>
       ),
     },
+    {
+      // Reste à vivre annuel = CA − charges − impôts = rémunération avant impôt
+      // − IR estimé sur les revenus de l'année en cours.
+      key: "rav", title: "Reste à vivre", year: currentYear, value: Math.max(0, annualRemAvantImpot - irCurrent), prevYear, prevValue: null,
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>
+        </svg>
+      ),
+    },
   ];
 
   // En fallback bordereaux : pas de solde bancaire réel → on ne rend aucune
   // donnée dans le chart pour ne pas afficher des bars trompeuses sous l'overlay.
   const chartData = isEstimated ? [] : [
     { key: "treso", name: "Trésorerie actuelle", value: Math.round(defaultBalance) },
-    ...(includeRegul ? [{ key: "regul", name: `Régularisation ${currentYear}`, value: Math.round(regulImpact) }] : []),
-    { key: "antic", name: "Anticipation 3 mois", value: Math.round(anticipation) },
+    { key: "reste", name: "Reste à vivre", value: Math.round(resteAVivre.total) },
   ];
 
   const formatSigned = (v: number) => `${v > 0 ? "+" : ""}${formatCurrency(v)}`;
   const isLoading = loading || transactionsLoading;
+
+  // Tooltip détaillé : pour la barre "Reste à vivre", on affiche la décomposition
+  // du calcul (solde + encaissements − échéances − charges) plutôt qu'un simple
+  // montant, pour que l'utilisateur comprenne d'où sort le chiffre.
+  const CashTooltip = ({ active, payload }: {
+    active?: boolean;
+    payload?: Array<{ payload: { key: string; value: number } }>;
+  }) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0].payload;
+    const line = (label: string, value: string, strong = false) => (
+      <div className={`flex items-center justify-between gap-6 ${strong ? "font-semibold text-ardoise-900" : "text-ardoise-600"}`}>
+        <span>{label}</span>
+        <span className="font-mono tabular-nums">{value}</span>
+      </div>
+    );
+    if (d.key === "reste") {
+      return (
+        <div className="rounded-lg border border-ardoise-200 bg-white px-3 py-2.5 text-[11px] shadow-lg space-y-1 min-w-[220px]">
+          <p className="font-semibold text-ardoise-900 mb-1.5">Reste à vivre — fin du mois</p>
+          {line("Trésorerie actuelle", formatCurrency(defaultBalance))}
+          {line("Encaissements estimés", `+ ${formatCurrency(resteAVivre.projIncome)}`)}
+          {line("Échéances fiscales/sociales", `− ${formatCurrency(resteAVivre.echeances)}`)}
+          {line("Charges pro. projetées", `− ${formatCurrency(resteAVivre.chargesProProjetees)}`)}
+          <div className="h-px bg-ardoise-100 my-1.5" />
+          {line("Reste à vivre", formatCurrency(d.value), true)}
+        </div>
+      );
+    }
+    return (
+      <div className="rounded-lg border border-ardoise-200 bg-white px-3 py-2 text-[11px] shadow-lg min-w-[180px]">
+        <p className="font-semibold text-ardoise-900 mb-1">Trésorerie actuelle</p>
+        {line("Solde du compte par défaut", formatCurrency(d.value))}
+      </div>
+    );
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1965,22 +2077,6 @@ function SummaryTab() {
         <DataMissingOverlay bankConnected={(bankConnected && !isEstimated) || isLoading} />
         <div className="flex items-center justify-between mb-4 gap-3">
           <h3 className="text-base font-semibold text-ardoise-900">Trésorerie prévisionnelle</h3>
-          <div className="inline-flex rounded-full bg-ardoise-100 p-0.5 text-[11px] font-medium">
-            <button
-              type="button"
-              onClick={() => setIncludeRegul(true)}
-              className={`px-3 py-1.5 rounded-full transition-colors ${includeRegul ? "bg-white text-ardoise-900 shadow-sm" : "text-ardoise-500 hover:text-ardoise-700"}`}
-            >
-              Prévoir la régularisation
-            </button>
-            <button
-              type="button"
-              onClick={() => setIncludeRegul(false)}
-              className={`px-3 py-1.5 rounded-full transition-colors ${!includeRegul ? "bg-white text-ardoise-900 shadow-sm" : "text-ardoise-500 hover:text-ardoise-700"}`}
-            >
-              Ne pas prévoir
-            </button>
-          </div>
         </div>
 
         {isLoading ? (
@@ -2007,11 +2103,7 @@ function SummaryTab() {
                 <ReferenceLine y={0} stroke="#2E2440" strokeWidth={1.5} />
                 <Tooltip
                   cursor={{ fill: "rgba(0,0,0,0.04)" }}
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E1DBEC", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
-                  formatter={(value) => {
-                    const num = typeof value === "number" ? value : Number(value ?? 0);
-                    return [formatSigned(num), "Montant"];
-                  }}
+                  content={<CashTooltip />}
                 />
                 <Bar dataKey="value" radius={[4, 4, 4, 4]} maxBarSize={64}>
                   <LabelList
@@ -2032,10 +2124,8 @@ function SummaryTab() {
 
             <div className="mt-6 pt-4 border-t border-ardoise-100">
               <div className="flex items-center gap-1.5 mb-1">
-                <p className="text-xs text-ardoise-400">Solde de trésorerie prévisionnelle</p>
-                <InfoTooltip text={includeRegul
-                  ? `Solde hypothétique après avoir anticipé votre régularisation d'Urssaf et de Carpimko ${currentYear} (ajustée en ${currentYear + 1}) ainsi que 3 mois de vos frais professionnels.`
-                  : `Solde hypothétique après avoir anticipé 3 mois de vos frais professionnels (sans tenir compte de la régularisation ${currentYear}).`} />
+                <p className="text-xs text-ardoise-400">Reste à vivre estimé fin du mois</p>
+                <InfoTooltip text="Trésorerie projetée à la fin du mois courant : solde actuel du compte par défaut, plus vos encaissements estimés du mois, moins les échéances fiscales/sociales restantes et vos charges professionnelles projetées." />
               </div>
               <p className={`text-3xl font-bold font-mono ${isEstimated ? "text-ardoise-300" : solde >= 0 ? "text-ardoise-900" : "text-red-500"}`}>
                 {isEstimated ? "—" : formatSigned(solde)}
@@ -2043,9 +2133,7 @@ function SummaryTab() {
             </div>
 
             <p className="mt-4 text-xs text-ardoise-500 leading-relaxed">
-              {includeRegul
-                ? <>Solde de trésorerie hypothétique après avoir anticipé votre régularisation d&apos;Urssaf et de Carpimko {currentYear} (ajustée en {currentYear + 1}) ainsi que 3 mois de vos frais professionnels.</>
-                : <>Solde de trésorerie hypothétique après avoir anticipé 3 mois de vos frais professionnels. La régularisation {currentYear} n&apos;est pas prise en compte.</>}
+              Trésorerie projetée à la fin du mois courant en partant de votre solde actuel, en ajoutant vos encaissements estimés du mois et en retranchant les échéances fiscales/sociales restantes ainsi que vos charges professionnelles projetées.
             </p>
             <p className="mt-2 text-xs text-ardoise-500 leading-relaxed">
               Un montant positif indique une trésorerie suffisante pour couvrir ces dépenses à venir.
@@ -2225,7 +2313,14 @@ function RemainderTab() {
     // Moyennes sur les mois écoulés (hors mois courant). Si on est en janvier
     // ou qu'on n'a aucun historique, on prend le mois courant comme proxy.
     const pastMonths = monthlyData.slice(0, currentMonthIdx);
-    const sample = pastMonths.length > 0 ? pastMonths : monthlyData.slice(0, 1);
+    // On ne moyenne que sur les mois réellement actifs (encaissements > 0).
+    // Les mois à zéro en début d'année (avant le démarrage d'activité) tiraient
+    // la moyenne vers le bas et sous-estimaient les projections. Fallback sur
+    // tous les mois écoulés, puis sur le premier mois, si aucun mois actif.
+    const activeMonths = pastMonths.filter((m) => m.income > 0);
+    const sample = activeMonths.length > 0
+      ? activeMonths
+      : pastMonths.length > 0 ? pastMonths : monthlyData.slice(0, 1);
     const avg = (sel: (m: typeof monthlyData[number]) => number) =>
       sample.length ? sample.reduce((s, m) => s + sel(m), 0) / sample.length : 0;
     const avgIncome = avg((m) => m.income);

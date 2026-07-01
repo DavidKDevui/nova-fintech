@@ -84,7 +84,10 @@ export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const isAdmin = user.accountType === "admin";
-  const displayName = hp?.firstName || user.email;
+  const displayName = hp ? `${hp.firstName} ${hp.lastName}` : user.email;
+  const initials = hp?.firstName && hp?.lastName
+    ? (hp.firstName[0]! + hp.lastName[0]!).toUpperCase()
+    : getInitials(user.email);
   const { pendingSuggestionsCount: pendingCount, uncategorizedCount, defaultBankAccountMissing, refreshAll } = useData();
   const [showMenu, setShowMenu] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
@@ -124,17 +127,17 @@ export function Navbar() {
   }, [showMenu]);
 
   const navLinkClass = (active: boolean) =>
-    `flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+    `flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
       active
-        ? "bg-white/15 text-white"
-        : "text-white/70 hover:text-white hover:bg-white/5"
+        ? "bg-violet-800 text-white"
+        : "text-ardoise-600 hover:text-ardoise-900 hover:bg-violet-100"
     }`;
 
   const mobileNavLinkClass = (active: boolean) =>
-    `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all ${
+    `flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition-all ${
       active
-        ? "bg-ardoise-100 text-ardoise-900"
-        : "text-ardoise-500 hover:bg-ardoise-100 hover:text-ardoise-900"
+        ? "bg-violet-800 text-white"
+        : "text-ardoise-500 hover:bg-violet-100 hover:text-ardoise-900"
     }`;
 
   const badge = (href: string) => {
@@ -164,78 +167,82 @@ export function Navbar() {
 
   return (
     <>
-      {/* Desktop navbar */}
-      <nav className="hidden lg:block bg-violet-900 w-full">
-        <div className="flex items-center justify-between h-[4.5rem] px-6 lg:px-8 mx-auto w-full max-w-7xl">
-        {/* Left: logo + nav items */}
-        <div className="flex items-center gap-5">
-          <Link href="/dashboard" className="flex items-center gap-2.5 select-none">
-            {/* Monogramme "A" — carré orange (charte page 14) */}
-            {/* Monogramme "Ad" — A et d en encre, centrés horizontalement, le d déborde en bas (charte p.3/14) */}
-            <span className="relative flex h-9 w-9 shrink-0 rounded-[10px] bg-brand-600">
-              <span className="absolute left-1/2 -translate-x-1/2 top-[2px] text-[15px] font-extrabold leading-none text-ardoise-900">A</span>
-              <span className="absolute left-1/2 -translate-x-1/2 -bottom-2.5 text-[15px] font-extrabold leading-none text-ardoise-900">d</span>
-            </span>
-            <span className="text-xl font-bold tracking-tight text-white">ActiDec</span>
-            {isAdmin && <span className="text-[8px] font-bold uppercase tracking-widest bg-white/20 text-white px-1 py-[1px] rounded-sm">admin</span>}
-          </Link>
-          {/* Séparateur vertical (charte page 14) */}
-          <span className="h-7 w-px bg-white/15" />
-          <div className="flex items-center gap-1">
-            {items.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`${navLinkClass(pathname === item.href || pathname.startsWith(item.href + "/"))} relative`}
-              >
-                <span className="shrink-0">{item.icon}</span>
-                {item.label}
-                {badge(item.href)}
-              </Link>
-            ))}
-          </div>
+      {/* Desktop sidebar */}
+      <nav className="hidden lg:flex lg:flex-col w-64 shrink-0 h-screen bg-violet-50 border-r border-ardoise-200">
+        {/* Logo */}
+        <Link href="/dashboard" className="flex items-center gap-2.5 select-none h-[4.5rem] shrink-0 px-5">
+          {/* Monogramme "Ad" — A et d en encre, centrés horizontalement, le d déborde en bas (charte p.3/14) */}
+          <span className="relative flex h-9 w-9 shrink-0 rounded-[10px] bg-brand-600">
+            <span className="absolute left-1/2 -translate-x-1/2 top-[2px] text-[15px] font-extrabold leading-none text-ardoise-900">A</span>
+            <span className="absolute left-1/2 -translate-x-1/2 -bottom-2.5 text-[15px] font-extrabold leading-none text-ardoise-900">d</span>
+          </span>
+          <span className="text-xl font-bold tracking-tight text-ardoise-900">ActiDec</span>
+          {isAdmin && <span className="text-[8px] font-bold uppercase tracking-widest bg-violet-200 text-violet-700 px-1 py-[1px] rounded-sm">admin</span>}
+        </Link>
+        {/* Séparateur horizontal */}
+        <span className="mx-5 h-px bg-ardoise-200" />
+
+        {/* Nav items (vertical) */}
+        <div className="flex-1 flex flex-col gap-1 px-3 py-4 overflow-y-auto">
+          {items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`${navLinkClass(pathname === item.href || pathname.startsWith(item.href + "/"))} w-full`}
+            >
+              <span className="shrink-0">{item.icon}</span>
+              <span className="flex-1">{item.label}</span>
+              {badge(item.href)}
+            </Link>
+          ))}
         </div>
 
-        {/* Right: profil + info + synchro (charte page 14) */}
-        <div className="flex items-center gap-1">
+        {/* Bottom: actions + profil */}
+        <div className="shrink-0 border-t border-ardoise-200 p-3">
+          <div className="flex items-center gap-1 px-1 pb-2">
+            <Link href="/help" title="Aide" className="flex h-9 w-9 items-center justify-center rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-violet-100 transition-all">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </Link>
+            <button type="button" onClick={handleRefresh} disabled={refreshing} title="Actualiser les données" className="flex h-9 w-9 items-center justify-center rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-violet-100 transition-all disabled:opacity-60 disabled:cursor-default">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={refreshing ? "animate-spin" : ""}><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 4 21 10 15 10"/></svg>
+            </button>
+          </div>
+
           <div className="relative" ref={menuRef}>
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            title={displayName}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          </button>
-
-          {showMenu && (
-            <div className="absolute right-0 top-full mt-1.5 w-48 bg-white border border-ardoise-200 rounded-md py-1 shadow-lg animate-fade-up-fast z-50">
-              {!isAdmin && (
-                <Link
-                  href="/profile"
-                  onClick={() => setShowMenu(false)}
-                  className="w-full px-4 py-2.5 text-left text-sm text-ardoise-700 hover:bg-ardoise-50 transition-colors flex items-center gap-2.5"
+            {showMenu && (
+              <div className="absolute bottom-full left-0 right-0 mb-1.5 bg-white border border-ardoise-200 rounded-md py-1 shadow-lg animate-fade-up-fast z-50">
+                {!isAdmin && (
+                  <Link
+                    href="/profile"
+                    onClick={() => setShowMenu(false)}
+                    className="w-full px-4 py-2.5 text-left text-sm text-ardoise-700 hover:bg-ardoise-50 transition-colors flex items-center gap-2.5"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    Mon profil
+                  </Link>
+                )}
+                <button
+                  onClick={() => { setShowMenu(false); setShowLogout(true); }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2.5"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  Mon profil
-                </Link>
-              )}
-              <button
-                onClick={() => { setShowMenu(false); setShowLogout(true); }}
-                className="w-full px-4 py-2.5 text-left text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2.5"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                Déconnexion
-              </button>
-            </div>
-          )}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  Déconnexion
+                </button>
+              </div>
+            )}
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              title={displayName}
+              className="w-full flex items-center gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-violet-100 transition-all"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">{initials}</span>
+              <span className="flex-1 min-w-0">
+                <span className="block truncate text-sm font-semibold text-ardoise-900">{displayName}</span>
+                <span className="block truncate text-[11px] text-ardoise-500">{isAdmin ? "Administrateur" : "Infirmier·ère libéral·e"}</span>
+              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-ardoise-400"><polyline points="18 15 12 9 6 15"/></svg>
+            </button>
           </div>
-          <Link href="/help" title="Aide" className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          </Link>
-          <button type="button" onClick={handleRefresh} disabled={refreshing} title="Actualiser les données" className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all disabled:opacity-60 disabled:cursor-default">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={refreshing ? "animate-spin" : ""}><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 4 21 10 15 10"/></svg>
-          </button>
-        </div>
         </div>
       </nav>
 

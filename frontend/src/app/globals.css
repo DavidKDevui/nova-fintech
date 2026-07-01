@@ -86,8 +86,8 @@ button,
 }
 
 body {
-  /* Fond « brume » charte ActiDec v3 — lavande/gris très clair teinté violet (pas blanc). */
-  background: #FCFBFE;
+  /* Fond « brume » charte ActiDec v3 — lavande très clair, quasi transparent. */
+  background: #FEFDFF;
   letter-spacing: -0.02em;
 }
 
@@ -185,7 +185,7 @@ body {
 }
 
 /* Ombres charte ActiDec v3 — 3 niveaux très discrets (« un produit financier ne flotte pas »). */
-.shadow-1 { box-shadow: 0 1px 2px rgba(26, 15, 46, 0.04), 0 2px 6px rgba(26, 15, 46, 0.05); }
+.shadow-1 { box-shadow: 0 1px 2px rgba(26, 15, 46, 0.03); }
 .shadow-2 { box-shadow: 0 4px 14px rgba(26, 15, 46, 0.08); }
 .shadow-3 { box-shadow: 0 16px 40px rgba(26, 15, 46, 0.14); }
 

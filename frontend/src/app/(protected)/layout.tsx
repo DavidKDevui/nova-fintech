@@ -45,9 +45,9 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       <PractitionerProvider profile={practitionerProfile}>
         <DataProvider>
           <AssistantProvider>
-            <div className="flex h-screen flex-col">
+            <div className="flex h-screen flex-col lg:flex-row">
               <Navbar />
-              <main id="main-content" className="app-content relative flex-1 overflow-y-auto p-4 md:p-6 lg:mt-3 lg:mx-auto lg:p-8 w-full max-w-7xl"><PageTransition>{children}</PageTransition></main>
+              <main id="main-content" className="app-content relative flex-1 overflow-y-auto p-4 md:p-6 lg:mt-3 lg:mx-auto lg:p-8 w-full max-w-[96rem]"><PageTransition>{children}</PageTransition></main>
             </div>
             {needsOnboarding && <OnboardingModal open />}
           </AssistantProvider>

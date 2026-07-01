@@ -138,7 +138,11 @@ export function TransactionsClient() {
   const [alertLoaded, setAlertLoaded] = useState(false);
   const alertConfigured = alertLoaded && alertEnabled && alertThreshold !== "";
 
-  const needsDefaultAccount = hp?.bridgeUserUuid && !hp.defaultBankAccountId && accounts.length > 1 && !loading;
+  // Défaut « manquant » = aucun id enregistré OU id périmé (compte supprimé/re-synchronisé
+  // avec un nouvel id). Sans ce second cas, un défaut orphelin bloquait l'utilisateur :
+  // la modale ne s'ouvrait pas et aucune autre UI ne permettait de re-choisir.
+  const defaultMissing = !loading && (!hp?.defaultBankAccountId || !accounts.some((a) => a.id === hp.defaultBankAccountId));
+  const needsDefaultAccount = hp?.bridgeUserUuid && accounts.length > 1 && defaultMissing;
 
   // Load alert state on mount
   useEffect(() => {
@@ -247,14 +251,14 @@ export function TransactionsClient() {
     }
   }, [alertThreshold, alertEnabled]);
 
-  // Auto-set default if only one account
+  // Auto-set default if only one account (y compris si le défaut enregistré est périmé)
   useEffect(() => {
-    if (hp?.bridgeUserUuid && !hp.defaultBankAccountId && accounts.length === 1 && !loading) {
+    if (hp?.bridgeUserUuid && defaultMissing && accounts.length === 1) {
       setDefaultBankAccountAction(accounts[0]!.id).then((result) => {
         if (result.success) window.location.reload();
       });
     }
-  }, [hp?.bridgeUserUuid, hp?.defaultBankAccountId, accounts, loading]);
+  }, [hp?.bridgeUserUuid, defaultMissing, accounts]);
 
   const filteredAccounts = selectedAccount ? accounts.filter((a) => a.id === selectedAccount) : accounts;
 
