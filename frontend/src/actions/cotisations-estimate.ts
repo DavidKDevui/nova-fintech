@@ -141,34 +141,34 @@ export async function getCotisationsEstimate(
     ? activityStartDate.getMonth() + 1
     : 1;
 
-  // Charger les jours de vacances saisis pour l'année cible.
-  const vacationsRows = await db
+  // Charger les jours travaillés saisis pour l'année cible (null = non saisi).
+  const workedRows = await db
     .select()
     .from(practitionerVacations)
     .where(and(
       eq(practitionerVacations.practitionerId, hp.id),
       eq(practitionerVacations.year, annee),
     ));
-  const vacations: number[] = Array(12).fill(0);
-  for (const row of vacationsRows) {
+  const workedDays: (number | null)[] = Array(12).fill(null);
+  for (const row of workedRows) {
     if (row.month >= 1 && row.month <= 12) {
-      vacations[row.month - 1] = row.days;
+      workedDays[row.month - 1] = row.workedDays;
     }
   }
 
-  // Jours réellement travaillés YTD (mois écoulés − vacances déjà saisies).
+  // Jours réellement travaillés YTD (jours saisis, ou défaut = jours ouvrés).
   // On démarre au mois d'activité, pas en janvier.
   let workedYTD = 0;
   for (let m = startMonth; m <= monthsElapsed; m++) {
     const wd = countWorkingDays(annee, m, daysPerWeek);
-    workedYTD += Math.max(0, wd - vacations[m - 1]);
+    workedYTD += workedDays[m - 1] ?? wd;
   }
-  // Jours travaillables sur le reste de l'année (depuis startMonth jusqu'à
+  // Jours travaillés sur le reste de l'année (depuis startMonth jusqu'à
   // décembre). Pour un praticien établi, c'est l'année complète.
   let workedYear = 0;
   for (let m = startMonth; m <= 12; m++) {
     const wd = countWorkingDays(annee, m, daysPerWeek);
-    workedYear += Math.max(0, wd - vacations[m - 1]);
+    workedYear += workedDays[m - 1] ?? wd;
   }
 
   // Annualisation du CA **brut** : daily rate × jours travaillés sur le reste

@@ -334,7 +334,10 @@ export const practitionerVacations = pgTable("practitioner_vacations", {
     .references(() => practitioners.id, { onDelete: "cascade" }),
   year: integer("year").notNull(),
   month: integer("month").notNull(),
+  // `days` = ancien modèle (jours de congés). Conservé pour compat, remplacé par
+  // `workedDays` (jours travaillés). NULL = non saisi → défaut = jours ouvrés du mois.
   days: integer("days").notNull().default(0),
+  workedDays: integer("worked_days"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [

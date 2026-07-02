@@ -10,6 +10,8 @@ import { useData } from "@/providers/data-provider";
 import { Logo } from "@/components/logo";
 import { Modal } from "@/components/modal";
 import { Button } from "@/components/button";
+import { NavSearch } from "@/components/nav-search";
+import { PRACTITIONER_DESTINATIONS, ADMIN_DESTINATIONS } from "@/lib/nav-search-index";
 
 const ICON_PROPS = { xmlns: "http://www.w3.org/2000/svg", width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 
@@ -109,6 +111,7 @@ export function Navbar() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const items = isAdmin ? adminItems : navItems;
+  const navDestinations = isAdmin ? ADMIN_DESTINATIONS : PRACTITIONER_DESTINATIONS;
 
   useEffect(() => {
     // Ferme le drawer au changement de route.
@@ -197,8 +200,11 @@ export function Navbar() {
           ))}
         </div>
 
-        {/* Bottom: actions + profil */}
+        {/* Bottom: recherche + actions + profil */}
         <div className="shrink-0 border-t border-ardoise-200 p-3">
+          <div className="pb-2">
+            <NavSearch destinations={navDestinations} />
+          </div>
           <div className="flex items-center gap-1 px-1 pb-2">
             <Link href="/help" title="Aide" className="flex h-9 w-9 items-center justify-center rounded-lg text-ardoise-500 hover:text-ardoise-900 hover:bg-violet-100 transition-all">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -281,6 +287,9 @@ export function Navbar() {
             ))}
           </nav>
           <div className="border-t border-ardoise-200 p-3">
+            <div className="pb-2">
+              <NavSearch destinations={navDestinations} onNavigate={() => setMobileOpen(false)} />
+            </div>
             {!isAdmin && (
               <Link
                 href="/profile"

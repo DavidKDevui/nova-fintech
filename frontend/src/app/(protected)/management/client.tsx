@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, useActionState, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, ReferenceLine, LabelList } from "recharts";
 import { getMonthlyActivityAction, getTransactionKpisAction, getCategoryTransactionsAction, type MonthlyActivityMonth, type CategoryTransaction } from "@/actions/transaction";
@@ -8,7 +9,7 @@ import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/coti
 import { simulateCotisations, type SimulationResult } from "@/actions/simulate-cotisations";
 import { getCAForecastAction, type CAForecastResult } from "@/actions/ca-history";
 import { getFiscalSituationAction, upsertFiscalSituationAction } from "@/actions/fiscal-situation";
-import { getVacationsAction, upsertVacationDayAction } from "@/actions/vacations";
+import { getWorkedDaysAction, upsertWorkedDayAction } from "@/actions/vacations";
 import { useData } from "@/providers/data-provider";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { useAssistant } from "@/providers/assistant-provider";
@@ -18,6 +19,7 @@ import { DataMissingOverlay } from "@/components/data-missing-overlay";
 import { CASourceIndicator } from "@/components/ca-source-indicator";
 import { EstimationBadge } from "@/components/estimation-badge";
 import { buildCalendar, type PaymentPreferences, DEFAULT_PREFERENCES } from "@/lib/data/fiscal-calendar";
+import { computeResteAVivre } from "@/lib/data/reste-a-vivre";
 import { countWorkingDays, countRemainingWorkingDays } from "@/lib/data/fr-holidays";
 import { computeIR, computeParts, getBareme } from "@/lib/data/fr-tax";
 import { downloadCSV, downloadPDF, getChartImage } from "@/lib/export";
@@ -36,6 +38,7 @@ const TABS = [
 type Tab = (typeof TABS)[number]["key"];
 
 const MONTH_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
+const MONTHS_LONG = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(amount);
@@ -123,7 +126,19 @@ function ManagementDataProvider({ children }: { children: ReactNode }) {
 
 export function ManagementClient() {
   const hp = usePractitioner();
-  const [tab, setTab] = useState<Tab>("summary");
+  const searchParams = useSearchParams();
+  // Onglet deep-linkable via ?tab= (utilisé par la recherche de la sidebar).
+  const paramTab = searchParams.get("tab");
+  const [tab, setTab] = useState<Tab>(() =>
+    TABS.some((x) => x.key === paramTab) ? (paramTab as Tab) : "summary",
+  );
+  // Resynchronise si ?tab= change alors qu'on est déjà sur la page (navigation
+  // douce). Pattern React d'ajustement d'état en render, sans effet.
+  const [prevParamTab, setPrevParamTab] = useState(paramTab);
+  if (paramTab !== prevParamTab) {
+    setPrevParamTab(paramTab);
+    if (paramTab && TABS.some((x) => x.key === paramTab)) setTab(paramTab as Tab);
+  }
 
   return (
     // key = connexion bancaire : un changement remonte tout le sous-arbre et
@@ -175,8 +190,10 @@ function ActivityTab() {
   const [effectiveCA, setEffectiveCA] = useState<EffectiveCA>({ ca: 0, source: "none" });
   type MonthData = { name: string; revenus: number; cotisations: number; autresDepenses: number; urssaf: number; carpimko: number; chargesPro: number; retrocession: number; madelin: number; impots: number; remuneration: number };
   const [chartData, setChartData] = useState<MonthData[]>([]);
-  const [vacations, setVacations] = useState<number[]>(Array(12).fill(0));
-  const [depensesOpen, setDepensesOpen] = useState(false);
+  // Jours travaillés saisis par mois ; null = non saisi → défaut = jours ouvrés.
+  const [workedDays, setWorkedDays] = useState<(number | null)[]>(Array(12).fill(null));
+  const [chargesProOpen, setChargesProOpen] = useState(false);
+  const [impotOpen, setImpotOpen] = useState(false);
   const [remOpen, setRemOpen] = useState(false);
   // `isEstimated` = on est en mode fallback bordereaux : CA réel issu des passages
   // mais URSSAF/CARPIMKO/PAS estimés via getCotisationsEstimate. Sert à afficher
@@ -185,8 +202,8 @@ function ActivityTab() {
 
   const fetchData = useCallback(async (y: number) => {
     setLoading(true);
-    const [vacationsResult, core] = await Promise.all([
-      getVacationsAction(y),
+    const [workedDaysResult, core] = await Promise.all([
+      getWorkedDaysAction(y),
       loadYearCore(y),
     ]);
     const { effectiveCA: effectiveCAResult, months, totalCA, isEstimated: useFallback } = core;
@@ -217,7 +234,7 @@ function ActivityTab() {
       setKpis({ encaissement: totalCA, decaissement: 0, cotisations: 0, remuneration: 0 });
       setEffectiveCA(effectiveCAResult);
       setChartData(toChartData(months));
-      setVacations(vacationsResult);
+      setWorkedDays(workedDaysResult);
       setIsEstimated(true);
       setLoading(false);
       return;
@@ -229,7 +246,7 @@ function ActivityTab() {
     setKpis({ encaissement: kpiResult.encaissement, decaissement: kpiResult.decaissement, cotisations: kpiResult.cotisations ?? 0, remuneration: kpiResult.remuneration ?? 0 });
     setEffectiveCA(effectiveCAResult);
     setChartData(toChartData(months));
-    setVacations(vacationsResult);
+    setWorkedDays(workedDaysResult);
     setIsEstimated(false);
     setLoading(false);
   }, [loadYearCore]);
@@ -244,7 +261,7 @@ function ActivityTab() {
 
   // Tableau des en-têtes et lignes pour l'export du détail mensuel.
   const exportData = useMemo(() => {
-    const headers = ["Mois", "CA encaissé", "Total dépenses", "URSSAF", "CARPIMKO", "Charges pro", "Rétrocession", "Madelin", "Impôts versés", "Rémunération versée", "Rém. avant impôt", "Vacances (jours)"];
+    const headers = ["Mois", "CA encaissé", "Total dépenses", "URSSAF", "CARPIMKO", "Charges pro", "Rétrocession", "Madelin", "Impôts versés", "Rémunération versée", "Rém. avant impôt", "Jours travaillés"];
     const rows = chartData.map((m, i) => {
       const totalDepenses = m.cotisations + m.autresDepenses;
       const remAvantImpot = m.revenus - m.urssaf - m.carpimko - m.chargesPro - m.retrocession - m.madelin;
@@ -260,11 +277,11 @@ function ActivityTab() {
         Math.round(m.impots),
         Math.round(m.remuneration),
         Math.round(remAvantImpot),
-        vacations[i] ?? 0,
+        workedDays[i] ?? countWorkingDays(year, i + 1, daysPerWeek),
       ];
     });
     return { headers, rows };
-  }, [chartData, vacations]);
+  }, [chartData, workedDays, year, daysPerWeek]);
 
   const handleExportCsv = useCallback(() => {
     downloadCSV(`activite_${year}`, exportData.headers, exportData.rows);
@@ -306,14 +323,14 @@ function ActivityTab() {
       const isPast = isPastYear || (year === now.getFullYear() && i < currentMonthIdx);
       if (!isPast || m.revenus <= 0) return;
       const wd = countWorkingDays(year, i + 1, daysPerWeek);
-      const worked = Math.max(0, wd - (vacations[i] || 0));
+      const worked = workedDays[i] ?? wd;
       if (worked > 0) {
         totalCA += m.revenus;
         totalDays += worked;
       }
     });
     return totalDays > 0 ? totalCA / totalDays : 0;
-  }, [chartData, vacations, year, daysPerWeek]);
+  }, [chartData, workedDays, year, daysPerWeek]);
 
   // CA mensuel projeté (mois passé = réel ; mois courant = réel + projection sur
   // les jours restants ; mois futur = dailyRate × jours travaillables). Sert à
@@ -333,20 +350,22 @@ function ActivityTab() {
       if (dailyRate <= 0) return Math.round(m.revenus);
       if (isFutureMonth) {
         const wd = countWorkingDays(year, i + 1, daysPerWeek);
-        const worked = Math.max(0, wd - (vacations[i] || 0));
+        const worked = workedDays[i] ?? wd;
         return Math.round(dailyRate * worked);
       }
       if (isCurrentMonth) {
         const totalWd = countWorkingDays(year, i + 1, daysPerWeek);
         const remainingWd = countRemainingWorkingDays(year, i + 1, now.getDate() + 1, daysPerWeek);
         const ratioRemaining = totalWd > 0 ? remainingWd / totalWd : 0;
-        const remainingVac = (vacations[i] || 0) * ratioRemaining;
-        const workedRemaining = Math.max(0, remainingWd - remainingVac);
+        // Jours travaillés prévus sur le mois (saisis ou défaut), ramenés à la
+        // fraction restante du mois.
+        const monthWorked = workedDays[i] ?? totalWd;
+        const workedRemaining = Math.max(0, monthWorked * ratioRemaining);
         return Math.round(m.revenus) + Math.round(dailyRate * workedRemaining);
       }
       return 0;
     });
-  }, [chartData, dailyRate, year, daysPerWeek, vacations]);
+  }, [chartData, dailyRate, year, daysPerWeek, workedDays]);
 
   const projectedAnnualCA = useMemo(
     () => projectedCAByMonth.reduce((s, v) => s + v, 0),
@@ -474,7 +493,7 @@ function ActivityTab() {
               )}
             </div>
           </div>
-          <div className="flex-1 min-w-0" ref={chartRef}>
+          <div className="flex-1 min-w-0 flex flex-col justify-end" ref={chartRef}>
             {loading ? (
               <div className="h-60 bg-ardoise-100 rounded animate-pulse" />
             ) : (
@@ -558,10 +577,10 @@ function ActivityTab() {
                     );
                   }
 
-                  // Future month: simulated CA = daily_rate × (working_days − vacances).
+                  // Future month: simulated CA = daily_rate × jours travaillés (saisis ou défaut).
                   if (isFutureMonth) {
                     const wd = countWorkingDays(year, i + 1, daysPerWeek);
-                    const worked = Math.max(0, wd - (vacations[i] || 0));
+                    const worked = workedDays[i] ?? wd;
                     const simulated = Math.round(dailyRate * worked);
                     return (
                       <div key={m.name} className="py-3.5 text-center font-medium text-ardoise-400 italic font-mono">
@@ -570,14 +589,14 @@ function ActivityTab() {
                     );
                   }
 
-                  // Current month: real to date + projection on remaining working days,
-                  // minus a pro-rata share of saved vacations (uniform distribution assumption).
+                  // Current month: real to date + projection sur les jours travaillés
+                  // prévus (saisis ou défaut), ramenés à la fraction restante du mois.
                   if (isCurrentMonth) {
                     const totalWd = countWorkingDays(year, i + 1, daysPerWeek);
                     const remainingWd = countRemainingWorkingDays(year, i + 1, now.getDate() + 1, daysPerWeek);
                     const ratioRemaining = totalWd > 0 ? remainingWd / totalWd : 0;
-                    const remainingVac = (vacations[i] || 0) * ratioRemaining;
-                    const workedRemaining = Math.max(0, remainingWd - remainingVac);
+                    const monthWorked = workedDays[i] ?? totalWd;
+                    const workedRemaining = Math.max(0, monthWorked * ratioRemaining);
                     const projection = Math.round(dailyRate * workedRemaining);
                     const total = Math.round(m.revenus) + projection;
                     return (
@@ -590,18 +609,18 @@ function ActivityTab() {
                   return <div key={m.name} className="py-3.5 text-center font-medium text-ardoise-300">—</div>;
                 })}
               </div>
-              {/* Dépenses */}
+              {/* Charges pro. */}
               <div
                 className="grid border-b border-ardoise-50 cursor-pointer hover:bg-ardoise-50/50 transition-colors"
                 style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}
-                onClick={() => setDepensesOpen((v) => !v)}
+                onClick={() => setChargesProOpen((v) => !v)}
               >
                 <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
-                  Dépenses
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`text-ardoise-400 transition-transform ${depensesOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+                  Charges pro.
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`text-ardoise-400 transition-transform ${chargesProOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
                 </div>
                 {chartData.map((m) => {
-                  const dep = m.cotisations + m.autresDepenses;
+                  const dep = m.autresDepenses;
                   return (
                     <div key={m.name} className="py-3.5 text-center font-medium text-ardoise-700 font-mono">
                       {dep > 0 ? formatCurrency(dep) : "—"}
@@ -609,15 +628,54 @@ function ActivityTab() {
                   );
                 })}
               </div>
-              {/* Sub-rows dépenses */}
-              {depensesOpen && (
+              {/* Sous-lignes charges pro. */}
+              {chargesProOpen && (
+                <>
+                  {([
+                    { key: "chargesPro", label: "Charges pro" },
+                    { key: "retrocession", label: "Rétrocession" },
+                    { key: "madelin", label: "Madelin" },
+                  ] as const).map((sub) => (
+                    <div key={sub.key} className="grid border-b border-ardoise-50 bg-ardoise-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
+                      <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500">{sub.label}</div>
+                      {chartData.map((m) => {
+                        const val = m[sub.key];
+                        return (
+                          <div key={m.name} className="py-2.5 text-center text-xs font-medium text-ardoise-500 font-mono">
+                            {val > 0 ? formatCurrency(val) : "—"}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </>
+              )}
+              {/* Impôt */}
+              <div
+                className="grid border-b border-ardoise-50 cursor-pointer hover:bg-ardoise-50/50 transition-colors"
+                style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}
+                onClick={() => setImpotOpen((v) => !v)}
+              >
+                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
+                  Impôts
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`text-ardoise-400 transition-transform ${impotOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+                {chartData.map((m) => {
+                  const val = m.urssaf + m.carpimko + m.impots;
+                  return (
+                    <div key={m.name} className="py-3.5 text-center font-medium text-ardoise-700 font-mono">
+                      {val > 0 ? formatCurrency(val) : "—"}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Sous-lignes impôt */}
+              {impotOpen && (
                 <>
                   {([
                     { key: "urssaf", label: "URSSAF" },
                     { key: "carpimko", label: "CARPIMKO" },
-                    { key: "chargesPro", label: "Charges pro" },
-                    { key: "retrocession", label: "Rétrocession" },
-                    { key: "madelin", label: "Madelin" },
+                    { key: "impots", label: "Impôts versés" },
                   ] as const).map((sub) => (
                     <div key={sub.key} className="grid border-b border-ardoise-50 bg-ardoise-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
                       <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500">{sub.label}</div>
@@ -659,7 +717,7 @@ function ActivityTab() {
                   const res = m.revenus - charges;
                   const empty = m.revenus === 0 && charges === 0;
                   return (
-                    <div key={m.name} className={`py-3.5 text-center font-medium font-mono ${empty ? "text-ardoise-300" : res >= 0 ? "text-ardoise-900" : "text-red-500"}`}>
+                    <div key={m.name} className={`py-3.5 text-center font-medium font-mono ${empty ? "text-ardoise-300" : "text-ardoise-900"}`}>
                       {empty ? "—" : formatCurrency(res)}
                     </div>
                   );
@@ -707,28 +765,31 @@ function ActivityTab() {
                   </div>
                 </>
               )}
-              {/* Vacances */}
+              {/* Jours travaillés */}
               <div className="grid" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700">Vacances (jours)</div>
+                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
+                  Jours travaillés
+                  <InfoTooltip text="Nombre de jours travaillés prévus dans le mois. Par défaut : les jours ouvrés (lundi→vendredi, hors jours fériés) selon votre rythme. Ajustez-le pour refléter vos congés — la projection de CA et les cotisations s'ajustent." />
+                </div>
                 {chartData.map((m, i) => {
                   const now = new Date();
                   const isPastMonth = year < now.getFullYear() || (year === now.getFullYear() && i < now.getMonth());
-                  const daysInMonth = new Date(year, i + 1, 0).getDate();
+                  const fullMonth = countWorkingDays(year, i + 1, daysPerWeek);
                   return (
                     <div key={m.name} className="py-2.5 flex items-center justify-center">
                       <input
                         type="number"
                         min="0"
-                        max={daysInMonth}
-                        value={vacations[i] || 0}
+                        max={fullMonth}
+                        value={workedDays[i] ?? fullMonth}
                         disabled={isPastMonth}
                         onChange={(e) => {
-                          const v = Math.max(0, Math.min(daysInMonth, parseInt(e.target.value) || 0));
-                          setVacations((prev) => { const next = [...prev]; next[i] = v; return next; });
+                          const v = Math.max(0, Math.min(fullMonth, parseInt(e.target.value) || 0));
+                          setWorkedDays((prev) => { const next = [...prev]; next[i] = v; return next; });
                         }}
                         onBlur={(e) => {
-                          const v = Math.max(0, Math.min(daysInMonth, parseInt(e.target.value) || 0));
-                          void upsertVacationDayAction(year, i + 1, v);
+                          const v = Math.max(0, Math.min(fullMonth, parseInt(e.target.value) || 0));
+                          void upsertWorkedDayAction(year, i + 1, v);
                         }}
                         className="w-10 text-center text-xs font-medium text-ardoise-700 border border-ardoise-200 rounded hover:border-ardoise-300 focus:border-brand-500 focus:outline-none bg-transparent transition-colors py-1 disabled:bg-ardoise-50 disabled:text-ardoise-300 disabled:cursor-not-allowed disabled:hover:border-ardoise-200 font-mono"
                       />
@@ -1240,8 +1301,8 @@ function TaxesTab() {
   // Monthly activity for the selected year (CA + charges)
   const [monthly, setMonthly] = useState<MonthlyActivityMonth[] | null>(null);
   const [monthlyLoading, setMonthlyLoading] = useState(true);
-  // Vacations for projection (future months / future years)
-  const [vacations, setVacations] = useState<number[]>(Array(12).fill(0));
+  // Jours travaillés saisis par mois (projection) ; null = non saisi → défaut.
+  const [workedDays, setWorkedDays] = useState<(number | null)[]>(Array(12).fill(null));
   // Past-year monthly used as a fallback to derive a daily rate for future-year projection
   const [pastReference, setPastReference] = useState<MonthlyActivityMonth[] | null>(null);
   // Fallback bordereaux : revenuBNC dérivé du CA des passages + cotisations estimées.
@@ -1271,7 +1332,7 @@ function TaxesTab() {
     });
   }, [year]);
 
-  // Load monthly activity + vacations for the selected year.
+  // Load monthly activity + jours travaillés for the selected year.
   // En fallback (pas de banque, bordereaux présents) : on lit les passages et on
   // injecte URSSAF/CARPIMKO estimés au prorata du CA mensuel pour que le calcul
   // BNC réel reste correct (BNC = CA − charges déductibles).
@@ -1281,7 +1342,7 @@ function TaxesTab() {
     (async () => {
       const [core, v] = await Promise.all([
         loadYearCore(year),
-        getVacationsAction(year),
+        getWorkedDaysAction(year),
       ]);
       const useFallback = core.isEstimated;
       setIsEstimated(useFallback);
@@ -1304,7 +1365,7 @@ function TaxesTab() {
       }
 
       setMonthly(months);
-      setVacations(v);
+      setWorkedDays(v);
       setMonthlyLoading(false);
     })().catch(() => setMonthlyLoading(false));
   }, [year, loadYearCore, loadEstimate, bankConnected]);
@@ -1359,7 +1420,7 @@ function TaxesTab() {
         const isPast = isPastYear || (y === now.getFullYear() && i < currentMonthIdx);
         if (!isPast || m.income <= 0) return;
         const wd = countWorkingDays(y, i + 1, daysPerWeek);
-        const worked = Math.max(0, wd - (vacations[i] || 0));
+        const worked = workedDays[i] ?? wd;
         if (worked > 0) {
           totalBNC += computeBNC(m);
           totalDays += worked;
@@ -1388,12 +1449,12 @@ function TaxesTab() {
         const totalWd = countWorkingDays(year, currentMonthIdx + 1, daysPerWeek);
         const remainingWd = countRemainingWorkingDays(year, currentMonthIdx + 1, now.getDate() + 1, daysPerWeek);
         const ratio = totalWd > 0 ? remainingWd / totalWd : 0;
-        const remainingVac = (vacations[currentMonthIdx] || 0) * ratio;
-        const worked = Math.max(0, remainingWd - remainingVac);
+        const monthWorked = workedDays[currentMonthIdx] ?? totalWd;
+        const worked = Math.max(0, monthWorked * ratio);
         bncProjection += daily * worked;
         for (let i = currentMonthIdx + 1; i < 12; i++) {
           const wd = countWorkingDays(year, i + 1, daysPerWeek);
-          const worked2 = Math.max(0, wd - (vacations[i] || 0));
+          const worked2 = workedDays[i] ?? wd;
           bncProjection += daily * worked2;
         }
       }
@@ -1415,7 +1476,7 @@ function TaxesTab() {
     let totalBnc = 0;
     for (let i = 0; i < 12; i++) {
       const wd = countWorkingDays(year, i + 1, daysPerWeek);
-      const worked = Math.max(0, wd - (vacations[i] || 0));
+      const worked = workedDays[i] ?? wd;
       totalBnc += daily * worked;
     }
     return {
@@ -1424,7 +1485,7 @@ function TaxesTab() {
       isProjected: true,
       pasYtdReel: 0,
     };
-  }, [hp, monthly, vacations, year, currentYear, pastReference, pasRate, daysPerWeek]);
+  }, [hp, monthly, workedDays, year, currentYear, pastReference, pasRate, daysPerWeek]);
 
   const revenuImposable = revenuBNC + autresRevenus;
 
@@ -1755,14 +1816,15 @@ function TaxesTab() {
 // ── Summary Tab ──
 
 // Tooltip détaillé : pour la barre "Reste à vivre", on affiche la décomposition
-// du calcul (solde + encaissements − échéances − charges) plutôt qu'un simple
-// montant, pour que l'utilisateur comprenne d'où sort le chiffre.
+// du calcul (solde + encaissements − cotisations provisionnées − charges) plutôt
+// qu'un simple montant, pour que l'utilisateur comprenne d'où sort le chiffre.
 // Défini au niveau module (pas dans le render) — reçoit les valeurs du calcul en props.
-function CashTooltip({ active, payload, defaultBalance, resteAVivre }: {
+function CashTooltip({ active, payload, defaultBalance, resteAVivre, horizonLabel }: {
   active?: boolean;
   payload?: Array<{ payload: { key: string; value: number } }>;
   defaultBalance: number;
-  resteAVivre: { projIncome: number; echeances: number; chargesProProjetees: number };
+  resteAVivre: { projIncome: number; provisionCotisations: number; chargesProProjetees: number };
+  horizonLabel: string;
 }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
@@ -1775,10 +1837,10 @@ function CashTooltip({ active, payload, defaultBalance, resteAVivre }: {
   if (d.key === "reste") {
     return (
       <div className="rounded-lg border border-ardoise-200 bg-white px-3 py-2.5 text-[11px] shadow-lg space-y-1 min-w-[220px]">
-        <p className="font-semibold text-ardoise-900 mb-1.5">Reste à vivre — fin du mois</p>
+        <p className="font-semibold text-ardoise-900 mb-1.5">Reste à vivre — fin {horizonLabel}</p>
         {line("Trésorerie actuelle", formatCurrency(defaultBalance))}
         {line("Encaissements estimés", `+ ${formatCurrency(resteAVivre.projIncome)}`)}
-        {line("Échéances fiscales/sociales", `− ${formatCurrency(resteAVivre.echeances)}`)}
+        {line("Cotisations provisionnées", `− ${formatCurrency(resteAVivre.provisionCotisations)}`)}
         {line("Charges pro. projetées", `− ${formatCurrency(resteAVivre.chargesProProjetees)}`)}
         <div className="h-px bg-ardoise-100 my-1.5" />
         {line("Reste à vivre", formatCurrency(d.value), true)}
@@ -1819,6 +1881,11 @@ function SummaryTab() {
   // estimées via getCotisationsEstimate. La carte "Trésorerie prévisionnelle"
   // reste indisponible (besoin du solde bancaire).
   const [isEstimated, setIsEstimated] = useState(false);
+
+  // Mois cible de la projection de trésorerie (carte "Trésorerie prévisionnelle").
+  // Par défaut = fin du mois courant ; l'utilisateur peut projeter jusqu'à décembre.
+  const currentMonthIdx = new Date().getMonth();
+  const [targetMonth, setTargetMonth] = useState(currentMonthIdx);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
@@ -1861,75 +1928,17 @@ function SummaryTab() {
     return acc ? parseFloat(acc.balance) : 0;
   }, [accounts, hp]);
 
-  // 2. Reste à vivre projeté à fin du mois courant : solde bancaire +
-  // encaissements estimés (moyenne mensuelle des mois écoulés × fraction du mois
-  // restante) − échéances fiscales/sociales à venir (calendrier) − charges pro
-  // projetées. Même logique que l'onglet "Reste à vivre", à l'horizon fin du
-  // mois (le plus court) pour rester comparable à la trésorerie actuelle.
-  const prefs: PaymentPreferences = useMemo(() => {
-    if (!hp) return DEFAULT_PREFERENCES;
-    return {
-      urssafFrequency: hp.urssafFrequency,
-      urssafPayDay: hp.urssafPayDay,
-      pasFrequency: hp.pasFrequency,
-      carpimkoFrequency: hp.carpimkoFrequency,
-      carpimkoPayDay: hp.carpimkoPayDay,
-      activityStartDate: hp.activityStartDate,
-    };
-  }, [hp]);
-  const calendar = useMemo(() => buildCalendar(prefs), [prefs]);
-
-  const resteAVivre = useMemo(() => {
-    const now = new Date();
-    const currentMonthIdx = now.getMonth();
-    const dayOfMonth = now.getDate();
-    const daysInMonth = new Date(currentYear, currentMonthIdx + 1, 0).getDate();
-    const fractionRemainingCurrentMonth = Math.max(0, (daysInMonth - dayOfMonth) / daysInMonth);
-    const targetIdx = currentMonthIdx; // fin du mois courant
-
-    const pastMonths = monthlyData.slice(0, currentMonthIdx);
-    // On ne moyenne que sur les mois réellement actifs (encaissements > 0).
-    // Les mois à zéro en début d'année (avant le démarrage d'activité) tiraient
-    // la moyenne vers le bas et sous-estimaient les projections. Fallback sur
-    // tous les mois écoulés, puis sur le premier mois, si aucun mois actif.
-    const activeMonths = pastMonths.filter((m) => m.income > 0);
-    const sample = activeMonths.length > 0
-      ? activeMonths
-      : pastMonths.length > 0 ? pastMonths : monthlyData.slice(0, 1);
-    const avg = (sel: (m: typeof monthlyData[number]) => number) =>
-      sample.length ? sample.reduce((s, m) => s + sel(m), 0) / sample.length : 0;
-    const avgIncome = avg((m) => m.income);
-    // `autresDepenses` = professional_expenses + retrocession + madelin. On le décompose
-    // en chargesPro (professional_expenses) + retro/madelin — deux ensembles disjoints —
-    // pour ne pas compter professional_expenses/retro/madelin deux fois.
-    const avgChargesPro = avg((m) => m.chargesPro);
-    const avgRetroMadelin = avg((m) => m.retrocession + m.madelin);
-
-    const monthsBetween = targetIdx > currentMonthIdx
-      ? fractionRemainingCurrentMonth + (targetIdx - currentMonthIdx)
-      : fractionRemainingCurrentMonth;
-
-    const projIncome = avgIncome * monthsBetween;
-    const projChargesPro = avgChargesPro * monthsBetween;
-    const projRetroMadelin = avgRetroMadelin * monthsBetween;
-
-    let urssafDue = 0;
-    let carpimkoDue = 0;
-    let pasDue = 0;
-    for (let m = currentMonthIdx; m <= targetIdx; m++) {
-      for (const e of calendar[m] || []) {
-        if (m === currentMonthIdx && e.day < dayOfMonth) continue;
-        if (e.type === "urssaf") urssafDue += estimate?.urssafParEcheance ?? 0;
-        else if (e.type === "carpimko") carpimkoDue += estimate?.carpimkoParEcheance ?? 0;
-        else if (e.type === "ir") pasDue += estimate?.pasParEcheance ?? 0;
-      }
-    }
-
-    const echeances = urssafDue + carpimkoDue + pasDue;
-    const chargesProProjetees = projChargesPro + projRetroMadelin;
-    const total = defaultBalance + projIncome - echeances - chargesProProjetees;
-    return { total, projIncome, echeances, chargesProProjetees };
-  }, [calendar, estimate, monthlyData, defaultBalance, currentYear]);
+  // 2. Reste à vivre projeté au mois cible. Calcul mutualisé avec le dashboard
+  // et l'onglet « Reste à vivre » via computeResteAVivre (modèle par accrual).
+  const resteAVivre = useMemo(
+    () => computeResteAVivre({
+      months: monthlyData,
+      estimate,
+      startingBalance: defaultBalance,
+      targetMonthIdx: targetMonth,
+    }),
+    [estimate, monthlyData, defaultBalance, targetMonth],
+  );
 
   const solde = resteAVivre.total;
 
@@ -2032,6 +2041,11 @@ function SummaryTab() {
 
   // En fallback bordereaux : pas de solde bancaire réel → on ne rend aucune
   // donnée dans le chart pour ne pas afficher des bars trompeuses sous l'overlay.
+  // Libellé de l'horizon de projection : "du mois courant" par défaut, sinon le
+  // mois cible choisi ("de septembre 2026").
+  const projTargetIdx = Math.max(currentMonthIdx, targetMonth);
+  const horizonLabel = projTargetIdx === currentMonthIdx ? "du mois courant" : `de ${MONTHS_LONG[projTargetIdx]} ${currentYear}`;
+
   const chartData = isEstimated ? [] : [
     { key: "treso", name: "Trésorerie actuelle", value: Math.round(defaultBalance) },
     { key: "reste", name: "Reste à vivre", value: Math.round(resteAVivre.total) },
@@ -2049,6 +2063,21 @@ function SummaryTab() {
         <DataMissingOverlay bankConnected={(bankConnected && !isEstimated) || isLoading} />
         <div className="flex items-center justify-between mb-4 gap-3">
           <h3 className="text-base font-semibold text-ardoise-900">Trésorerie prévisionnelle</h3>
+          <select
+            aria-label="Mois de projection"
+            value={targetMonth}
+            onChange={(e) => setTargetMonth(Number(e.target.value))}
+            disabled={isEstimated || isLoading || !bankConnected}
+            className="border border-ardoise-200 bg-transparent pl-3 pr-8 py-1.5 rounded-md text-sm capitalize transition-all hover:border-ardoise-400 focus:border-violet-500 focus:outline-none appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {MONTHS_LONG.map((label, idx) =>
+              idx >= currentMonthIdx ? (
+                <option key={idx} value={idx}>
+                  {label} {currentYear}
+                </option>
+              ) : null,
+            )}
+          </select>
         </div>
 
         {isLoading ? (
@@ -2075,7 +2104,7 @@ function SummaryTab() {
                 <ReferenceLine y={0} stroke="#2E2440" strokeWidth={1.5} />
                 <Tooltip
                   cursor={{ fill: "rgba(0,0,0,0.04)" }}
-                  content={<CashTooltip defaultBalance={defaultBalance} resteAVivre={resteAVivre} />}
+                  content={<CashTooltip defaultBalance={defaultBalance} resteAVivre={resteAVivre} horizonLabel={horizonLabel} />}
                 />
                 <Bar dataKey="value" radius={[4, 4, 4, 4]} maxBarSize={64}>
                   <LabelList
@@ -2096,8 +2125,8 @@ function SummaryTab() {
 
             <div className="mt-6 pt-4 border-t border-ardoise-100">
               <div className="flex items-center gap-1.5 mb-1">
-                <p className="text-xs text-ardoise-400">Reste à vivre estimé fin du mois</p>
-                <InfoTooltip text="Trésorerie projetée à la fin du mois courant : solde actuel du compte par défaut, plus vos encaissements estimés du mois, moins les échéances fiscales/sociales restantes et vos charges professionnelles projetées." />
+                <p className="text-xs text-ardoise-400">Reste à vivre estimé fin {horizonLabel}</p>
+                <InfoTooltip text={`Trésorerie projetée à la fin ${horizonLabel} : solde actuel du compte par défaut, plus vos encaissements estimés, moins les échéances fiscales/sociales restantes et vos charges professionnelles projetées.`} />
               </div>
               <p className={`text-3xl font-bold font-mono ${isEstimated ? "text-ardoise-300" : solde >= 0 ? "text-ardoise-900" : "text-red-500"}`}>
                 {isEstimated ? "—" : formatSigned(solde)}
@@ -2105,7 +2134,7 @@ function SummaryTab() {
             </div>
 
             <p className="mt-4 text-xs text-ardoise-500 leading-relaxed">
-              Trésorerie projetée à la fin du mois courant en partant de votre solde actuel, en ajoutant vos encaissements estimés du mois et en retranchant les échéances fiscales/sociales restantes ainsi que vos charges professionnelles projetées.
+              Trésorerie projetée à la fin {horizonLabel} en partant de votre solde actuel, en ajoutant vos encaissements estimés et en retranchant les échéances fiscales/sociales restantes ainsi que vos charges professionnelles projetées.
             </p>
             <p className="mt-2 text-xs text-ardoise-500 leading-relaxed">
               Un montant positif indique une trésorerie suffisante pour couvrir ces dépenses à venir.
@@ -2239,19 +2268,6 @@ function RemainderTab() {
     })().catch(() => setLoading(false));
   }, [currentYear, loadYearCore, loadEstimate, bankConnected]);
 
-  const prefs: PaymentPreferences = useMemo(() => {
-    if (!hp) return DEFAULT_PREFERENCES;
-    return {
-      urssafFrequency: hp.urssafFrequency,
-      urssafPayDay: hp.urssafPayDay,
-      pasFrequency: hp.pasFrequency,
-      carpimkoFrequency: hp.carpimkoFrequency,
-      carpimkoPayDay: hp.carpimkoPayDay,
-      activityStartDate: hp.activityStartDate,
-    };
-  }, [hp]);
-  const calendar = useMemo(() => buildCalendar(prefs), [prefs]);
-
   const defaultBalance = useMemo(() => {
     if (!hp?.defaultBankAccountId) return 0;
     const acc = accounts.find((a) => a.id === hp.defaultBankAccountId);
@@ -2272,34 +2288,8 @@ function RemainderTab() {
     remainder: number;
   };
 
-  const MONTHS_LONG = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-
   const breakdowns = useMemo<Breakdown[]>(() => {
-    const now = new Date();
-    const currentMonthIdx = now.getMonth();
-    const dayOfMonth = now.getDate();
-    const daysInMonth = new Date(currentYear, currentMonthIdx + 1, 0).getDate();
-    const fractionRemainingCurrentMonth = Math.max(0, (daysInMonth - dayOfMonth) / daysInMonth);
-
-    // Moyennes sur les mois écoulés (hors mois courant). Si on est en janvier
-    // ou qu'on n'a aucun historique, on prend le mois courant comme proxy.
-    const pastMonths = monthlyData.slice(0, currentMonthIdx);
-    // On ne moyenne que sur les mois réellement actifs (encaissements > 0).
-    // Les mois à zéro en début d'année (avant le démarrage d'activité) tiraient
-    // la moyenne vers le bas et sous-estimaient les projections. Fallback sur
-    // tous les mois écoulés, puis sur le premier mois, si aucun mois actif.
-    const activeMonths = pastMonths.filter((m) => m.income > 0);
-    const sample = activeMonths.length > 0
-      ? activeMonths
-      : pastMonths.length > 0 ? pastMonths : monthlyData.slice(0, 1);
-    const avg = (sel: (m: typeof monthlyData[number]) => number) =>
-      sample.length ? sample.reduce((s, m) => s + sel(m), 0) / sample.length : 0;
-    const avgIncome = avg((m) => m.income);
-    // autresDepenses (= chargesPro + retro + madelin) décomposé en deux ensembles
-    // disjoints pour éviter le double comptage.
-    const avgChargesPro = avg((m) => m.chargesPro);
-    const avgRetroMadelin = avg((m) => m.retrocession + m.madelin);
-
+    const currentMonthIdx = new Date().getMonth();
     const eomIdx = currentMonthIdx;
     const eoqIdx = Math.min(11, Math.floor(currentMonthIdx / 3) * 3 + 2);
     const eoyIdx = 11;
@@ -2307,37 +2297,20 @@ function RemainderTab() {
     const compute = (key: string, label: string, targetIdx: number): Breakdown => {
       const lastDay = new Date(currentYear, targetIdx + 1, 0).getDate();
       const horizonDate = `${lastDay} ${MONTHS_LONG[targetIdx]} ${currentYear}`;
-
-      const monthsBetween = targetIdx > currentMonthIdx
-        ? fractionRemainingCurrentMonth + (targetIdx - currentMonthIdx)
-        : fractionRemainingCurrentMonth;
-
-      const projIncome = avgIncome * monthsBetween;
-      const projChargesPro = avgChargesPro * monthsBetween;
-      const projRetroMadelin = avgRetroMadelin * monthsBetween;
-
-      let urssafDue = 0;
-      let carpimkoDue = 0;
-      let pasDue = 0;
-      for (let m = currentMonthIdx; m <= targetIdx; m++) {
-        for (const e of calendar[m] || []) {
-          // Échéance du mois en cours déjà passée → on ne la compte pas
-          // (elle apparaîtra dans monthlyData une fois prélevée).
-          if (m === currentMonthIdx && e.day < dayOfMonth) continue;
-          if (e.type === "urssaf") urssafDue += estimate?.urssafParEcheance ?? 0;
-          else if (e.type === "carpimko") carpimkoDue += estimate?.carpimkoParEcheance ?? 0;
-          else if (e.type === "ir") pasDue += estimate?.pasParEcheance ?? 0;
-        }
-      }
-
-      const totalCharges = urssafDue + carpimkoDue + pasDue + projChargesPro + projRetroMadelin;
-      const remainder = defaultBalance + projIncome - totalCharges;
-
+      // Calcul mutualisé (accrual) — cf. computeResteAVivre.
+      const b = computeResteAVivre({
+        months: monthlyData,
+        estimate,
+        startingBalance: defaultBalance,
+        targetMonthIdx: targetIdx,
+      });
       return {
         key, label, horizonDate,
-        projIncome, urssafDue, carpimkoDue, pasDue,
-        projChargesPro, projRetroMadelin,
-        totalCharges, remainder,
+        projIncome: b.projIncome,
+        urssafDue: b.urssafDue, carpimkoDue: b.carpimkoDue, pasDue: b.pasDue,
+        projChargesPro: b.projChargesPro, projRetroMadelin: b.projRetroMadelin,
+        totalCharges: b.provisionCotisations + b.chargesProProjetees,
+        remainder: b.total,
       };
     };
 
@@ -2346,7 +2319,7 @@ function RemainderTab() {
     if (eoqIdx !== eomIdx) out.push(compute("eoq", "Fin du trimestre", eoqIdx));
     if (eoyIdx !== eoqIdx && eoyIdx !== eomIdx) out.push(compute("eoy", "Fin de l'année", eoyIdx));
     return out;
-  }, [calendar, estimate, monthlyData, defaultBalance, currentYear]);
+  }, [estimate, monthlyData, defaultBalance, currentYear]);
 
   const isLoading = loading || transactionsLoading;
 
@@ -2354,7 +2327,7 @@ function RemainderTab() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <h2 className="text-lg font-bold text-ardoise-900">Reste à vivre</h2>
-        <InfoTooltip text="Trésorerie projetée à différents horizons : on part de votre solde bancaire, on y ajoute vos encaissements estimés (moyenne mensuelle des mois écoulés) et on déduit les échéances fiscales/sociales à venir ainsi qu'une moyenne de vos charges pro. Indicatif — ne tient pas compte de régularisations ou de dépenses ponctuelles." />
+        <InfoTooltip text="Trésorerie projetée à différents horizons : on part de votre solde bancaire, on y ajoute vos encaissements estimés (moyenne mensuelle des mois écoulés) et on déduit les cotisations provisionnées au prorata (URSSAF, CARPIMKO, impôt) ainsi qu'une moyenne de vos charges pro. Indicatif — ne tient pas compte de régularisations ou de dépenses ponctuelles." />
       </div>
 
       {isEstimated && (
@@ -2460,7 +2433,7 @@ function RemainderTab() {
       </div>
 
       <p className="text-[11px] text-ardoise-400 leading-relaxed">
-        Estimation indicative. Encaissements et charges pro. extrapolés à partir de la moyenne mensuelle des mois écoulés ; cotisations sociales et impôts pris sur le calendrier d&apos;échéances avec votre estimation annualisée. Ne tient pas compte d&apos;éventuelles régularisations URSSAF/CARPIMKO ni de dépenses ponctuelles.
+        Estimation indicative. Encaissements et charges pro. extrapolés à partir de la moyenne mensuelle des mois écoulés ; cotisations sociales et impôts provisionnés au prorata des encaissements projetés (taux effectif issu de votre estimation annualisée). Ne tient pas compte d&apos;éventuelles régularisations URSSAF/CARPIMKO ni de dépenses ponctuelles.
       </p>
     </div>
   );
@@ -2484,6 +2457,12 @@ function SimulationTab() {
   // Fallback bordereaux : la baseline est issue des passages, pas des transactions
   // bancaires. Sert à signaler la provenance de la simulation.
   const [isEstimated, setIsEstimated] = useState(false);
+  // Charges pro réelles YTD (pour extrapoler le reste à vivre) + situation
+  // fiscale de l'année (pour l'IR au barème).
+  const [monthlyCharges, setMonthlyCharges] = useState<{ chargesPro: number; retrocession: number; madelin: number }[]>([]);
+  const [currentYearFiscal, setCurrentYearFiscal] = useState<{
+    maritalStatus: string; dependentChildren: number; isSingleParent?: boolean; otherIncome: string;
+  } | null>(null);
 
   // Baseline = CA annualisé courant simulé via la même fonction que la valeur
   // "Simulé". Évite la confusion N-2/forfaitaire — comparaison apples-to-apples.
@@ -2493,7 +2472,19 @@ function SimulationTab() {
     (async () => {
       const core = await loadYearCore(currentYear);
       setIsEstimated(core.isEstimated);
-      const est = await loadEstimate(currentYear);
+      setMonthlyCharges(core.months.map((m) => ({ chargesPro: m.chargesPro, retrocession: m.retrocession, madelin: m.madelin })));
+      const [est, currFiscal] = await Promise.all([
+        loadEstimate(currentYear),
+        getFiscalSituationAction(currentYear),
+      ]);
+      if (currFiscal) {
+        setCurrentYearFiscal({
+          maritalStatus: currFiscal.maritalStatus,
+          dependentChildren: currFiscal.dependentChildren,
+          isSingleParent: (currFiscal as { isSingleParent?: boolean }).isSingleParent,
+          otherIncome: currFiscal.otherIncome,
+        });
+      }
       const annualCA = est?.revenuAnnualise ?? 0;
       const baseSim = annualCA > 0 ? await simulateCotisations(annualCA) : null;
       setBaselineCA(annualCA);
@@ -2523,11 +2514,6 @@ function SimulationTab() {
   }, [simulatedCA, baselineCA, baseline]);
 
   const sliderMax = useMemo(() => Math.max(150_000, Math.round(baselineCA * 1.5 / 10_000) * 10_000), [baselineCA]);
-
-  const setPreset = useCallback((mult: number) => {
-    if (baselineCA <= 0) return;
-    setSimulatedCA(Math.round(baselineCA * mult / 1000) * 1000);
-  }, [baselineCA]);
 
   const chartData = useMemo(() => {
     if (!baseline || !simulated) return [];
@@ -2592,6 +2578,46 @@ function SimulationTab() {
     { label: "Solde avant charges pro", before: baseline?.remunerationNette ?? 0, after: simulated?.remunerationNette ?? 0, isReward: true },
   ];
 
+  // ── Estimation du reste à vivre ──
+  // reste à vivre = CA − URSSAF − CARPIMKO − IR (barème) − charges pro.
+  // Charges pro : fixes (loyer/matériel/Madelin) extrapolées de l'activité réelle
+  // et tenues constantes ; rétrocession proratisée au CA (elle suit l'activité).
+  // Mêmes briques que le "Reste à vivre" annuel de l'onglet Synthèse → cohérent.
+  const monthsElapsed = new Date().getMonth() + 1;
+  const annualize = (ytd: number) => (monthsElapsed > 0 ? Math.round((ytd / monthsElapsed) * 12) : 0);
+  const chargesFixesAnnuelles = annualize(monthlyCharges.reduce((s, m) => s + m.chargesPro + m.madelin, 0));
+  const retroAnnuelBaseline = annualize(monthlyCharges.reduce((s, m) => s + m.retrocession, 0));
+
+  const irForRevenu = (revenuAnnuel: number): number => {
+    if (!hp || revenuAnnuel <= 0) return 0;
+    const revenuNet = hp.taxRegime === "micro_bnc" ? revenuAnnuel * 0.66 : revenuAnnuel;
+    const otherIncome = currentYearFiscal ? Number(currentYearFiscal.otherIncome) : 0;
+    const revenuImposable = Math.round(revenuNet + otherIncome);
+    if (revenuImposable <= 0) return 0;
+    const { parts, partsDeReference } = computeParts({
+      maritalStatus: (currentYearFiscal?.maritalStatus as "celibataire" | "marie" | "pacse") ?? "celibataire",
+      dependentChildren: currentYearFiscal?.dependentChildren ?? 0,
+      isSingleParent: currentYearFiscal?.isSingleParent ?? false,
+    });
+    return computeIR({ revenuImposable, parts, partsDeReference, incomeYear: currentYear }).impot;
+  };
+
+  // Détail (annuel) pour un CA + sa simulation de cotisations donnés.
+  const resteAVivreDetail = (ca: number, sim: SimulationResult | null) => {
+    const ir = irForRevenu(ca);
+    const retro = baselineCA > 0 ? Math.round(retroAnnuelBaseline * (ca / baselineCA)) : retroAnnuelBaseline;
+    const chargesPro = chargesFixesAnnuelles + retro;
+    const soldeAvantCharges = Math.max(0, ca - (sim?.urssafAnnuel ?? 0) - (sim?.carpimkoAnnuel ?? 0) - ir);
+    const reste = Math.max(0, soldeAvantCharges - chargesPro);
+    return { ca, urssaf: sim?.urssafAnnuel ?? 0, carpimko: sim?.carpimkoAnnuel ?? 0, ir, chargesPro, soldeAvantCharges, reste };
+  };
+  const ravBaseline = resteAVivreDetail(baselineCA, baseline);
+  const ravSimulated = resteAVivreDetail(simulatedCA, simulated);
+  // Sans banque : charges pro inconnues → on affiche le solde avant charges.
+  const ravValue = isEstimated ? ravSimulated.soldeAvantCharges : ravSimulated.reste;
+  const ravBefore = isEstimated ? ravBaseline.soldeAvantCharges : ravBaseline.reste;
+  const ravDiff = ravValue - ravBefore;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       {/* ── Section 1 : Estimation du C.A. ── */}
@@ -2602,14 +2628,6 @@ function SimulationTab() {
 
       {/* ── Section 2 : Estimation du reste à régler ── */}
       <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-bold text-ardoise-900">Estimation du reste à régler</h3>
-          <InfoTooltip text="Calcul via OpenFisca (régime PAMC IDEL) + barème CARPIMKO. À titre indicatif : en pratique, l'URSSAF est calculée sur le revenu N-2 ; cette simulation suppose que le revenu indiqué est celui de l'année en cours." />
-        </div>
-        <ExportButtons onCsv={handleExportCsv} onPdf={handleExportPdf} disabled={!baseline || !simulated} />
-      </div>
       {isEstimated && (
         <div className="text-[11px] text-ardoise-400 flex items-center gap-1.5">
           <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
@@ -2641,26 +2659,6 @@ function SimulationTab() {
               <p className="text-xs text-ardoise-500">CA actuel projeté</p>
             )}
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {[0.8, 0.9, 1, 1.1, 1.2].map((m) => {
-              const isActive = baselineCA > 0 && Math.abs(simulatedCA - baselineCA * m) < 600;
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setPreset(m)}
-                  disabled={baselineCA <= 0}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors disabled:opacity-30 ${
-                    isActive
-                      ? "bg-brand-600 text-white"
-                      : "bg-ardoise-100 text-ardoise-700 hover:bg-ardoise-200"
-                  }`}
-                >
-                  {m === 1 ? "Actuel" : `${m > 1 ? "+" : ""}${Math.round((m - 1) * 100)} %`}
-                </button>
-              );
-            })}
-          </div>
         </div>
         <input
           type="range"
@@ -2674,15 +2672,26 @@ function SimulationTab() {
         />
       </div>
 
-      {/* KPI list + chart (empilés dans la colonne) */}
+      {/* Carte unique : titre + tableau/graphe côte à côte, puis reste à vivre en dessous */}
       <div className="space-y-3">
-        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 divide-y divide-ardoise-100">
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4 space-y-3">
+          {/* Header dans la carte */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-ardoise-900">Estimation du reste à régler</h3>
+              <InfoTooltip text="Calcul via OpenFisca (régime PAMC IDEL) + barème CARPIMKO. À titre indicatif : en pratique, l'URSSAF est calculée sur le revenu N-2 ; cette simulation suppose que le revenu indiqué est celui de l'année en cours." />
+            </div>
+            <ExportButtons onCsv={handleExportCsv} onPdf={handleExportPdf} disabled={!baseline || !simulated} />
+          </div>
+          {/* Tableau + graphe côte à côte */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
+          <div className="divide-y divide-ardoise-100 flex flex-col rounded-[12px] border border-ardoise-100">
           {cards.map((c) => {
             const diff = c.after - c.before;
             const isUp = diff > 0;
             const isGood = c.isReward ? isUp : !isUp;
             return (
-              <div key={c.label} className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <div key={c.label} className="flex-1 flex items-center justify-between gap-3 px-4 py-2.5">
                 <p className="text-xs uppercase tracking-wide text-ardoise-500">{c.label}</p>
                 <div className="flex items-baseline gap-2 text-right">
                   <p className="text-sm font-bold text-ardoise-900 font-mono">{formatCurrency(c.after)}</p>
@@ -2699,8 +2708,7 @@ function SimulationTab() {
           })}
         </div>
 
-        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
-          <div ref={chartRef} className="w-full h-60">
+          <div ref={chartRef} className="w-full h-60 rounded-[12px] border border-ardoise-100 p-2">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E1DBEC" />
@@ -2713,6 +2721,65 @@ function SimulationTab() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </div>
+        </div>
+
+        {/* Estimation du reste à vivre */}
+        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4">
+          <div className="flex items-center gap-1.5 mb-3">
+            <h4 className="text-sm font-bold text-ardoise-900">Estimation du reste à vivre</h4>
+            <InfoTooltip text="Ce qu'il vous reste pour vivre une fois tout payé : CA − cotisations (URSSAF + CARPIMKO) − impôt sur le revenu (barème) − charges professionnelles. Charges fixes extrapolées de votre activité réelle et tenues constantes ; rétrocession proratisée au CA. L'impôt retranché est le vrai IR au barème (parts, quotient familial), pas le PAS ci-dessus qui n'est qu'un acompte prélevé à la source." />
+          </div>
+
+          <div className="flex items-end justify-between gap-4 flex-wrap mb-3">
+            <div>
+              <p className="text-xs text-ardoise-400 mb-0.5">{isEstimated ? "Solde avant charges pro (annuel)" : "Reste à vivre (annuel)"}</p>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <p className={`text-3xl font-bold font-mono ${ravValue >= 0 ? "text-ardoise-900" : "text-alerte-600"}`}>{formatCurrency(ravValue)}</p>
+                {Math.abs(ravDiff) >= 1 && (
+                  <p className={`text-xs font-medium font-mono ${ravDiff > 0 ? "text-menthe-600" : "text-alerte-600"}`}>
+                    {ravDiff > 0 ? "+" : ""}{formatCurrency(ravDiff)} vs actuel
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-ardoise-400 mb-0.5">soit /mois</p>
+              <p className="text-lg font-bold font-mono text-ardoise-700">{formatCurrency(Math.round(ravValue / 12))}</p>
+            </div>
+          </div>
+
+          <div className="border-t border-ardoise-100 pt-3 space-y-1 text-[11px]">
+            {[
+              { label: "CA simulé", value: ravSimulated.ca, sign: "" },
+              { label: "URSSAF", value: ravSimulated.urssaf, sign: "−" },
+              { label: "CARPIMKO", value: ravSimulated.carpimko, sign: "−" },
+              { label: "Impôt sur le revenu (barème)", value: ravSimulated.ir, sign: "−" },
+              ...(isEstimated ? [] : [{ label: "Charges pro. estimées", value: ravSimulated.chargesPro, sign: "−" }]),
+            ].map((r) => (
+              <div key={r.label} className="flex items-center justify-between">
+                <span className="text-ardoise-500">{r.label}</span>
+                <span className="font-mono tabular-nums text-ardoise-700">{r.sign}{formatCurrency(r.value)}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between pt-1.5 mt-1 border-t border-ardoise-100 font-semibold text-ardoise-900">
+              <span>{isEstimated ? "Solde avant charges pro" : "Reste à vivre"}</span>
+              <span className="font-mono tabular-nums">{formatCurrency(ravValue)}</span>
+            </div>
+          </div>
+
+          <p className="mt-2 text-[11px] text-ardoise-400 leading-relaxed">
+            Simulation en régime stable (cotisations calculées sur le CA saisi). Pour votre situation réelle de l&apos;année — base forfaitaire début d&apos;activité ou revenu N-2 —, référez-vous à l&apos;onglet{" "}
+            <span className="font-medium text-ardoise-500">Ma synthèse</span>.
+          </p>
+
+          {isEstimated && (
+            <p className="mt-2 text-[11px] text-ardoise-400">
+              Charges pro. non estimées (banque non connectée) —{" "}
+              <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-600">connectez votre banque</Link>{" "}
+              pour un reste à vivre complet.
+            </p>
+          )}
         </div>
       </div>
 

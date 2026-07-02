@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useActionState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { updateProfileAction, updateNotificationsAction } from "@/actions/profile";
 import { changePasswordAction, deleteAccountAction, logoutAction } from "@/actions/auth";
@@ -17,6 +17,9 @@ const SELECT_CLASS = INPUT_CLASS + " appearance-none cursor-pointer";
 const PROFESSIONS = [
   { value: "nurse", label: "Infirmier(e)" },
 ] as const;
+
+const PROFILE_TABS = ["profile", "payments", "notifications", "account"] as const;
+type ProfileTab = (typeof PROFILE_TABS)[number];
 
 const TAX_REGIMES = [
   { value: "micro_bnc", label: "Micro-BNC" },
@@ -70,7 +73,18 @@ export function ProfileClient() {
   const [carpimkoPayDay, setCarpimkoPayDay] = useState<string>(hp?.carpimkoPayDay ?? "10");
   const [daysPerWeekWorked, setDaysPerWeekWorked] = useState<number>(hp?.daysPerWeekWorked ?? 5);
 
-  const [tab, setTab] = useState<"profile" | "payments" | "notifications" | "account">("profile");
+  const searchParams = useSearchParams();
+  // Onglet deep-linkable via ?tab= (utilisé par la recherche de la sidebar).
+  const paramTab = searchParams.get("tab");
+  const [tab, setTab] = useState<ProfileTab>(() =>
+    PROFILE_TABS.includes(paramTab as ProfileTab) ? (paramTab as ProfileTab) : "profile",
+  );
+  // Resynchronise si ?tab= change (navigation douce) — ajustement en render, sans effet.
+  const [prevParamTab, setPrevParamTab] = useState(paramTab);
+  if (paramTab !== prevParamTab) {
+    setPrevParamTab(paramTab);
+    if (PROFILE_TABS.includes(paramTab as ProfileTab)) setTab(paramTab as ProfileTab);
+  }
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [exportPending, setExportPending] = useState(false);

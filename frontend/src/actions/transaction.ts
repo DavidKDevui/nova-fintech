@@ -269,6 +269,43 @@ export async function getMonthlyActivityAction(year: number): Promise<{ months: 
   }
 }
 
+// Mouvement net mensuel (somme signée des montants) d'UN compte pour l'année donnée.
+// Sert à la tendance « trésorerie vs mois dernier » calibrée sur le compte par défaut
+// (getMonthlyActivityAction agrège tous les comptes, donc ne convient pas ici).
+export async function getAccountMonthlyNetAction(accountId: string, year: number): Promise<number[]> {
+  const out: number[] = new Array(12).fill(0);
+  const session = await getSession();
+  if (!session || session.accountType !== "practitioner") return out;
+  if (!isUuid(accountId)) return out;
+  const [hp] = await db.select({ id: practitioners.id }).from(practitioners).where(eq(practitioners.userId, session.id));
+  if (!hp) return out;
+  // Le compte doit appartenir au praticien.
+  const [acc] = await db
+    .select({ id: bankAccounts.id })
+    .from(bankAccounts)
+    .where(and(eq(bankAccounts.id, accountId), eq(bankAccounts.practitionerId, hp.id)));
+  if (!acc) return out;
+
+  const rows = await db
+    .select({
+      month: sql<number>`EXTRACT(MONTH FROM ${bankTransactions.date})::int`,
+      net: sql<string>`COALESCE(SUM(${bankTransactions.amount}), 0)`,
+    })
+    .from(bankTransactions)
+    .where(and(
+      eq(bankTransactions.bankAccountId, accountId),
+      gte(bankTransactions.date, `${year}-01-01`),
+      lte(bankTransactions.date, `${year}-12-31`),
+    ))
+    .groupBy(sql`EXTRACT(MONTH FROM ${bankTransactions.date})`);
+
+  for (const r of rows) {
+    const m = Number(r.month) - 1;
+    if (m >= 0 && m < 12) out[m] = Number(r.net);
+  }
+  return out;
+}
+
 export type CategoryTransaction = {
   id: string;
   date: string;

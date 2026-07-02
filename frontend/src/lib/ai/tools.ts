@@ -14,7 +14,7 @@ import {
   buildScenarioForecast,
   addCaAdjustment,
   clearCaAdjustments,
-  setVacationMonth,
+  setWorkedDaysMonth,
   setDaysPerWeek,
   listCaAdjustments,
 } from "@/lib/services/ca-scenario.service";
@@ -548,18 +548,21 @@ export function createToolExecutors(practitionerId: string, accountIds: string[]
       if (!Number.isInteger(month) || month < 1 || month > 12) return "Mois invalide (1 à 12).";
 
       const daysPerWeek = Number(hp.daysPerWeekWorked) || 5;
-      let days: number;
+      const fullMonth = countWorkingDays(year, month, daysPerWeek);
+      let workedDays: number;
       if (args.full_month) {
-        days = countWorkingDays(year, month, daysPerWeek);
+        // Mois entièrement chômé → 0 jour travaillé.
+        workedDays = 0;
       } else if (args.days_off != null) {
-        days = Number(args.days_off);
+        workedDays = Math.max(0, fullMonth - Number(args.days_off));
       } else {
         return "Précise full_month=true ou un nombre de jours (days_off).";
       }
 
-      const res = await setVacationMonth(practitionerId, year, month, days);
+      const res = await setWorkedDaysMonth(practitionerId, year, month, workedDays);
       if (!res.ok) return `Échec : ${res.error}`;
-      return `Disponibilité mise à jour : ${days} jour(s) non travaillé(s) en ${MONTH_SHORT[month - 1]} ${year}. La prévision et les cotisations vont s'ajuster.`;
+      const daysOff = fullMonth - workedDays;
+      return `Disponibilité mise à jour : ${workedDays} jour(s) travaillé(s) (${daysOff} chômé(s)) en ${MONTH_SHORT[month - 1]} ${year}. La prévision et les cotisations vont s'ajuster.`;
     },
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

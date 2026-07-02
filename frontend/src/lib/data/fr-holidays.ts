@@ -50,18 +50,30 @@ export function getFrenchHolidays(year: number): Set<string> {
   return set;
 }
 
-// Number of working days in a given month, prorated on the praticien's weekly rhythm.
-// `daysPerWeek` is between 1 and 7. Example : 5 j/sem en juin (30 j) → round(30 × 5/7) ≈ 21.
-export function countWorkingDays(year: number, month: number, daysPerWeek: number = 5): number {
-  const dpw = Math.max(1, Math.min(7, daysPerWeek));
+// Nombre réel de jours ouvrés "plein temps" dans un mois : les lundis→vendredis,
+// jours fériés français déduits. C'est la base d'un rythme 5 j/semaine.
+// `fromDay` (inclus) permet de ne compter que la fin du mois.
+export function countWeekdaysMinusHolidays(year: number, month: number, fromDay: number = 1): number {
+  const holidays = getFrenchHolidays(year);
   const daysInMonth = new Date(year, month, 0).getDate();
-  return Math.round(daysInMonth * dpw / 7);
+  let count = 0;
+  for (let day = Math.max(1, fromDay); day <= daysInMonth; day++) {
+    const dow = new Date(year, month - 1, day).getDay(); // 0=dim … 6=sam
+    if (dow >= 1 && dow <= 5 && !holidays.has(`${month}-${day}`)) count++;
+  }
+  return count;
 }
 
-// Same prorata applied to the remaining days from `fromDay` (inclusive) to end of month.
+// Jours travaillés par défaut dans le mois, mappés sur le rythme du praticien :
+// (lundis→vendredis hors fériés) × daysPerWeek / 5. Pour 5 j/sem → comptage exact ;
+// pour 4 j/sem → prorata 4/5 (on ignore quel jour est chômé).
+export function countWorkingDays(year: number, month: number, daysPerWeek: number = 5): number {
+  const dpw = Math.max(1, Math.min(7, daysPerWeek));
+  return Math.round(countWeekdaysMinusHolidays(year, month) * dpw / 5);
+}
+
+// Même mapping appliqué aux jours restants, de `fromDay` (inclus) à la fin du mois.
 export function countRemainingWorkingDays(year: number, month: number, fromDay: number, daysPerWeek: number = 5): number {
   const dpw = Math.max(1, Math.min(7, daysPerWeek));
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const remaining = Math.max(0, daysInMonth - Math.max(1, fromDay) + 1);
-  return Math.round(remaining * dpw / 7);
+  return Math.round(countWeekdaysMinusHolidays(year, month, fromDay) * dpw / 5);
 }

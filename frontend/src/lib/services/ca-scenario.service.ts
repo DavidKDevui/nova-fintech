@@ -28,8 +28,8 @@ export type StoredAdjustment = {
 
 /**
  * Facteur de disponibilité par mois (12 valeurs, 0..1) pour l'année cible :
- * (jours travaillables − jours de congés saisis) / jours travaillables.
- * Un mois entièrement off → 0, un mois normal → 1.
+ * jours travaillés saisis / jours ouvrés du mois.
+ * Un mois entièrement off → 0, un mois normal (non saisi) → 1.
  */
 export async function buildAvailabilityFactor(
   practitionerId: string,
@@ -44,17 +44,18 @@ export async function buildAvailabilityFactor(
       eq(practitionerVacations.year, year),
     ));
 
-  const vacationDays = Array<number>(12).fill(0);
+  // Jours travaillés saisis par mois ; null = non saisi → défaut = mois complet.
+  const workedDays = Array<number | null>(12).fill(null);
   for (const r of rows) {
-    if (r.month >= 1 && r.month <= 12) vacationDays[r.month - 1] = r.days;
+    if (r.month >= 1 && r.month <= 12) workedDays[r.month - 1] = r.workedDays;
   }
 
   const factor = Array<number>(12).fill(1);
   for (let m = 1; m <= 12; m++) {
     const workable = countWorkingDays(year, m, daysPerWeek);
     if (workable <= 0) { factor[m - 1] = 1; continue; }
-    const worked = Math.max(0, workable - vacationDays[m - 1]);
-    factor[m - 1] = worked / workable;
+    const worked = workedDays[m - 1] ?? workable;
+    factor[m - 1] = Math.max(0, Math.min(1, worked / workable));
   }
   return factor;
 }
@@ -165,15 +166,15 @@ export async function clearCaAdjustments(practitionerId: string, year: number): 
 // ── Disponibilité : écritures ──
 
 /** Upsert du nombre de jours de congés d'un mois donné. */
-export async function setVacationMonth(
+export async function setWorkedDaysMonth(
   practitionerId: string,
   year: number,
   month: number,
-  days: number,
+  workedDays: number,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!Number.isInteger(month) || month < 1 || month > 12) return { ok: false, error: "Mois invalide" };
   const daysInMonth = new Date(year, month, 0).getDate();
-  if (!Number.isInteger(days) || days < 0 || days > daysInMonth) return { ok: false, error: "Nombre de jours invalide" };
+  if (!Number.isInteger(workedDays) || workedDays < 0 || workedDays > daysInMonth) return { ok: false, error: "Nombre de jours invalide" };
 
   const [existing] = await db
     .select()
@@ -186,10 +187,10 @@ export async function setVacationMonth(
 
   if (existing) {
     await db.update(practitionerVacations)
-      .set({ days, updatedAt: new Date() })
+      .set({ workedDays, updatedAt: new Date() })
       .where(eq(practitionerVacations.id, existing.id));
   } else {
-    await db.insert(practitionerVacations).values({ practitionerId, year, month, days });
+    await db.insert(practitionerVacations).values({ practitionerId, year, month, workedDays });
   }
   return { ok: true };
 }

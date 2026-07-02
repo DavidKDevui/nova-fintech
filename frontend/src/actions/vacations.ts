@@ -6,12 +6,14 @@ import { db } from "@/lib/db";
 import { practitioners, practitionerVacations } from "@/lib/db/schema";
 
 
-export async function getVacationsAction(year: number): Promise<number[]> {
+// Jours travaillés saisis par mois (null = non saisi → l'appelant applique le
+// défaut = jours ouvrés du mois). Remplace le modèle "jours de congés".
+export async function getWorkedDaysAction(year: number): Promise<(number | null)[]> {
   const session = await getSession();
-  if (!session || session.accountType !== "practitioner") return Array(12).fill(0);
+  if (!session || session.accountType !== "practitioner") return Array(12).fill(null);
 
   const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
-  if (!hp) return Array(12).fill(0);
+  if (!hp) return Array(12).fill(null);
 
   const rows = await db
     .select()
@@ -21,16 +23,16 @@ export async function getVacationsAction(year: number): Promise<number[]> {
       eq(practitionerVacations.year, year),
     ));
 
-  const days = Array(12).fill(0);
+  const worked: (number | null)[] = Array(12).fill(null);
   for (const row of rows) {
     if (row.month >= 1 && row.month <= 12) {
-      days[row.month - 1] = row.days;
+      worked[row.month - 1] = row.workedDays;
     }
   }
-  return days;
+  return worked;
 }
 
-export async function upsertVacationDayAction(year: number, month: number, days: number) {
+export async function upsertWorkedDayAction(year: number, month: number, workedDays: number) {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") {
     return { error: "Non autorisé" };
@@ -42,7 +44,7 @@ export async function upsertVacationDayAction(year: number, month: number, days:
   if (!Number.isInteger(year) || year < 2000 || year > 2100) return { error: "Année invalide" };
   if (!Number.isInteger(month) || month < 1 || month > 12) return { error: "Mois invalide" };
   const daysInMonth = new Date(year, month, 0).getDate();
-  if (!Number.isInteger(days) || days < 0 || days > daysInMonth) return { error: "Nombre de jours invalide" };
+  if (!Number.isInteger(workedDays) || workedDays < 0 || workedDays > daysInMonth) return { error: "Nombre de jours invalide" };
 
   try {
     const [existing] = await db
@@ -57,17 +59,18 @@ export async function upsertVacationDayAction(year: number, month: number, days:
     if (existing) {
       await db
         .update(practitionerVacations)
-        .set({ days, updatedAt: new Date() })
+        .set({ workedDays, updatedAt: new Date() })
         .where(eq(practitionerVacations.id, existing.id));
     } else {
       await db
         .insert(practitionerVacations)
-        .values({ practitionerId: hp.id, year, month, days });
+        .values({ practitionerId: hp.id, year, month, workedDays });
     }
 
     return { success: true };
   } catch (err) {
-    console.error("[VACATIONS] Erreur :", err);
-    return { error: "Impossible de sauvegarder les vacances" };
+    console.error("[WORKED_DAYS] Erreur :", err);
+    return { error: "Impossible de sauvegarder les jours travaillés" };
   }
 }
+

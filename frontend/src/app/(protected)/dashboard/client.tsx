@@ -8,7 +8,7 @@ import { usePractitioner } from "@/providers/practitioner-provider";
 import { useData } from "@/providers/data-provider";
 import { PracticeSuggestionBanner } from "@/components/practice-suggestion-banner";
 import { DataMissingOverlay } from "@/components/data-missing-overlay";
-import { getTransactionKpisAction, getMonthlyActivityAction, type MonthlyActivityMonth } from "@/actions/transaction";
+import { getTransactionKpisAction, getMonthlyActivityAction, getAccountMonthlyNetAction, type MonthlyActivityMonth } from "@/actions/transaction";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
 import { getHealthScoreAction, type HealthScore } from "@/actions/health-score";
 import { getEffectiveCAAction, type EffectiveCASource } from "@/actions/effective-ca";
@@ -24,6 +24,7 @@ import {
   type PaymentPreferences,
   DEFAULT_PREFERENCES,
 } from "@/lib/data/fiscal-calendar";
+import { computeResteAVivre } from "@/lib/data/reste-a-vivre";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   en_attente: { label: "En attente", color: "text-brand-700", bg: "bg-brand-50" },
@@ -134,52 +135,17 @@ export function DashboardClient() {
     return () => { cancelled = true; };
   }, [currentYear]);
 
-  const resteAVivre = useMemo(() => {
-    const prefs: PaymentPreferences = hp
-      ? {
-          urssafFrequency: hp.urssafFrequency,
-          urssafPayDay: hp.urssafPayDay,
-          pasFrequency: hp.pasFrequency,
-          carpimkoFrequency: hp.carpimkoFrequency,
-          carpimkoPayDay: hp.carpimkoPayDay,
-          activityStartDate: hp.activityStartDate,
-        }
-      : DEFAULT_PREFERENCES;
-    const calendar = buildCalendar(prefs);
-
-    const now = new Date();
-    const currentMonthIdx = now.getMonth();
-    const dayOfMonth = now.getDate();
-    const daysInMonth = new Date(currentYear, currentMonthIdx + 1, 0).getDate();
-    const fractionRemainingCurrentMonth = Math.max(0, (daysInMonth - dayOfMonth) / daysInMonth);
-
-    const pastMonths = ravMonths.slice(0, currentMonthIdx);
-    const sample = pastMonths.length > 0 ? pastMonths : ravMonths.slice(0, 1);
-    const avg = (sel: (m: MonthlyActivityMonth) => number) =>
-      sample.length ? sample.reduce((s, m) => s + sel(m), 0) / sample.length : 0;
-    const avgIncome = avg((m) => m.income);
-    // `autresDepenses` = professional_expenses + retrocession + madelin (déjà tout inclus).
-    // On ne rajoute donc PAS chargesPro/retrocession/madelin séparément (sinon double comptage).
-    const avgAutres = avg((m) => m.autresDepenses);
-
-    // Horizon « fin du mois » → cible = mois courant, monthsBetween = fraction restante.
-    const monthsBetween = fractionRemainingCurrentMonth;
-    const projIncome = avgIncome * monthsBetween;
-    const projAutres = avgAutres * monthsBetween;
-
-    let urssafDue = 0;
-    let carpimkoDue = 0;
-    let pasDue = 0;
-    for (const e of calendar[currentMonthIdx] || []) {
-      if (e.day < dayOfMonth) continue;
-      if (e.type === "urssaf") urssafDue += ravEstimate?.urssafParEcheance ?? 0;
-      else if (e.type === "carpimko") carpimkoDue += ravEstimate?.carpimkoParEcheance ?? 0;
-      else if (e.type === "ir") pasDue += ravEstimate?.pasParEcheance ?? 0;
-    }
-
-    const totalCharges = urssafDue + carpimkoDue + pasDue + projAutres;
-    return (solde ?? 0) + projIncome - totalCharges;
-  }, [hp, ravMonths, ravEstimate, solde, currentYear]);
+  // Horizon « fin du mois » → cible = mois courant. Calcul mutualisé (accrual)
+  // avec /management via computeResteAVivre, pour que les chiffres coïncident.
+  const resteAVivre = useMemo(
+    () => computeResteAVivre({
+      months: ravMonths,
+      estimate: ravEstimate,
+      startingBalance: solde ?? 0,
+      targetMonthIdx: new Date().getMonth(),
+    }).total,
+    [ravMonths, ravEstimate, solde],
+  );
 
   // ── Solde de fin de mois reconstruit ──
   // `transactions` du DataProvider n'est pas peuplé ; on reconstruit donc le solde
@@ -199,14 +165,31 @@ export function DashboardClient() {
     () => (totalSolde === null ? [] : reconstructBalances(totalSolde, ravMonths, new Date().getMonth())),
     [totalSolde, ravMonths],
   );
-  const soldePrevMonth = balances[new Date().getMonth() - 1] ?? null;
 
-  // ── Tendances mois-sur-mois pour les cards (best-effort) ──
-  // Tendance trésorerie = variation de la trésorerie TOTALE (même périmètre que la courbe).
+  // ── Tendance trésorerie (calibrée sur le COMPTE PAR DÉFAUT) ──
+  // La card « Trésorerie disponible » affiche le solde du compte par défaut ; sa tendance
+  // doit donc porter sur le MÊME compte. `getMonthlyActivityAction` agrège tous les comptes,
+  // on récupère donc le net mensuel du seul compte par défaut via une action dédiée.
+  const [defaultMonthlyNet, setDefaultMonthlyNet] = useState<number[]>([]);
+  useEffect(() => {
+    const accId = hp?.defaultBankAccountId;
+    if (!accId) return; // sans compte par défaut, `solde` est null → pas de tendance de toute façon
+    let cancelled = false;
+    getAccountMonthlyNetAction(accId, currentYear).then((nets) => {
+      if (!cancelled) setDefaultMonthlyNet(nets);
+    });
+    return () => { cancelled = true; };
+  }, [hp?.defaultBankAccountId, currentYear]);
+
+  // solde(fin du mois dernier) = solde actuel − mouvements du compte par défaut ce mois-ci.
+  const soldePrevMonth = solde !== null && defaultMonthlyNet.length
+    ? solde - (defaultMonthlyNet[new Date().getMonth()] ?? 0)
+    : null;
+
   const tresoTrend = useMemo(() => {
-    if (totalSolde === null || soldePrevMonth === null || soldePrevMonth === 0) return null;
-    return ((totalSolde - soldePrevMonth) / Math.abs(soldePrevMonth)) * 100;
-  }, [totalSolde, soldePrevMonth]);
+    if (solde === null || soldePrevMonth === null || soldePrevMonth === 0) return null;
+    return ((solde - soldePrevMonth) / Math.abs(soldePrevMonth)) * 100;
+  }, [solde, soldePrevMonth]);
 
   const monthTrends = useMemo(() => {
     const cur = selectedMonth;
@@ -285,6 +268,7 @@ export function DashboardClient() {
           value={solde !== null ? formatCurrencyRounded(resteAVivre) : "—"}
           loading={ravLoading}
           icon={<KpiCoinIcon />}
+          sub={solde !== null ? "D'ici la fin du mois" : undefined}
         />
       </div>
 
@@ -802,7 +786,7 @@ function MonthSelector({ value, onChange, year }: { value: number; onChange: (m:
 }
 
 /* ─── Stat card (rangée du haut) ─── */
-function StatCard({ label, value, icon, loading, empty, trend }: { label?: string; value?: string; icon?: React.ReactNode; loading?: boolean; empty?: boolean; trend?: { pct: number | null; invert?: boolean } }) {
+function StatCard({ label, value, icon, loading, empty, trend, sub }: { label?: string; value?: string; icon?: React.ReactNode; loading?: boolean; empty?: boolean; trend?: { pct: number | null; invert?: boolean }; sub?: string }) {
   if (empty) {
     return <div className="rounded-[14px] border border-dashed border-ardoise-200 min-h-[104px]" />;
   }
@@ -818,6 +802,7 @@ function StatCard({ label, value, icon, loading, empty, trend }: { label?: strin
         <p className="text-2xl font-bold text-ardoise-900 font-mono">{value}</p>
       )}
       {!loading && trend?.pct != null && <TrendLine pct={trend.pct} invert={trend.invert} />}
+      {!loading && sub && <p className="mt-1.5 text-xs text-ardoise-400">{sub}</p>}
     </Card>
   );
 }
