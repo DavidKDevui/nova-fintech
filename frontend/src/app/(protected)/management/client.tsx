@@ -1800,8 +1800,6 @@ function SummaryTab() {
   const { accounts, transactionsLoading } = useData();
   const currentYear = new Date().getFullYear();
   const prevYear = currentYear - 1;
-  const irYear = prevYear; // IR de N (déclaré et soldé en N+1)
-  const irPrevYear = irYear - 1;
 
   const [loading, setLoading] = useState(true);
   const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
@@ -1810,14 +1808,12 @@ function SummaryTab() {
     urssaf: number; carpimko: number; autresDepenses: number; chargesPro: number;
     retrocession: number; madelin: number;
   }[]>([]);
-  const [prevYearCA, setPrevYearCA] = useState(0);
   type FiscalSituation = {
     maritalStatus: string;
     dependentChildren: number;
     isSingleParent?: boolean;
     otherIncome: string;
   };
-  const [prevYearFiscal, setPrevYearFiscal] = useState<FiscalSituation | null>(null);
   const [currentYearFiscal, setCurrentYearFiscal] = useState<FiscalSituation | null>(null);
   // Fallback bordereaux : CA mensuel + CA N-1 issus des passages, cotisations
   // estimées via getCotisationsEstimate. La carte "Trésorerie prévisionnelle"
@@ -1831,11 +1827,7 @@ function SummaryTab() {
       const core = await loadYearCore(currentYear);
       setIsEstimated(core.isEstimated);
 
-      // prevYear : même source/loader que l'année courante pour rester cohérent.
-      const monthlyLoader = core.isEstimated ? getMonthlyActivityFromBordereauxAction : getMonthlyActivityAction;
-      const [prevMonthly, prevFiscal, currFiscal, est] = await Promise.all([
-        monthlyLoader(prevYear),
-        getFiscalSituationAction(prevYear),
+      const [currFiscal, est] = await Promise.all([
         getFiscalSituationAction(currentYear),
         loadEstimate(currentYear),
       ]);
@@ -1850,15 +1842,6 @@ function SummaryTab() {
       }));
       setMonthlyData(monthly);
       setEstimate(est);
-      setPrevYearCA(prevMonthly.months.reduce((s, m) => s + m.income, 0));
-      if (prevFiscal) {
-        setPrevYearFiscal({
-          maritalStatus: prevFiscal.maritalStatus,
-          dependentChildren: prevFiscal.dependentChildren,
-          isSingleParent: (prevFiscal as { isSingleParent?: boolean }).isSingleParent,
-          otherIncome: prevFiscal.otherIncome,
-        });
-      }
       if (currFiscal) {
         setCurrentYearFiscal({
           maritalStatus: currFiscal.maritalStatus,
@@ -1869,7 +1852,7 @@ function SummaryTab() {
       }
       setLoading(false);
     })().catch(() => setLoading(false));
-  }, [currentYear, prevYear, loadYearCore, loadEstimate, bankConnected]);
+  }, [currentYear, loadYearCore, loadEstimate, bankConnected]);
 
   // 1. Trésorerie actuelle = balance du compte par défaut
   const defaultBalance = useMemo(() => {
@@ -1916,8 +1899,10 @@ function SummaryTab() {
     const avg = (sel: (m: typeof monthlyData[number]) => number) =>
       sample.length ? sample.reduce((s, m) => s + sel(m), 0) / sample.length : 0;
     const avgIncome = avg((m) => m.income);
+    // `autresDepenses` = professional_expenses + retrocession + madelin. On le décompose
+    // en chargesPro (professional_expenses) + retro/madelin — deux ensembles disjoints —
+    // pour ne pas compter professional_expenses/retro/madelin deux fois.
     const avgChargesPro = avg((m) => m.chargesPro);
-    const avgAutres = avg((m) => m.autresDepenses);
     const avgRetroMadelin = avg((m) => m.retrocession + m.madelin);
 
     const monthsBetween = targetIdx > currentMonthIdx
@@ -1926,7 +1911,6 @@ function SummaryTab() {
 
     const projIncome = avgIncome * monthsBetween;
     const projChargesPro = avgChargesPro * monthsBetween;
-    const projAutres = avgAutres * monthsBetween;
     const projRetroMadelin = avgRetroMadelin * monthsBetween;
 
     let urssafDue = 0;
@@ -1942,7 +1926,7 @@ function SummaryTab() {
     }
 
     const echeances = urssafDue + carpimkoDue + pasDue;
-    const chargesProProjetees = projChargesPro + projAutres + projRetroMadelin;
+    const chargesProProjetees = projChargesPro + projRetroMadelin;
     const total = defaultBalance + projIncome - echeances - chargesProProjetees;
     return { total, projIncome, echeances, chargesProProjetees };
   }, [calendar, estimate, monthlyData, defaultBalance, currentYear]);
@@ -1965,26 +1949,11 @@ function SummaryTab() {
   // Clamp à 0 — pas de rémunération négative affichée.
   const annualRemAvantImpot = Math.max(0, annualCA - annualCotisations - annualChargesPro - annualRetroMadelin);
 
-  // IR sur revenus N (payé en N+1).
-  const irPrev = useMemo(() => {
-    if (!hp) return 0;
-    const taxRegime = hp.taxRegime;
-    const revenuNet = taxRegime === "micro_bnc" ? prevYearCA * 0.66 : prevYearCA;
-    const otherIncome = prevYearFiscal ? Number(prevYearFiscal.otherIncome) : 0;
-    const revenuImposable = Math.round(revenuNet + otherIncome);
-    if (revenuImposable <= 0) return 0;
-    const { parts, partsDeReference } = computeParts({
-      maritalStatus: (prevYearFiscal?.maritalStatus as "celibataire" | "marie" | "pacse") ?? "celibataire",
-      dependentChildren: prevYearFiscal?.dependentChildren ?? 0,
-      isSingleParent: prevYearFiscal?.isSingleParent ?? false,
-    });
-    return computeIR({ revenuImposable, parts, partsDeReference, incomeYear: irYear }).impot;
-  }, [hp, prevYearCA, prevYearFiscal, irYear]);
-
   // IR estimé sur les revenus de l'année en cours (généré cette année, payé en
-  // N+1). Sert au "Reste à vivre" = CA − charges − impôts : on retranche l'impôt
-  // que le praticien est en train de générer, pas celui de N-1 (nul pour un
-  // nouvel installé, ce qui rendait le reste à vivre = rémunération avant impôt).
+  // N+1). Sert à la fois à la ligne "Impôt sur le revenu" et au "Reste à vivre"
+  // = CA − charges − impôts : on retranche l'impôt que le praticien est en train
+  // de générer, pas celui de N-1 (nul pour un nouvel installé, ce qui rendait le
+  // reste à vivre = rémunération avant impôt).
   const irCurrent = useMemo(() => {
     if (!hp || annualCA <= 0) return 0;
     const taxRegime = hp.taxRegime;
@@ -2042,7 +2011,7 @@ function SummaryTab() {
       ),
     },
     {
-      key: "ir", title: "Impôt sur le revenu", year: irYear, value: irPrev, prevYear: irPrevYear, prevValue: null,
+      key: "ir", title: "Impôt sur le revenu", year: currentYear, value: irCurrent, prevYear, prevValue: null,
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>
@@ -2298,7 +2267,6 @@ function RemainderTab() {
     carpimkoDue: number;
     pasDue: number;
     projChargesPro: number;
-    projAutres: number;
     projRetroMadelin: number;
     totalCharges: number;
     remainder: number;
@@ -2327,8 +2295,9 @@ function RemainderTab() {
     const avg = (sel: (m: typeof monthlyData[number]) => number) =>
       sample.length ? sample.reduce((s, m) => s + sel(m), 0) / sample.length : 0;
     const avgIncome = avg((m) => m.income);
+    // autresDepenses (= chargesPro + retro + madelin) décomposé en deux ensembles
+    // disjoints pour éviter le double comptage.
     const avgChargesPro = avg((m) => m.chargesPro);
-    const avgAutres = avg((m) => m.autresDepenses);
     const avgRetroMadelin = avg((m) => m.retrocession + m.madelin);
 
     const eomIdx = currentMonthIdx;
@@ -2345,7 +2314,6 @@ function RemainderTab() {
 
       const projIncome = avgIncome * monthsBetween;
       const projChargesPro = avgChargesPro * monthsBetween;
-      const projAutres = avgAutres * monthsBetween;
       const projRetroMadelin = avgRetroMadelin * monthsBetween;
 
       let urssafDue = 0;
@@ -2362,13 +2330,13 @@ function RemainderTab() {
         }
       }
 
-      const totalCharges = urssafDue + carpimkoDue + pasDue + projChargesPro + projAutres + projRetroMadelin;
+      const totalCharges = urssafDue + carpimkoDue + pasDue + projChargesPro + projRetroMadelin;
       const remainder = defaultBalance + projIncome - totalCharges;
 
       return {
         key, label, horizonDate,
         projIncome, urssafDue, carpimkoDue, pasDue,
-        projChargesPro, projAutres, projRetroMadelin,
+        projChargesPro, projRetroMadelin,
         totalCharges, remainder,
       };
     };
@@ -2437,7 +2405,6 @@ function RemainderTab() {
             { label: "CARPIMKO", value: b.carpimkoDue },
             { label: "Impôt sur le revenu (PAS)", value: b.pasDue },
             { label: "Charges pro.", value: b.projChargesPro },
-            { label: "Autres dépenses pro.", value: b.projAutres },
             { label: "Rétrocession + Madelin", value: b.projRetroMadelin },
           ].filter((r) => Math.abs(r.value) > 0.5);
           return (

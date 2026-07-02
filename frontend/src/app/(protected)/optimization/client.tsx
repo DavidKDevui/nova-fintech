@@ -279,8 +279,7 @@ export function OptimizationClient() {
 
   return (
     <div className="max-w-6xl space-y-8">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-xl md:text-2xl font-bold">Mes moyens d&apos;optimisation</h1>
+      <div className="flex items-center justify-end gap-3 flex-wrap">
         <ExportButtons onPdf={exportPdf} disabled={!estimate} />
       </div>
 

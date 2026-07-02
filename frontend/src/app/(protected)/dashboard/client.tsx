@@ -158,16 +158,14 @@ export function DashboardClient() {
     const avg = (sel: (m: MonthlyActivityMonth) => number) =>
       sample.length ? sample.reduce((s, m) => s + sel(m), 0) / sample.length : 0;
     const avgIncome = avg((m) => m.income);
-    const avgChargesPro = avg((m) => m.chargesPro);
+    // `autresDepenses` = professional_expenses + retrocession + madelin (déjà tout inclus).
+    // On ne rajoute donc PAS chargesPro/retrocession/madelin séparément (sinon double comptage).
     const avgAutres = avg((m) => m.autresDepenses);
-    const avgRetroMadelin = avg((m) => m.retrocession + m.madelin);
 
     // Horizon « fin du mois » → cible = mois courant, monthsBetween = fraction restante.
     const monthsBetween = fractionRemainingCurrentMonth;
     const projIncome = avgIncome * monthsBetween;
-    const projChargesPro = avgChargesPro * monthsBetween;
     const projAutres = avgAutres * monthsBetween;
-    const projRetroMadelin = avgRetroMadelin * monthsBetween;
 
     let urssafDue = 0;
     let carpimkoDue = 0;
@@ -179,7 +177,7 @@ export function DashboardClient() {
       else if (e.type === "ir") pasDue += ravEstimate?.pasParEcheance ?? 0;
     }
 
-    const totalCharges = urssafDue + carpimkoDue + pasDue + projChargesPro + projAutres + projRetroMadelin;
+    const totalCharges = urssafDue + carpimkoDue + pasDue + projAutres;
     return (solde ?? 0) + projIncome - totalCharges;
   }, [hp, ravMonths, ravEstimate, solde, currentYear]);
 
@@ -219,7 +217,7 @@ export function DashboardClient() {
     if (prev < 0 || !mc || !mp) return { ca: null as number | null, depenses: null as number | null };
     return {
       ca: pct(mc.income, mp.income),
-      depenses: pct(mc.chargesPro + mc.autresDepenses, mp.chargesPro + mp.autresDepenses),
+      depenses: pct(monthlyDepenses(mc), monthlyDepenses(mp)),
     };
   }, [ravMonths, selectedMonth]);
 
@@ -227,7 +225,7 @@ export function DashboardClient() {
   const monthValues = useMemo(() => {
     const mc = ravMonths[selectedMonth];
     if (!mc) return { ca: null as number | null, depenses: null as number | null };
-    return { ca: mc.income, depenses: mc.chargesPro + mc.autresDepenses };
+    return { ca: mc.income, depenses: monthlyDepenses(mc) };
   }, [ravMonths, selectedMonth]);
 
   // "Pas de données bancaires exploitables" = les données mensuelles ne viennent PAS
@@ -301,10 +299,8 @@ export function DashboardClient() {
         </p>
       )}
 
-      {/* Grille détaillée */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-start">
-      <div className="flex flex-col gap-4">
-        <ApercuTresorerieCard balances={balances} months={ravMonths} />
+      {/* Alertes & suggestions, juste sous les 4 cards */}
+      <div className="flex flex-col gap-1.5">
         {hasWarnings && (
           <div className="flex flex-col gap-1.5">
             {!bankConnected && (
@@ -353,6 +349,12 @@ export function DashboardClient() {
         <PracticeSuggestionBanner />
       </div>
 
+      {/* Grille détaillée */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-start">
+      <div className="flex flex-col gap-4">
+        <ApercuTresorerieCard balances={balances} months={ravMonths} />
+      </div>
+
       <div className="flex flex-col gap-4">
         {/* Suivi de mon activité (masqué temporairement)
         <FacturationCard loading={loading} summary={summary} />
@@ -378,7 +380,7 @@ export function DashboardClient() {
       {/* Score de santé + Analyse des dépenses sur la même ligne, même hauteur */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-stretch">
         <HealthScoreCard loading={healthScoreLoading} data={healthScore} />
-        <AnalyseDepensesCard loading={ravLoading} months={ravMonths} />
+        <AnalyseDepensesCard loading={ravLoading} month={ravMonths[selectedMonth]} />
       </div>
     </div>
   );
@@ -587,15 +589,15 @@ const DEPENSE_CATS: { label: string; color: string; sel: (m: MonthlyActivityMont
   { label: "Madelin", color: "#FBBF24", sel: (m) => m.madelin },
 ];
 
-function AnalyseDepensesCard({ loading, months }: { loading: boolean; months: MonthlyActivityMonth[] }) {
+function AnalyseDepensesCard({ loading, month }: { loading: boolean; month: MonthlyActivityMonth | undefined }) {
   const { cats, total } = useMemo(() => {
     const c = DEPENSE_CATS.map((cat) => ({
       label: cat.label,
       color: cat.color,
-      value: months.reduce((s, m) => s + cat.sel(m), 0),
+      value: month ? cat.sel(month) : 0,
     })).filter((cat) => cat.value > 0);
     return { cats: c, total: c.reduce((s, cat) => s + cat.value, 0) };
-  }, [months]);
+  }, [month]);
 
   if (loading) return <SkeletonCard />;
 
@@ -606,7 +608,7 @@ function AnalyseDepensesCard({ loading, months }: { loading: boolean; months: Mo
         <DetailLink href="/management" />
       </div>
       {total === 0 ? (
-        <p className="text-sm text-ardoise-400 text-center py-6">Aucune dépense enregistrée cette année.</p>
+        <p className="text-sm text-ardoise-400 text-center py-6">Aucune dépense enregistrée ce mois-ci.</p>
       ) : (
         <div className="flex flex-col sm:flex-row items-center gap-5">
           <DepenseDonut cats={cats} total={total} />
@@ -627,10 +629,10 @@ function AnalyseDepensesCard({ loading, months }: { loading: boolean; months: Mo
 }
 
 function DepenseDonut({ cats, total }: { cats: { label: string; color: string; value: number }[]; total: number }) {
-  const r = 42;
+  const r = 52;
   const circ = 2 * Math.PI * r;
   return (
-    <div className="relative w-[130px] h-[130px] shrink-0">
+    <div className="relative w-[132px] h-[132px] shrink-0">
       <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
         {cats.map((c, i) => {
           const seg = (c.value / total) * circ;
@@ -638,7 +640,7 @@ function DepenseDonut({ cats, total }: { cats: { label: string; color: string; v
           const offset = cats.slice(0, i).reduce((s, x) => s + (x.value / total) * circ, 0);
           return (
             <circle
-              key={c.label} cx="60" cy="60" r={r} fill="none" stroke={c.color} strokeWidth="14"
+              key={c.label} cx="60" cy="60" r={r} fill="none" stroke={c.color} strokeWidth="10"
               strokeDasharray={`${seg} ${circ - seg}`} strokeDashoffset={-offset}
             />
           );
@@ -658,6 +660,14 @@ function DepenseDonut({ cats, total }: { cats: { label: string; color: string; v
 // virements internes ne déplacent pas la courbe).
 function monthlyNet(m: MonthlyActivityMonth): number {
   return m.income - (m.urssaf + m.carpimko + m.chargesPro + m.retrocession + m.madelin + m.impots + m.cfe + m.remuneration);
+}
+
+// Total des dépenses catégorisées d'un mois, SANS double comptage.
+// `autresDepenses` contient déjà professional_expenses + retrocession + madelin, donc
+// on ne réadditionne PAS chargesPro/retrocession/madelin. Cohérent avec le total du
+// donut « Analyse des dépenses ».
+function monthlyDepenses(m: MonthlyActivityMonth): number {
+  return m.urssaf + m.carpimko + m.autresDepenses + m.impots + m.cfe;
 }
 
 // Solde de fin de mois, reconstruit à rebours depuis le solde actuel :

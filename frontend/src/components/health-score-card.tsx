@@ -17,14 +17,17 @@ function statusBadge(score: number, available: boolean): { label: string; cls: s
   return { label: "Critique", cls: "bg-red-50 text-red-600" };
 }
 
-const ICON_PROPS = { xmlns: "http://www.w3.org/2000/svg", width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" } as const;
-
-/* Icône par sous-score. */
+/* Icône par sous-score — pleines (mêmes codes que les cartes du haut). */
+const ISVG = { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", xmlns: "http://www.w3.org/2000/svg" } as const;
 const ICON: Record<HealthSubscoreKey, React.ReactNode> = {
-  treasury: <svg {...ICON_PROPS}><rect x="2" y="6" width="20" height="14" rx="2.5" /><path d="M2 10h20" /><circle cx="17" cy="15" r="1" /></svg>,
-  charges_ratio: <svg {...ICON_PROPS}><path d="m12 3 9 4.5-9 4.5-9-4.5L12 3Z" /><path d="m3 12 9 4.5 9-4.5" /><path d="m3 16.5 9 4.5 9-4.5" /></svg>,
-  data_quality: <svg {...ICON_PROPS}><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" /><path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" /></svg>,
-  collection_rate: <svg {...ICON_PROPS}><path d="M21 12a9 9 0 1 1-2.64-6.36" /><polyline points="21 4 21 10 15 10" /></svg>,
+  // Trésorerie → portefeuille
+  treasury: <svg {...ISVG}><rect x="2" y="6" width="20" height="14" rx="2.5" fill="currentColor" opacity="0.5" /><rect x="2" y="6" width="20" height="4" rx="2.5" fill="currentColor" opacity="0.7" /><circle cx="17" cy="15" r="1.5" fill="currentColor" opacity="0.35" /></svg>,
+  // Poids des charges → part / camembert
+  charges_ratio: <svg {...ISVG}><circle cx="12" cy="12" r="9" fill="currentColor" opacity="0.4" /><path d="M12 3a9 9 0 0 1 9 9h-9z" fill="currentColor" opacity="0.75" /></svg>,
+  // Complétude des données → base de données
+  data_quality: <svg {...ISVG}><path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6z" fill="currentColor" opacity="0.4" /><ellipse cx="12" cy="6" rx="8" ry="3" fill="currentColor" opacity="0.7" /></svg>,
+  // Recouvrement → pile de pièces
+  collection_rate: <svg {...ISVG}><ellipse cx="12" cy="7" rx="7" ry="3" fill="currentColor" opacity="0.7" /><path d="M5 7v5c0 1.66 3.13 3 7 3s7-1.34 7-3V7" fill="currentColor" opacity="0.5" /><path d="M5 12v5c0 1.66 3.13 3 7 3s7-1.34 7-3v-5" fill="currentColor" opacity="0.35" /></svg>,
 };
 
 export function HealthScoreCard({ loading, data }: { loading: boolean; data: HealthScore | null }) {
@@ -85,15 +88,15 @@ function ScoreGauge({ score, colorClass }: { score: number; colorClass: string }
 function SubscoreRow({ sub }: { sub: HealthSubscore }) {
   const badge = statusBadge(sub.score, sub.available);
   return (
-    <li className="flex items-center gap-3">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
-        {ICON[sub.key]}
-      </span>
-      <div className="flex-1 min-w-0">
-        <p className={`text-sm font-medium ${sub.available ? "text-ardoise-900" : "text-ardoise-400"}`}>{sub.label}</p>
-        <p className="text-xs text-ardoise-400 leading-snug line-clamp-2">{sub.detail}</p>
+    <li>
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 min-w-0 text-[11px] font-mono font-medium uppercase tracking-wide text-ardoise-500">
+          <span className="shrink-0 text-violet-700">{ICON[sub.key]}</span>
+          <span className="truncate">{sub.label}</span>
+        </span>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}>{badge.label}</span>
       </div>
-      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${badge.cls}`}>{badge.label}</span>
+      <p className="mt-0.5 text-[11px] text-ardoise-500 leading-snug line-clamp-2">{sub.detail}</p>
     </li>
   );
 }
