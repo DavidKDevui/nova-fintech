@@ -92,6 +92,25 @@ services:
       ofelia.job-exec.monthly-recap.schedule: "0 0 9 1 * *"
       ofelia.job-exec.monthly-recap.command: "pnpm cron:monthly-recap"
 
+  # Landing page (marketing) — Next.js standalone, sans DB ni cron.
+  # Exposee sur le port hote 3002 ; nginx proxie le domaine vitrine vers ce container.
+  landing:
+    image: ghcr.io/davidkdevui/actidec-landing:${IMAGE_TAG}
+    container_name: actidec-landing-staging
+    restart: unless-stopped
+    networks:
+      - actidec-network-staging
+    environment:
+      TZ: Europe/Paris
+      NODE_ENV: production
+    ports:
+      - "3002:3000"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
   ofelia:
     image: mcuadros/ofelia:latest
     container_name: actidec-ofelia-staging

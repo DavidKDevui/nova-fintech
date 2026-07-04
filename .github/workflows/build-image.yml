@@ -15,18 +15,25 @@ concurrency:
   group: build-image-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  IMAGE_NAME: ghcr.io/davidkdevui/actidec-app
-
 jobs:
-  # Build + push de l'image Docker.
-  # La validation (typecheck + lint) est faite DANS le Dockerfile (stage builder)
+  # Build + push des images Docker (matrice) :
+  #   - actidec-app     <- contexte frontend/  (l'app Next.js)
+  #   - actidec-landing <- contexte landing/   (la landing page)
+  # La validation (typecheck + lint) est faite DANS chaque Dockerfile (stage builder)
   # avant `npm run build` -> un seul `npm ci`, pas de duplication host/Docker.
   publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ghcr.io/davidkdevui/actidec-app
+            context: frontend
+          - image: ghcr.io/davidkdevui/actidec-landing
+            context: landing
     steps:
       - uses: actions/checkout@v4
 
@@ -44,7 +51,7 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ${{ env.IMAGE_NAME }}
+          images: ${{ matrix.image }}
           tags: |
             type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
@@ -55,9 +62,10 @@ jobs:
       - uses: docker/build-push-action@v5
         id: build
         with:
-          context: frontend
+          context: ${{ matrix.context }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Cache GHA cloisonne par image pour eviter que les 2 builds se marchent dessus
+          cache-from: type=gha,scope=${{ matrix.context }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.context }}
