@@ -46,6 +46,11 @@ const navItems = [
     label: "Optimisation",
     icon: <svg {...ICON_PROPS}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>,
   },
+  {
+    href: "/support-services",
+    label: "Services d'accompagnement",
+    icon: <svg {...ICON_PROPS}><circle cx="12" cy="12" r="10" /><path d="m4.93 4.93 4.24 4.24" /><path d="m14.83 9.17 4.24-4.24" /><path d="m14.83 14.83 4.24 4.24" /><path d="m9.17 14.83-4.24 4.24" /><circle cx="12" cy="12" r="4" /></svg>,
+  },
 ];
 
 const adminItems = [

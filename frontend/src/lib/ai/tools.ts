@@ -630,7 +630,7 @@ export function createToolExecutors(practitionerId: string, accountIds: string[]
       const month = Number(args.month);
       const save = args.save === true;
 
-      const res = await estimateMonthFromActs(practitioner, acts, month, save);
+      const res = await estimateMonthFromActs(practitioner, acts, month, save ? "replace" : null);
       if ("error" in res) return `Échec : ${res.error}`;
 
       const lines: string[] = [];

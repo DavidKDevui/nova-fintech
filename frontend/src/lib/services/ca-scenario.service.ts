@@ -4,6 +4,7 @@ import {
   practitioners,
   practitionerVacations,
   practitionerCaAdjustments,
+  practitionerPlannedActs,
 } from "@/lib/db/schema";
 import { countWorkingDays } from "@/lib/data/fr-holidays";
 import { getCAHistoryForPractitioner, type CAHistory } from "./ca-history.service";
@@ -150,6 +151,104 @@ export async function setMonthOverride(
     label: label ?? null,
   });
   return { ok: true };
+}
+
+/**
+ * Ajoute un montant ponctuel (`fixed_oneoff`) au CA d'un mois, SANS écraser la
+ * projection existante — contrairement à `setMonthOverride`. Idempotent par
+ * (mois + label) : une nouvelle saisie manuelle remplace la précédente au lieu
+ * de s'empiler.
+ */
+export async function setMonthAddition(
+  practitionerId: string,
+  year: number,
+  month: number,
+  value: number,
+  label: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!Number.isInteger(month) || month < 1 || month > 12) return { ok: false, error: "Mois invalide" };
+  if (!Number.isFinite(value) || value < 0) return { ok: false, error: "Montant invalide" };
+
+  const existing = await db
+    .select({ id: practitionerCaAdjustments.id, startMonth: practitionerCaAdjustments.startMonth, kind: practitionerCaAdjustments.kind, label: practitionerCaAdjustments.label })
+    .from(practitionerCaAdjustments)
+    .where(and(
+      eq(practitionerCaAdjustments.practitionerId, practitionerId),
+      eq(practitionerCaAdjustments.year, year),
+    ));
+  for (const e of existing) {
+    if (e.kind === "fixed_oneoff" && e.startMonth === month && e.label === label) {
+      await db.delete(practitionerCaAdjustments).where(eq(practitionerCaAdjustments.id, e.id));
+    }
+  }
+
+  await db.insert(practitionerCaAdjustments).values({
+    practitionerId,
+    year,
+    kind: "fixed_oneoff",
+    value: String(value),
+    startMonth: month,
+    endMonth: month,
+    label,
+  });
+  return { ok: true };
+}
+
+/**
+ * Retire l'ajustement issu de la saisie manuelle d'actes pour un mois donné,
+ * avant de réappliquer. Sinon :
+ *  - passer de « Définir tout le mois » à « Compléter » laisserait l'ancien
+ *    month_override actif, qui **masque** le fixed_oneoff (un override écrase le
+ *    mois et court-circuite les leviers additifs dans applyScenarioToForecast) ;
+ *  - un month_override hérité (ancien label) resterait collé au mois.
+ *
+ * On retire donc TOUT `month_override` du mois — c'est par nature une « valeur
+ * imposée par actes », supplantée par la nouvelle saisie, quel que soit son
+ * label. Le `fixed_oneoff`, lui, n'est retiré que s'il provient de la saisie
+ * manuelle (label), pour ne pas toucher une prime ponctuelle saisie par ailleurs.
+ */
+export async function clearPlannedActsAdjustment(
+  practitionerId: string,
+  year: number,
+  month: number,
+  label: string,
+): Promise<void> {
+  const rows = await db
+    .select({ id: practitionerCaAdjustments.id, kind: practitionerCaAdjustments.kind, startMonth: practitionerCaAdjustments.startMonth, label: practitionerCaAdjustments.label })
+    .from(practitionerCaAdjustments)
+    .where(and(
+      eq(practitionerCaAdjustments.practitionerId, practitionerId),
+      eq(practitionerCaAdjustments.year, year),
+    ));
+  for (const e of rows) {
+    if (e.startMonth !== month) continue;
+    const belongsToPlannedActs =
+      e.kind === "month_override" || (e.kind === "fixed_oneoff" && e.label === label);
+    if (belongsToPlannedActs) {
+      await db.delete(practitionerCaAdjustments).where(eq(practitionerCaAdjustments.id, e.id));
+    }
+  }
+}
+
+/**
+ * Réinitialise TOUT le scénario de l'année → la prévision revient à la base brute :
+ *   - leviers de CA (actes manuels, leviers IA…),
+ *   - jours travaillés / congés saisis (retour à la disponibilité pleine),
+ *   - détail des actes prévus (le formulaire de saisie manuelle se vide).
+ */
+export async function clearScenario(practitionerId: string, year: number): Promise<void> {
+  await db.delete(practitionerCaAdjustments).where(and(
+    eq(practitionerCaAdjustments.practitionerId, practitionerId),
+    eq(practitionerCaAdjustments.year, year),
+  ));
+  await db.delete(practitionerVacations).where(and(
+    eq(practitionerVacations.practitionerId, practitionerId),
+    eq(practitionerVacations.year, year),
+  ));
+  await db.delete(practitionerPlannedActs).where(and(
+    eq(practitionerPlannedActs.practitionerId, practitionerId),
+    eq(practitionerPlannedActs.year, year),
+  ));
 }
 
 export async function clearCaAdjustments(practitionerId: string, year: number): Promise<number> {

@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { practitioners, bankAccounts, bankTransactions } from "@/lib/db/schema";
 import { getCotisationsEstimate } from "@/actions/cotisations-estimate";
 import { getFacturationData } from "@/actions/facturation";
+import { getManualChargesTotal } from "@/lib/db/manual-charges";
 
 export type HealthSubscoreKey = "treasury" | "charges_ratio" | "data_quality" | "collection_rate";
 
@@ -155,6 +156,10 @@ async function computeHealthScore(hp: Practitioner): Promise<HealthScore> {
     totalTxCount = Number(totalRow[0]?.total ?? 0);
     uncategorizedCount = Number(uncatRow[0]?.total ?? 0);
   }
+
+  // Charges pro. saisies à la main (indépendantes de la banque), bornées aux mois
+  // écoulés pour rester cohérent avec le décaissement bancaire YTD.
+  decaissementYtd += await getManualChargesTotal(hp.id, year, now.getMonth() + 1);
 
   // ── CA & bordereaux ──
   const facturation = await getFacturationData();

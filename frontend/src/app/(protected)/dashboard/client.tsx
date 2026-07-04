@@ -45,6 +45,7 @@ export function DashboardClient() {
     effectiveCA,
     cotisationsEstimate: estimate,
     defaultBankAccountMissing,
+    manualChargesVersion,
   } = useData();
 
   const name = hp?.firstName || user.email.split("@")[0] || "";
@@ -80,13 +81,13 @@ export function DashboardClient() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     if (!hp?.bridgeUserUuid) { setKpiLoading(false); return; }
-    getTransactionKpisAction(hp.defaultBankAccountId).then((result) => {
+    getTransactionKpisAction(hp.defaultBankAccountId, undefined, true).then((result) => {
       setKpiEncaissement(result.encaissement);
       setKpiDecaissement(result.decaissement);
       setKpiNbDepenses(result.nbTransactionsDepenses ?? 0);
       setKpiLoading(false);
     });
-  }, [hp?.bridgeUserUuid, hp?.defaultBankAccountId]);
+  }, [hp?.bridgeUserUuid, hp?.defaultBankAccountId, manualChargesVersion]);
 
   // CA et nb factures de l'année courante (cohérent avec les autres KPIs du dashboard)
   const currentYear = new Date().getFullYear();
@@ -133,7 +134,7 @@ export function DashboardClient() {
       setRavLoading(false);
     })().catch(() => { if (!cancelled) setRavLoading(false); });
     return () => { cancelled = true; };
-  }, [currentYear]);
+  }, [currentYear, manualChargesVersion]);
 
   // Horizon « fin du mois » → cible = mois courant. Calcul mutualisé (accrual)
   // avec /management via computeResteAVivre, pour que les chiffres coïncident.
@@ -668,6 +669,9 @@ function reconstructBalances(solde: number, months: MonthlyActivityMonth[], curM
 }
 
 /* ─── Aperçu de trésorerie (graphe) ─── */
+// Abréviations de mois distinctes pour l'axe X (Juin ≠ Juil.).
+const MONTH_ABBR = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
+
 // Tooltip ordonné : Trésorerie au-dessus, Charges en dessous.
 function TresoTooltip({ active, payload, label }: {
   active?: boolean;
@@ -692,7 +696,7 @@ function TresoTooltip({ active, payload, label }: {
     <div className="rounded-lg border border-ardoise-200 bg-white px-3 py-2 shadow-1 text-xs min-w-[170px] space-y-1">
       <p className="font-semibold text-ardoise-500">{label}</p>
       {treso != null && row("#7C6BF0", "Trésorerie", treso)}
-      {charges != null && row("#A79EB5", "Charges", charges)}
+      {charges != null && row("#A79EB5", "Charges pro.", charges)}
     </div>
   );
 }
@@ -709,10 +713,13 @@ function ApercuTresorerieCard({ balances, months }: {
       const bal = balances[m];
       if (bal == null) continue;
       const mm = months[m];
-      const charges = mm ? mm.urssaf + mm.carpimko + mm.chargesPro : 0;
-      const name = (MONTH_NAMES[m] ?? "").slice(0, 3);
+      // « Charges pro. » : identique au total de l'onglet Mon activité
+      // (professional_expenses + rétrocession + Madelin + charges saisies à la main,
+      // ces dernières étant déjà injectées dans `autresDepenses` côté serveur).
+      const charges = mm ? mm.autresDepenses : 0;
       out.push({
-        name: name.charAt(0).toUpperCase() + name.slice(1),
+        // Abréviations distinctes : `slice(0,3)` confondait « Juin » et « Juillet » (tous deux « Jui »).
+        name: MONTH_ABBR[m] ?? "",
         tresorerie: Math.round(bal),
         charges: Math.round(charges),
       });
@@ -734,7 +741,7 @@ function ApercuTresorerieCard({ balances, months }: {
         <>
           <div className="flex items-center gap-4 mb-3 text-xs text-ardoise-500">
             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#7C6BF0]" />Trésorerie disponible</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block w-3.5 border-t-2 border-dashed border-ardoise-400" />Charges</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-3.5 border-t-2 border-dashed border-ardoise-400" />Charges pro.</span>
           </div>
           <ResponsiveContainer width="100%" height={230}>
             <ComposedChart data={chartData} margin={{ top: 5, right: 6, left: 4, bottom: 0 }}>
@@ -752,7 +759,7 @@ function ApercuTresorerieCard({ balances, months }: {
               />
               <Tooltip content={<TresoTooltip />} />
               <Area type="monotone" dataKey="tresorerie" name="Trésorerie disponible" stroke="#7C6BF0" strokeWidth={2.5} fill="url(#tresoFill)" dot={{ r: 2.5, fill: "#7C6BF0" }} />
-              <Line type="monotone" dataKey="charges" name="Charges" stroke="#A79EB5" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+              <Line type="monotone" dataKey="charges" name="Charges pro." stroke="#A79EB5" strokeWidth={2} strokeDasharray="5 5" dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </>

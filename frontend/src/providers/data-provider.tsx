@@ -73,6 +73,13 @@ interface DataContextValue {
   refreshFiscal: () => Promise<void>;
   /** Recharge toutes les données client du provider (utilisé par le bouton « Actualiser »). */
   refreshAll: () => Promise<void>;
+
+  // Signal de changement des charges manuelles (édition dans Gestion → Mon activité).
+  // Vit dans ce provider (partagé/persistant entre pages) pour que le Dashboard
+  // se rafraîchisse sans reload. Les consommateurs mettent `manualChargesVersion`
+  // dans les dépendances de leur effet de fetch.
+  manualChargesVersion: number;
+  notifyManualChargesChanged: () => void;
 }
 
 const DataContext = createContext<DataContextValue>({
@@ -98,6 +105,8 @@ const DataContext = createContext<DataContextValue>({
   refreshTransactions: async () => {},
   refreshFiscal: async () => {},
   refreshAll: async () => {},
+  manualChargesVersion: 0,
+  notifyManualChargesChanged: () => {},
 });
 
 export function DataProvider({ children }: { children: ReactNode }) {
@@ -126,6 +135,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [effectiveCA, setEffectiveCA] = useState<EffectiveCA>({ ca: 0, source: "none" });
   const [cotisationsEstimate, setCotisationsEstimate] = useState<CotisationsEstimate | null>(null);
   const [fiscalLoading, setFiscalLoading] = useState(true);
+
+  // Compteur incrémenté à chaque édition de charge manuelle.
+  const [manualChargesVersion, setManualChargesVersion] = useState(0);
+  const notifyManualChargesChanged = useCallback(() => setManualChargesVersion((v) => v + 1), []);
 
   const refreshFacturation = useCallback(async () => {
     if (isAdmin || !hp) {
@@ -237,6 +250,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       refreshTransactions,
       refreshFiscal,
       refreshAll,
+      manualChargesVersion,
+      notifyManualChargesChanged,
     }}>
       {children}
     </DataContext.Provider>

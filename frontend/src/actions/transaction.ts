@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { db, pool } from "@/lib/db";
 import { practitioners, bankAccounts, bankTransactions } from "@/lib/db/schema";
 import { isUuid } from "@/lib/validation";
+import { getManualChargesTotal, addManualChargesToMonths } from "@/lib/db/manual-charges";
 
 const VALID_CATEGORIES = [
   "income", "professional_reimbursement", "royalty", "urssaf", "carpimko",
@@ -116,7 +117,12 @@ export async function updateTransactionCategoryAction(transactionId: string, cat
   }
 }
 
-export async function getTransactionKpisAction(accountId?: string | null, year?: number) {
+// `includeManualCharges` : ajoute les charges pro. saisies à la main au
+// décaissement. Activé pour les vues synthétiques (Dashboard, Gestion) où le
+// décaissement est un total « vos dépenses ». Laissé à false pour la page
+// Transactions, qui liste littéralement les mouvements d'un compte (les charges
+// manuelles ne sont pas des transactions et n'y ont donc pas leur place).
+export async function getTransactionKpisAction(accountId?: string | null, year?: number, includeManualCharges = false) {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") {
     return { encaissement: 0, decaissement: 0 };
@@ -182,9 +188,12 @@ export async function getTransactionKpisAction(accountId?: string | null, year?:
     const urssafPaid = Math.abs(Number(cotisationsRows.find((r) => r.category === "urssaf")?.total ?? 0));
     const carpimkoPaid = Math.abs(Number(cotisationsRows.find((r) => r.category === "carpimko")?.total ?? 0));
 
+    // Charges pro. manuelles de l'année (praticien-level, indépendantes du compte).
+    const manualCharges = includeManualCharges ? await getManualChargesTotal(hp.id, kpiYear) : 0;
+
     return {
       encaissement: Math.abs(Number(encaissementRow[0]?.total ?? 0)),
-      decaissement: Math.abs(Number(decaissementRow[0]?.total ?? 0)),
+      decaissement: Math.abs(Number(decaissementRow[0]?.total ?? 0)) + manualCharges,
       remuneration: Math.abs(Number(remunerationRow[0]?.total ?? 0)),
       cotisations: urssafPaid + carpimkoPaid,
       urssafPaid,
@@ -262,6 +271,11 @@ export async function getMonthlyActivityAction(year: number): Promise<{ months: 
       month: i + 1,
       ...(monthMap.get(i + 1) ?? zero),
     }));
+
+    // Charges pro. saisies à la main : on les ajoute au champ `chargesPro` (et au
+    // total `autresDepenses`) de chaque mois. Tout le calcul aval (BNC, reste à
+    // vivre, projections, export) lit ces champs → prise en compte automatique.
+    await addManualChargesToMonths(months, hp.id, year);
 
     return { months };
   } catch {

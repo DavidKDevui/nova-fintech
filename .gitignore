@@ -8,3 +8,7 @@ rsa-ssh-private-key
 .ssh
 COFFRE-FORT.md
 ROADMAP.md
+
+.contexte
+.claude
+postgres-init

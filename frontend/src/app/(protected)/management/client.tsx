@@ -7,9 +7,11 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { getMonthlyActivityAction, getTransactionKpisAction, getCategoryTransactionsAction, type MonthlyActivityMonth, type CategoryTransaction } from "@/actions/transaction";
 import { getCotisationsEstimate, type CotisationsEstimate } from "@/actions/cotisations-estimate";
 import { simulateCotisations, type SimulationResult } from "@/actions/simulate-cotisations";
-import { getCAForecastAction, type CAForecastResult } from "@/actions/ca-history";
+import { getCAForecastAction, getManualActOptionsAction, getPlannedActsAction, saveManualPlannedActsAction, clearScenarioAction, type CAForecastResult, type ActOption } from "@/actions/ca-history";
 import { getFiscalSituationAction, upsertFiscalSituationAction } from "@/actions/fiscal-situation";
 import { getWorkedDaysAction, upsertWorkedDayAction } from "@/actions/vacations";
+import { getManualChargesAction, upsertManualChargeCellAction, deleteManualChargeLineAction } from "@/actions/manual-charges";
+import { MANUAL_CHARGE_TYPES, manualChargeLabel } from "@/lib/data/manual-charge-types";
 import { useData } from "@/providers/data-provider";
 import { usePractitioner } from "@/providers/practitioner-provider";
 import { useAssistant } from "@/providers/assistant-provider";
@@ -66,6 +68,9 @@ type ManagementDataValue = {
   loadYearCore: (year: number) => Promise<YearCore>;
   /** Estimation cotisations pour une année (null si CA nul). */
   loadEstimate: (year: number) => Promise<CotisationsEstimate | null>;
+  /** Invalide les caches d'une année (après édition des charges manuelles) : les
+   *  onglets non montés se rechargeront frais à leur prochaine ouverture. */
+  bustYear: (year: number) => void;
 };
 
 const ManagementDataContext = createContext<ManagementDataValue | null>(null);
@@ -120,7 +125,12 @@ function ManagementDataProvider({ children }: { children: ReactNode }) {
     return p;
   }, [loadYearCore]);
 
-  const value = useMemo(() => ({ loadYearCore, loadEstimate }), [loadYearCore, loadEstimate]);
+  const bustYear = useCallback((year: number) => {
+    coreCacheRef.current.delete(year);
+    estimateCacheRef.current.delete(year);
+  }, []);
+
+  const value = useMemo(() => ({ loadYearCore, loadEstimate, bustYear }), [loadYearCore, loadEstimate, bustYear]);
   return <ManagementDataContext.Provider value={value}>{children}</ManagementDataContext.Provider>;
 }
 
@@ -180,7 +190,8 @@ export function ManagementClient() {
 
 function ActivityTab() {
   const hp = usePractitioner();
-  const { loadYearCore } = useManagementData();
+  const { loadYearCore, bustYear } = useManagementData();
+  const { notifyManualChargesChanged } = useData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
@@ -195,6 +206,12 @@ function ActivityTab() {
   const [chargesProOpen, setChargesProOpen] = useState(false);
   const [impotOpen, setImpotOpen] = useState(false);
   const [remOpen, setRemOpen] = useState(false);
+  // Charges pro. saisies à la main : lignes { type, 12 montants }. État local =
+  // source de vérité pour l'affichage ; chaque édition est persistée puis patchée
+  // dans `chartData` (dont `chargesPro`/`autresDepenses` incluent déjà le manuel
+  // côté serveur), pour que totaux et calculs aval restent cohérents sans refetch.
+  const [manualLines, setManualLines] = useState<{ type: string; amounts: number[] }[]>([]);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   // `isEstimated` = on est en mode fallback bordereaux : CA réel issu des passages
   // mais URSSAF/CARPIMKO/PAS estimés via getCotisationsEstimate. Sert à afficher
   // les badges "estim." et le bandeau d'incitation à connecter la banque.
@@ -202,11 +219,24 @@ function ActivityTab() {
 
   const fetchData = useCallback(async (y: number) => {
     setLoading(true);
-    const [workedDaysResult, core] = await Promise.all([
+    const [workedDaysResult, core, manualRows] = await Promise.all([
       getWorkedDaysAction(y),
       loadYearCore(y),
+      getManualChargesAction(y),
     ]);
     const { effectiveCA: effectiveCAResult, months, totalCA, isEstimated: useFallback } = core;
+
+    // Regroupe les charges manuelles par type → { type, 12 montants }, ordonnées
+    // selon MANUAL_CHARGE_TYPES pour un affichage stable.
+    const grouped = new Map<string, number[]>();
+    for (const r of manualRows) {
+      if (r.month < 1 || r.month > 12) continue;
+      if (!grouped.has(r.chargeType)) grouped.set(r.chargeType, Array(12).fill(0));
+      grouped.get(r.chargeType)![r.month - 1] = r.amount;
+    }
+    setManualLines(
+      MANUAL_CHARGE_TYPES.filter((t) => grouped.has(t.key)).map((t) => ({ type: t.key, amounts: grouped.get(t.key)! })),
+    );
 
     const toChartData = (ms: MonthlyActivityMonth[]) =>
       ms.map((m) => ({
@@ -242,7 +272,7 @@ function ActivityTab() {
 
     // Flux normal : transactions bancaires. Les KPIs encaissement/décaissement
     // proviennent d'une agrégation dédiée (distincte de l'activité mensuelle).
-    const kpiResult = await getTransactionKpisAction(null, y);
+    const kpiResult = await getTransactionKpisAction(null, y, true);
     setKpis({ encaissement: kpiResult.encaissement, decaissement: kpiResult.decaissement, cotisations: kpiResult.cotisations ?? 0, remuneration: kpiResult.remuneration ?? 0 });
     setEffectiveCA(effectiveCAResult);
     setChartData(toChartData(months));
@@ -258,6 +288,68 @@ function ActivityTab() {
 
   const daysPerWeek = hp?.daysPerWeekWorked ?? 5;
   const chartRef = useRef<HTMLDivElement>(null);
+
+  // ── Charges pro. manuelles : dérivés + handlers ──
+  // Somme mensuelle (tous types) — sert à retrancher le manuel de la sous-ligne
+  // « Charges pro » (bancaire pur) puisque `chartData.chargesPro` l'inclut déjà.
+  const manualByMonth = useMemo(() => {
+    const arr = Array(12).fill(0);
+    for (const line of manualLines) {
+      for (let i = 0; i < 12; i++) arr[i]! += line.amounts[i] ?? 0;
+    }
+    return arr;
+  }, [manualLines]);
+
+  const availableChargeTypes = useMemo(() => {
+    const used = new Set(manualLines.map((l) => l.type));
+    return MANUAL_CHARGE_TYPES.filter((t) => !used.has(t.key));
+  }, [manualLines]);
+
+  // Répercute une variation de montant sur chartData (total charges pro + dépenses)
+  // et sur le KPI décaissement, pour une mise à jour instantanée sans refetch.
+  const patchChartCharges = useCallback((monthIdx: number, delta: number) => {
+    if (delta === 0) return;
+    setChartData((prev) => prev.map((m, i) =>
+      i === monthIdx ? { ...m, chargesPro: m.chargesPro + delta, autresDepenses: m.autresDepenses + delta } : m,
+    ));
+    setKpis((k) => ({ ...k, decaissement: Math.max(0, k.decaissement + delta) }));
+  }, []);
+
+  const commitManualCell = useCallback(async (type: string, monthIdx: number, raw: string) => {
+    const parsed = parseFloat(raw.replace(",", ".").replace(/[^0-9.]/g, ""));
+    const value = Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : 0;
+    const line = manualLines.find((l) => l.type === type);
+    const old = line?.amounts[monthIdx] ?? 0;
+    const delta = value - old;
+    if (delta === 0) return;
+    setManualLines((prev) => prev.map((l) =>
+      l.type === type ? { ...l, amounts: l.amounts.map((a, i) => (i === monthIdx ? value : a)) } : l,
+    ));
+    patchChartCharges(monthIdx, delta);
+    bustYear(year);
+    notifyManualChargesChanged();
+    const res = await upsertManualChargeCellAction(year, monthIdx + 1, type, value);
+    if (res?.error) console.error("[manual-charges]", res.error);
+  }, [manualLines, patchChartCharges, bustYear, notifyManualChargesChanged, year]);
+
+  const handleAddChargeLine = useCallback((type: string) => {
+    setManualLines((prev) => (prev.some((l) => l.type === type) ? prev : [...prev, { type, amounts: Array(12).fill(0) }]));
+    setAddMenuOpen(false);
+  }, []);
+
+  const handleRemoveChargeLine = useCallback(async (type: string) => {
+    const line = manualLines.find((l) => l.type === type);
+    setManualLines((prev) => prev.filter((l) => l.type !== type));
+    if (!line) return;
+    // Retire les montants de chartData avant de purger la ligne en base.
+    line.amounts.forEach((a, i) => { if (a > 0) patchChartCharges(i, -a); });
+    if (line.amounts.some((a) => a > 0)) {
+      bustYear(year);
+      notifyManualChargesChanged();
+      const res = await deleteManualChargeLineAction(year, type);
+      if (res?.error) console.error("[manual-charges]", res.error);
+    }
+  }, [manualLines, patchChartCharges, bustYear, notifyManualChargesChanged, year]);
 
   // Tableau des en-têtes et lignes pour l'export du détail mensuel.
   const exportData = useMemo(() => {
@@ -638,8 +730,10 @@ function ActivityTab() {
                   ] as const).map((sub) => (
                     <div key={sub.key} className="grid border-b border-ardoise-50 bg-ardoise-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
                       <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500">{sub.label}</div>
-                      {chartData.map((m) => {
-                        const val = m[sub.key];
+                      {chartData.map((m, i) => {
+                        // « Charges pro » = part bancaire seule : on retranche le manuel,
+                        // affiché ci-dessous en lignes séparées, pour ne pas le compter deux fois.
+                        const val = sub.key === "chargesPro" ? Math.max(0, m.chargesPro - (manualByMonth[i] ?? 0)) : m[sub.key];
                         return (
                           <div key={m.name} className="py-2.5 text-center text-xs font-medium text-ardoise-500 font-mono">
                             {val > 0 ? formatCurrency(val) : "—"}
@@ -648,6 +742,71 @@ function ActivityTab() {
                       })}
                     </div>
                   ))}
+
+                  {/* Lignes de charges pro. saisies manuellement (montant éditable par mois) */}
+                  {manualLines.map((line) => (
+                    <div key={line.type} className="group grid border-b border-ardoise-50 bg-ardoise-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
+                      <div className="pl-7 pr-3 py-2 text-xs font-medium text-ardoise-500 flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveChargeLine(line.type)}
+                          title="Supprimer cette ligne"
+                          className="shrink-0 text-ardoise-300 hover:text-red-500 transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                        </button>
+                        <span className="truncate">{manualChargeLabel(line.type)}</span>
+                      </div>
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <div key={i} className="px-0.5 py-1.5">
+                          <input
+                            key={`${year}-${line.type}-${i}`}
+                            type="text"
+                            inputMode="decimal"
+                            defaultValue={line.amounts[i] ? String(line.amounts[i]) : ""}
+                            placeholder="—"
+                            onBlur={(e) => commitManualCell(line.type, i, e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                            className="w-full rounded border border-transparent hover:border-ardoise-200 focus:border-violet-400 focus:bg-white bg-transparent px-1 py-1 text-center text-xs font-mono text-ardoise-600 outline-none transition-colors placeholder:text-ardoise-300"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+
+                  {/* Ajout d'une ligne : bouton + menu déroulant des types restants */}
+                  <div className="grid border-b border-ardoise-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
+                    <div className="pl-7 pr-3 py-2 relative">
+                      {availableChargeTypes.length > 0 ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setAddMenuOpen((v) => !v)}
+                            className="flex items-center gap-1.5 text-xs font-medium text-violet-700 hover:text-violet-900 transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Ajouter une charge
+                          </button>
+                          {addMenuOpen && (
+                            <div className="absolute z-20 left-7 top-full mt-1 w-56 max-h-64 overflow-y-auto rounded-md border border-ardoise-200 bg-white py-1 shadow-lg">
+                              {availableChargeTypes.map((t) => (
+                                <button
+                                  key={t.key}
+                                  type="button"
+                                  onClick={() => handleAddChargeLine(t.key)}
+                                  className="w-full px-3 py-2 text-left text-xs text-ardoise-700 hover:bg-violet-50 transition-colors"
+                                >
+                                  {t.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-ardoise-300">Tous les types ajoutés</span>
+                      )}
+                    </div>
+                  </div>
                 </>
               )}
               {/* Impôt */}
@@ -2834,6 +2993,102 @@ function CAForecastSection({
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [question, setQuestion] = useState("");
+  const [analysisMode, setAnalysisMode] = useState<"manuel" | "ia">("manuel");
+  // Temporaire : on ne montre que le mode Manuel. Repasser à true pour réafficher le switch IA.
+  const showAnalysisSwitch = false;
+
+  // Saisie manuelle d'actes prévus (mode « Manuel »).
+  const [actOptions, setActOptions] = useState<{ mine: ActOption[]; catalog: ActOption[] } | null>(null);
+  const [manualMonth, setManualMonth] = useState<number>(new Date().getMonth() + 1);
+  const [manualLines, setManualLines] = useState<{ key: string; count: number; unitAmount: number }[]>([]);
+  const [manualPersist, setManualPersist] = useState<"add" | "replace">("add");
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualFeedback, setManualFeedback] = useState<{ text: string; ok: boolean } | null>(null);
+  const [clearingScenario, setClearingScenario] = useState(false);
+
+  // Charge les options d'actes à la première ouverture du mode Manuel.
+  useEffect(() => {
+    if (analysisMode === "manuel" && actOptions === null) {
+      getManualActOptionsAction().then(setActOptions).catch(() => setActOptions({ mine: [], catalog: [] }));
+    }
+  }, [analysisMode, actOptions]);
+
+  // Charge les actes déjà enregistrés pour le mois sélectionné (par mois).
+  useEffect(() => {
+    if (analysisMode !== "manuel") return;
+    let cancelled = false;
+    getPlannedActsAction(manualMonth)
+      .then((saved) => {
+        if (cancelled) return;
+        setManualLines(saved.lines);
+        setManualPersist(saved.mode);
+        setManualFeedback(null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setManualLines([]);
+      });
+    return () => { cancelled = true; };
+  }, [analysisMode, manualMonth]);
+
+  const allOptions = actOptions ? [...actOptions.mine, ...actOptions.catalog] : [];
+  const optionByKey = (key: string) => allOptions.find((o) => o.key === key) ?? null;
+  const manualTotal = manualLines.reduce((s, l) => s + l.count * l.unitAmount, 0);
+
+  const addManualLine = () => {
+    const first = allOptions[0];
+    if (!first) return;
+    setManualLines((prev) => [...prev, { key: first.key, count: 1, unitAmount: first.unitPrice }]);
+    setManualFeedback(null);
+  };
+
+  // Enregistre la liste passée (source de vérité explicite : on ne dépend pas de
+  // l'état async) et rafraîchit la prévision. Une liste vide nettoie le mois.
+  const persistManualLines = async (lines: { key: string; count: number; unitAmount: number }[]) => {
+    const valid = lines.filter((l) => l.count > 0);
+    setManualSaving(true);
+    setManualFeedback(null);
+    try {
+      const res = await saveManualPlannedActsAction(valid, manualMonth, manualPersist);
+      if ("error" in res) {
+        setManualFeedback({ text: res.error, ok: false });
+      } else {
+        setManualFeedback({
+          text: valid.length === 0
+            ? `Actes de ${MONTHS_LONG[manualMonth - 1]} retirés de la simulation.`
+            : manualPersist === "replace"
+              ? `${MONTHS_LONG[manualMonth - 1]} fixé à ${formatCurrency(res.total)}. La prévision s'aligne.`
+              : `${formatCurrency(res.total)} ajoutés à ${MONTHS_LONG[manualMonth - 1]}. La prévision est mise à jour.`,
+          ok: true,
+        });
+        await refetch();
+      }
+    } finally {
+      setManualSaving(false);
+    }
+  };
+
+  const applyManualActs = () => persistManualLines(manualLines);
+
+  // Suppression d'une ligne → on répercute tout de suite sur le graphe.
+  const removeManualLine = (idx: number) => {
+    const next = manualLines.filter((_, i) => i !== idx);
+    setManualLines(next);
+    void persistManualLines(next);
+  };
+
+  // Efface tout le scénario de l'année (leviers + congés + actes) → retour à la base.
+  const clearScenario = async () => {
+    setClearingScenario(true);
+    try {
+      await clearScenarioAction();
+      setManualLines([]);
+      setManualFeedback(null);
+      await refetch();
+    } finally {
+      setClearingScenario(false);
+    }
+  };
 
   const refetch = useCallback(() => {
     setLoading(true);
@@ -2961,7 +3216,7 @@ function CAForecastSection({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-bold text-ardoise-900">Estimation du C.A. {forecast.targetYear}</h3>
-          <InfoTooltip text="Estimation calculée à partir de la tendance de vos années précédentes, de la saisonnalité de votre activité et de votre chiffre d'affaires déjà réalisé cette année. Indicatif." />
+          <InfoTooltip position="bottom" text="Estimation calculée à partir de la tendance de vos années précédentes, de la saisonnalité de votre activité et de votre chiffre d'affaires déjà réalisé cette année. Indicatif." />
         </div>
         <span className={`px-2 py-0.5 text-[11px] font-medium rounded-full ${conf.cls}`}>{conf.text}</span>
       </div>
@@ -2993,14 +3248,24 @@ function CAForecastSection({
       )}
 
       {hasScenario && baseForecast && (
-        <div className="rounded-[12px] bg-brand-50/70 border border-brand-200 px-3 py-2 text-xs text-ardoise-700 flex items-center gap-2 flex-wrap">
-          <span className="font-semibold text-brand-700">Scénario actif</span>
+        <div className="rounded-[12px] bg-brand-50/70 border border-brand-200 px-3 py-2 text-xs text-ardoise-700 flex items-center gap-x-2 gap-y-1 flex-wrap">
+          <span className="font-semibold text-brand-700">Prévision ajustée</span>
           <span className="text-ardoise-500">
-            sans scénario : {formatCurrency(baseForecast.annualProbable)}
+            tient compte de vos saisies (actes prévus, congés, leviers) — sans elles : {formatCurrency(baseForecast.annualProbable)}
           </span>
           <span className={`font-medium ${scenarioDelta >= 0 ? "text-menthe-600" : "text-alerte-600"}`}>
-            ({scenarioDelta >= 0 ? "+" : ""}{formatCurrency(scenarioDelta)})
+            (soit {scenarioDelta >= 0 ? "+" : ""}{formatCurrency(scenarioDelta)})
           </span>
+          <button
+            type="button"
+            onClick={clearScenario}
+            disabled={clearingScenario}
+            title="Effacer vos saisies et revenir à la prévision de base"
+            aria-label="Effacer le scénario"
+            className="ml-auto text-brand-400 hover:text-alerte-500 transition-colors shrink-0 disabled:opacity-40"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
         </div>
       )}
 
@@ -3040,10 +3305,202 @@ function CAForecastSection({
       </Button>
       */}
 
-      {/* Encart IA */}
+      {/* Switch Manuel / IA — masqué temporairement (mode Manuel uniquement) */}
+      {showAnalysisSwitch && (
+        <div className="flex items-center justify-end">
+          <div className="inline-flex items-center gap-0.5 rounded-full bg-ardoise-100 p-0.5">
+            <button
+              type="button"
+              onClick={() => setAnalysisMode("manuel")}
+              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                analysisMode === "manuel" ? "bg-white text-ardoise-800 shadow-sm" : "text-ardoise-500 hover:text-ardoise-700"
+              }`}
+            >
+              Manuel
+            </button>
+            <button
+              type="button"
+              onClick={() => setAnalysisMode("ia")}
+              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                analysisMode === "ia" ? "bg-white text-ardoise-800 shadow-sm" : "text-ardoise-500 hover:text-ardoise-700"
+              }`}
+            >
+              IA
+            </button>
+          </div>
+        </div>
+      )}
+
+      {analysisMode === "manuel" ? (
+      /* Encart Manuel — saisie d'actes prévus */
+      <div className="rounded-[12px] border border-ardoise-100 bg-white/60 p-3 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <p className="text-xs font-semibold text-ardoise-700">Saisie manuelle</p>
+          <div className="flex items-center gap-1.5">
+            <label className="text-[11px] text-ardoise-500">Mois</label>
+            <select
+              value={manualMonth}
+              onChange={(e) => { setManualMonth(Number(e.target.value)); setManualFeedback(null); }}
+              className="px-2 py-1 text-xs rounded-md border border-ardoise-200 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 capitalize"
+            >
+              {MONTHS_LONG.map((m, i) => (
+                <option key={i} value={i + 1}>{m}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {actOptions === null ? (
+          <p className="text-xs text-ardoise-400">Chargement des actes…</p>
+        ) : allOptions.length === 0 ? (
+          <p className="text-xs text-ardoise-500">
+            Aucun acte disponible.
+          </p>
+        ) : (
+          <>
+            {manualLines.length === 0 && (
+              <p className="text-xs text-ardoise-400">Ajoutez les actes que vous prévoyez ce mois-ci.</p>
+            )}
+
+            <div className="space-y-2">
+              {manualLines.map((line, idx) => {
+                const setLine = (patch: Partial<typeof line>) =>
+                  setManualLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+                return (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <select
+                      value={line.key}
+                      onChange={(e) => {
+                        const p = optionByKey(e.target.value);
+                        setLine({ key: e.target.value, unitAmount: p ? p.unitPrice : line.unitAmount });
+                        setManualFeedback(null);
+                      }}
+                      className="flex-1 min-w-0 px-2 py-1 text-xs rounded-md border border-ardoise-200 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400"
+                    >
+                      {actOptions.mine.length > 0 && (
+                        <optgroup label="Vos actes (tarif réel)">
+                          {actOptions.mine.map((a) => (
+                            <option key={a.key} value={a.key}>{a.short} — {a.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {actOptions.catalog.length > 0 && (
+                        <optgroup label="Autres actes NGAP (tarif conventionnel)">
+                          {actOptions.catalog.map((a) => (
+                            <option key={a.key} value={a.key}>{a.short} — {a.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                    <input
+                      type="number"
+                      min={1}
+                      value={line.count}
+                      onChange={(e) => { setLine({ count: Math.max(0, Math.floor(Number(e.target.value) || 0)) }); setManualFeedback(null); }}
+                      className="w-12 px-1.5 py-1 text-xs text-center rounded-md border border-ardoise-200 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400"
+                      aria-label="Quantité"
+                    />
+                    <span className="text-[11px] text-ardoise-400">×</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.05"
+                        value={line.unitAmount}
+                        onChange={(e) => { setLine({ unitAmount: Math.max(0, Number(e.target.value) || 0) }); setManualFeedback(null); }}
+                        className="w-16 pl-1.5 pr-4 py-1 text-xs text-right rounded-md border border-ardoise-200 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400"
+                        aria-label="Prix unitaire"
+                      />
+                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] text-ardoise-400 pointer-events-none">€</span>
+                    </div>
+                    <span className="w-16 text-right text-xs font-medium text-ardoise-700 font-mono shrink-0">
+                      {formatCurrency(line.count * line.unitAmount)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeManualLine(idx)}
+                      disabled={manualSaving}
+                      className="text-ardoise-300 hover:text-alerte-500 transition-colors shrink-0 disabled:opacity-40"
+                      aria-label="Retirer"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={addManualLine}
+                className="text-xs font-medium text-brand-600 hover:text-brand-700"
+              >
+                + Ajouter un acte
+              </button>
+              {manualLines.length > 0 && (
+                <span className="text-[11px] text-ardoise-400">
+                  Actes hors historique : tarif conventionnel de base (hors déplacement), modifiable.
+                </span>
+              )}
+            </div>
+
+            {manualLines.length > 0 && (
+              <>
+                <div className="flex items-center justify-between pt-1 border-t border-ardoise-100">
+                  <span className="text-xs text-ardoise-500">Total du mois saisi</span>
+                  <span className="text-sm font-bold text-ardoise-800 font-mono">{formatCurrency(manualTotal)}</span>
+                </div>
+
+                {/* Compléter (ajout) vs Définir tout le mois (remplacement) */}
+                <div className="inline-flex items-center gap-0.5 rounded-full bg-ardoise-100 p-0.5 w-full">
+                  <button
+                    type="button"
+                    onClick={() => { setManualPersist("add"); setManualFeedback(null); }}
+                    className={`flex-1 px-2 py-1 text-[11px] font-medium rounded-full transition-colors ${
+                      manualPersist === "add" ? "bg-white text-ardoise-800 shadow-sm" : "text-ardoise-500 hover:text-ardoise-700"
+                    }`}
+                  >
+                    Compléter ma prévision
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setManualPersist("replace"); setManualFeedback(null); }}
+                    className={`flex-1 px-2 py-1 text-[11px] font-medium rounded-full transition-colors ${
+                      manualPersist === "replace" ? "bg-white text-ardoise-800 shadow-sm" : "text-ardoise-500 hover:text-ardoise-700"
+                    }`}
+                  >
+                    Définir tout le mois
+                  </button>
+                </div>
+                <p className="text-[11px] text-ardoise-400 leading-snug">
+                  {manualPersist === "add"
+                    ? "Ces actes s'ajoutent à votre projection habituelle du mois."
+                    : "Ces actes remplacent toute la projection du mois."}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={applyManualActs}
+                  disabled={manualSaving || manualTotal <= 0}
+                  className="w-full px-2.5 py-1.5 text-xs font-medium rounded-md bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40"
+                >
+                  {manualSaving ? "Application…" : "Appliquer à la simulation"}
+                </button>
+              </>
+            )}
+
+            {manualFeedback && (
+              <p className={`text-[11px] ${manualFeedback.ok ? "text-menthe-600" : "text-alerte-600"}`}>{manualFeedback.text}</p>
+            )}
+          </>
+        )}
+      </div>
+      ) : (
+      /* Encart IA */
       <div className="rounded-[12px] border border-ardoise-100 bg-white/60 p-3 space-y-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <p className="text-xs font-semibold text-ardoise-700">Analyse de Nova</p>
+          <p className="text-xs font-semibold text-ardoise-700">Analyse IA</p>
           <button
             type="button"
             onClick={() => askAI("Explique-moi ma prévision de chiffre d'affaires pour cette année : tendance, saisonnalité, mois forts et faibles, et ce que je peux en faire.")}
@@ -3086,6 +3543,7 @@ function CAForecastSection({
           </button>
         </div>
       </div>
+      )}
       </div>
     </div>
   );
@@ -3126,7 +3584,7 @@ function YearSelector({
   );
 }
 
-function InfoTooltip({ text }: { text: string }) {
+function InfoTooltip({ text, position = "top" }: { text: string; position?: "top" | "bottom" }) {
   const [show, setShow] = useState(false);
 
   return (
@@ -3141,10 +3599,17 @@ function InfoTooltip({ text }: { text: string }) {
         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
       </button>
       {show && (
-        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-ardoise-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg leading-relaxed">
-          {text}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-ardoise-900" />
-        </div>
+        position === "bottom" ? (
+          <div className="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-ardoise-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg leading-relaxed">
+            {text}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-ardoise-900" />
+          </div>
+        ) : (
+          <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-ardoise-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg leading-relaxed">
+            {text}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-ardoise-900" />
+          </div>
+        )
       )}
     </div>
   );

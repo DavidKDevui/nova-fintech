@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { practitioners, bankAccounts, bankTransactions } from "@/lib/db/schema";
 import { getCotisationsEstimate } from "@/actions/cotisations-estimate";
+import { getManualChargesTotal } from "@/lib/db/manual-charges";
 import { buildCalendar, getUpcomingEvents, DEFAULT_PREFERENCES, type PaymentPreferences } from "@/lib/data/fiscal-calendar";
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -136,7 +137,9 @@ async function computeRecommendations(hp: Practitioner): Promise<Recommendation[
   ]);
 
   const caYtd = Number(incomeRow[0]?.total ?? 0);
-  const decaissementYtd = Number(expensesRow[0]?.total ?? 0);
+  // Charges pro. saisies à la main, bornées aux mois écoulés (cohérent avec le YTD bancaire).
+  const manualChargesYtd = await getManualChargesTotal(hp.id, year, now.getMonth() + 1);
+  const decaissementYtd = Number(expensesRow[0]?.total ?? 0) + manualChargesYtd;
 
   if (caYtd <= 0) return []; // pas de CA → recos non significatives
 

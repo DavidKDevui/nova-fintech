@@ -25,6 +25,7 @@ export const PRACTITIONER_DESTINATIONS: NavDestination[] = [
   { label: "Gestion", href: "/management", group: "Page", keywords: ["comptabilité", "compta"] },
   { label: "Échéances", href: "/deadlines", group: "Page", keywords: ["calendrier", "paiements", "dates", "urssaf", "carpimko", "impôt", "rappels"] },
   { label: "Optimisation", href: "/optimization", group: "Page", keywords: ["optimiser", "défiscalisation", "économies", "madelin", "per", "épargne", "moyens d'optimisation"] },
+  { label: "Services d'accompagnement", href: "/support-services", group: "Page", keywords: ["accompagnement", "services", "soutien", "aide", "partenaires", "coaching"] },
   { label: "Aide", href: "/help", group: "Page", keywords: ["support", "faq", "question", "contact", "assistance"] },
 
   // ── Onglets Gestion ──

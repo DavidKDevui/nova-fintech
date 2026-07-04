@@ -370,3 +370,59 @@ export const practitionerCaAdjustments = pgTable("practitioner_ca_adjustments", 
 }, (table) => [
   index("idx_ca_adjustments_practitioner_year").on(table.practitionerId, table.year),
 ]);
+
+// ── Charges pro. saisies manuellement (par praticien, par mois) ──
+// Complètent les charges dérivées des transactions bancaires dans « Mon activité ».
+// Une ligne = un montant pour un (type de charge, mois) donné. `chargeType` est un
+// varchar libre validé côté serveur contre la liste `MANUAL_CHARGE_TYPES`
+// (lib/data/manual-charge-types.ts) — volontairement pas un enum PG, pour ajouter
+// des types sans migration. L'unicité (praticien, année, mois, type) permet l'upsert.
+
+export const practitionerManualCharges = pgTable("practitioner_manual_charges", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  practitionerId: uuid("practitioner_id")
+    .notNull()
+    .references(() => practitioners.id, { onDelete: "cascade" }),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(),
+  chargeType: varchar("charge_type", { length: 60 }).notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_manual_charges_practitioner_year").on(table.practitionerId, table.year),
+  // Index composite pour la recherche exacte d'une case (upsert applicatif). Non
+  // marqué unique : la synchro de schéma (sync.ts) crée tous les index en
+  // non-unique — l'unicité (praticien, année, mois, type) est garantie côté
+  // applicatif par l'upsert « select puis update/insert ».
+  index("idx_manual_charges_cell").on(table.practitionerId, table.year, table.month, table.chargeType),
+]);
+
+// ── Actes prévus saisis manuellement (simulation de CA, par praticien/mois) ──
+// Détail des lignes saisies dans l'onglet Simulation (mode « Manuel ») : une ligne
+// = un acte prévu (type + quantité + prix) pour un (année, mois). Sert UNIQUEMENT
+// à réafficher/rééditer la saisie ; l'effet réel sur la prévision passe par
+// `practitionerCaAdjustments` (month_override / fixed_oneoff). C'est de la
+// simulation : cette table n'alimente aucun CA réel ni aucune autre page.
+// `persistMode` (add|replace) est identique pour toutes les lignes d'un même mois
+// (réécrites en bloc à chaque application).
+
+export const practitionerPlannedActs = pgTable("practitioner_planned_acts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  practitionerId: uuid("practitioner_id")
+    .notNull()
+    .references(() => practitioners.id, { onDelete: "cascade" }),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(),
+  // Clé stable de la prestation (code:coefficient), ex. "AMI:1.5".
+  actKey: varchar("act_key", { length: 40 }).notNull(),
+  short: varchar("short", { length: 40 }).notNull(),
+  label: varchar("label", { length: 200 }).notNull(),
+  count: integer("count").notNull().default(1),
+  unitAmount: numeric("unit_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  // "add" (compléter la prévision) ou "replace" (définir tout le mois).
+  persistMode: varchar("persist_mode", { length: 16 }).notNull().default("add"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_planned_acts_cell").on(table.practitionerId, table.year, table.month),
+]);

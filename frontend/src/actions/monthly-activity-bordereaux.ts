@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { practitioners, practiceLinks, carePassages } from "@/lib/db/schema";
 import { namesMatch } from "@/lib/name-matching";
+import { addManualChargesToMonths } from "@/lib/db/manual-charges";
 import type { MonthlyActivityMonth } from "./transaction";
 
 /**
@@ -33,7 +34,11 @@ export async function getMonthlyActivityFromBordereauxAction(
       .select({ practiceId: practiceLinks.practiceId })
       .from(practiceLinks)
       .where(eq(practiceLinks.practitionerId, hp.id));
-    if (links.length === 0) return { months: empty };
+    if (links.length === 0) {
+      // Pas de bordereaux, mais le praticien peut avoir saisi des charges manuelles.
+      await addManualChargesToMonths(empty, hp.id, year);
+      return { months: empty };
+    }
 
     const practiceIds = links.map((l) => l.practiceId);
     const yearStart = `${year}-01-01`;
@@ -65,6 +70,8 @@ export async function getMonthlyActivityFromBordereauxAction(
       if (idx < 0 || idx > 11) continue;
       months[idx]!.income += Number(p.totalAmount);
     }
+    // Charges pro. manuelles ajoutées par-dessus le CA dérivé des bordereaux.
+    await addManualChargesToMonths(months, hp.id, year);
     return { months };
   } catch {
     return { months: empty };

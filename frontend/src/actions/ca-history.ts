@@ -9,11 +9,21 @@ import {
   type CAHistory,
 } from "@/lib/services/ca-history.service";
 import type { CAForecast } from "@/lib/services/ca-forecast.service";
-import { buildScenarioForecast, type StoredAdjustment } from "@/lib/services/ca-scenario.service";
+import { buildScenarioForecast, clearScenario, type StoredAdjustment } from "@/lib/services/ca-scenario.service";
+import {
+  getManualActOptions,
+  getPlannedActs,
+  saveManualPlannedActs,
+  type ActOption,
+  type PlannedActLine,
+  type SavedPlannedActs,
+  type ActEstimateResult,
+} from "@/lib/services/ca-acts.service";
 
 export type { CAHistory, YearlyCA, CASource } from "@/lib/services/ca-history.service";
 export type { CAForecast } from "@/lib/services/ca-forecast.service";
 export type { StoredAdjustment } from "@/lib/services/ca-scenario.service";
+export type { ActOption, ActEstimateResult, PlannedActLine, SavedPlannedActs } from "@/lib/services/ca-acts.service";
 
 const EMPTY_HISTORY: CAHistory = { years: [], currentYear: new Date().getFullYear() };
 
@@ -66,4 +76,44 @@ export async function getCAForecastAction(): Promise<CAForecastResult> {
     return { history: EMPTY_HISTORY, forecast: null, baseForecast: null, monthsElapsed, hasScenario: false, adjustments: [] };
   }
   return buildScenarioForecast(hp, monthsElapsed);
+}
+
+/**
+ * Options du menu de saisie manuelle : actes réels du praticien (tarif observé)
+ * + reste du référentiel NGAP (tarif conventionnel), pour l'année en cours.
+ */
+export async function getManualActOptionsAction(): Promise<{ mine: ActOption[]; catalog: ActOption[] }> {
+  const hp = await resolvePractitioner();
+  if (!hp) return { mine: [], catalog: [] };
+  return getManualActOptions(hp);
+}
+
+/** Réinitialise tout le scénario de l'année (leviers + congés + actes prévus). */
+export async function clearScenarioAction(): Promise<{ ok: boolean }> {
+  const hp = await resolvePractitioner();
+  if (!hp) return { ok: false };
+  await clearScenario(hp.id, new Date().getFullYear());
+  return { ok: true };
+}
+
+/** Actes prévus déjà enregistrés pour un mois (pour réafficher/rééditer la saisie). */
+export async function getPlannedActsAction(month: number): Promise<SavedPlannedActs> {
+  const year = new Date().getFullYear();
+  const hp = await resolvePractitioner();
+  if (!hp) return { month, year, mode: "add", lines: [] };
+  return getPlannedActs(hp, year, month);
+}
+
+/**
+ * Enregistre le détail des actes prévus d'un mois et répercute leur total sur la
+ * prévision (réaligne le mois si « replace », complète la projection si « add »).
+ */
+export async function saveManualPlannedActsAction(
+  lines: PlannedActLine[],
+  month: number,
+  mode: "add" | "replace",
+): Promise<ActEstimateResult | { error: string }> {
+  const hp = await resolvePractitioner();
+  if (!hp) return { error: "Session invalide." };
+  return saveManualPlannedActs(hp, lines, month, mode);
 }
