@@ -1,3 +1,4 @@
+import { APP_URL } from "@/lib/config";
 import { IconCheck } from "./icons";
 
 type Plan = {
@@ -7,8 +8,12 @@ type Plan = {
   features: string[];
   cta: string;
   ctaClass: string;
+  /** Cible du bouton. Par défaut l'app ; le plan Cabinet ouvre un mailto équipe. */
+  href: string;
   popular?: boolean;
 };
+
+const CONTACT_EMAIL = "team@actidec.com";
 
 const PLANS: Plan[] = [
   {
@@ -22,6 +27,7 @@ const PLANS: Plan[] = [
     ],
     cta: "Commencer gratuitement",
     ctaClass: "btn-ghost",
+    href: APP_URL,
   },
   {
     plan: "Praticien",
@@ -36,6 +42,7 @@ const PLANS: Plan[] = [
     ],
     cta: "Démarrer l'essai gratuit",
     ctaClass: "btn-cta",
+    href: APP_URL,
     popular: true,
   },
   {
@@ -50,6 +57,7 @@ const PLANS: Plan[] = [
     ],
     cta: "Contacter l'équipe",
     ctaClass: "btn-ghost",
+    href: `mailto:${CONTACT_EMAIL}`,
   },
 ];
 
@@ -86,7 +94,7 @@ export function Pricing() {
                   </li>
                 ))}
               </ul>
-              <a href="#" className={`btn ${plan.ctaClass}`}>
+              <a href={plan.href} className={`btn ${plan.ctaClass}`}>
                 {plan.cta}
               </a>
             </div>

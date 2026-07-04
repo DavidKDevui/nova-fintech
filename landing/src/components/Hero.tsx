@@ -1,3 +1,4 @@
+import { APP_URL } from "@/lib/config";
 import { IconArrowRight, IconCheck, IconClock, IconEuroFlow } from "./icons";
 
 const HERO_NOTES = [
@@ -148,7 +149,7 @@ export function Hero() {
             impôts. Vous savez à l&apos;euro près ce que vous pouvez vous verser.
           </p>
           <div className="hero-cta">
-            <a href="#tarifs" className="btn btn-cta">
+            <a href={APP_URL} className="btn btn-cta">
               Démarrer mon essai gratuit
               <IconArrowRight />
             </a>

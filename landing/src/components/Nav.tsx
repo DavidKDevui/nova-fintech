@@ -1,3 +1,5 @@
+import { APP_URL } from "@/lib/config";
+
 const NAV_LINKS = [
   { href: "#fonctionnalites", label: "Fonctionnalités" },
   { href: "#optimisations", label: "Optimisations" },
@@ -30,10 +32,10 @@ export function Nav() {
           ))}
         </nav>
         <div className="nav-actions">
-          <a href="#" className="login">
+          <a href={APP_URL} className="login">
             Se connecter
           </a>
-          <a href="#tarifs" className="btn btn-cta">
+          <a href={APP_URL} className="btn btn-cta">
             Essai gratuit 30 j
           </a>
         </div>
