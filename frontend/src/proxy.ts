@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { refreshSession } from "@/lib/services/auth.service";
-
-const IS_PROD = process.env.NODE_ENV === "production";
 
 const publicPaths = ["/login", "/setup-password", "/forgot-password", "/reset-password"];
 // Pages toujours accessibles, peu importe l'état de connexion (RGPD / légal)
 const alwaysAccessiblePaths = ["/legal", "/privacy"];
+const REFRESH_ENDPOINT = "/api/auth/refresh";
 
 function isTokenExpired(token: string): boolean {
   try {
@@ -25,93 +23,96 @@ function isTokenExpired(token: string): boolean {
   }
 }
 
+// Prefetch : Next.js les tire de façon spéculative et peut annuler/ignorer la
+// réponse. On ne doit JAMAIS y muter les cookies d'auth (ni rotation, ni clear),
+// sinon on désynchronise le cookie du navigateur et la base → déconnexion.
+function isPrefetch(request: NextRequest): boolean {
+  const h = request.headers;
+  return (
+    h.get("next-router-prefetch") === "1" ||
+    h.get("purpose") === "prefetch" ||
+    (h.get("sec-purpose")?.includes("prefetch") ?? false)
+  );
+}
+
+// Construit le chemin de retour après refresh. On retire `_rsc` (paramètre interne
+// des navigations RSC) mais on conserve les vrais query params (?toast=…, filtres…).
+function buildNextParam(request: NextRequest, isPublicPath: boolean): string {
+  if (isPublicPath) return "/dashboard";
+  const params = new URLSearchParams(request.nextUrl.search);
+  params.delete("_rsc");
+  const qs = params.toString();
+  const dest = request.nextUrl.pathname + (qs ? `?${qs}` : "");
+  if (!dest.startsWith("/") || dest.startsWith("//")) return "/dashboard";
+  return dest;
+}
+
+/**
+ * Proxy = check OPTIMISTE uniquement (cookie only, jamais de DB, jamais de
+ * rotation). Il tourne sur chaque route (prefetch compris) : toute écriture DB ou
+ * rotation de token ici est à la fois lente et racy. La rotation vit dans
+ * l'endpoint dédié /api/auth/refresh, sur une vraie navigation dont la réponse
+ * est toujours commitée par le navigateur.
+ */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const accessToken = request.cookies.get("accessToken")?.value;
   const refreshToken = request.cookies.get("refreshToken")?.value;
+  const prefetch = isPrefetch(request);
+  const isGet = request.method === "GET";
 
   const log = (...args: unknown[]) => console.log(`[PROXY] ${request.method} ${pathname} ::`, ...args);
-  log("start", {
-    hasAccess: !!accessToken,
-    hasRefresh: !!refreshToken,
-    referer: request.headers.get("referer") || "",
-  });
+  log("start", { hasAccess: !!accessToken, hasRefresh: !!refreshToken, prefetch });
 
-  // Pages légales : accessibles à tous, jamais de redirection
+  // Pages légales : accessibles à tous, jamais de redirection.
   if (alwaysAccessiblePaths.some((p) => pathname.startsWith(p))) {
-    log("alwaysAccessible → next");
     return NextResponse.next();
   }
 
-  const accessExpired = accessToken ? isTokenExpired(accessToken) : true;
-  const hasValidAccess = !!accessToken && !accessExpired;
+  const hasValidAccess = !!accessToken && !isTokenExpired(accessToken);
   const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
-  log("tokenCheck", { accessExpired, hasValidAccess, isPublicPath });
 
-  // Valid access token — proceed normally
+  // Access token valide (optimiste — la DAL/getSession revalide en DB au rendu).
   if (hasValidAccess) {
     if (isPublicPath) {
-      // Accès valide mais on demande une page publique (ex : prefetch d'un
-      // <Link href="/login">) → on redirige vers le dashboard. On ne touche
-      // JAMAIS aux cookies ici : un token valide est valide, point.
       log("valid access + public path → redirect /dashboard");
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
-    log("valid access → next ✅");
     return NextResponse.next();
   }
 
-  // No valid access token — try refresh
-  if (refreshToken) {
-    log("no valid access, refresh present → calling refreshSession()");
-    try {
-      const tokens = await refreshSession(refreshToken);
-      log("refreshSession OK", { rotated: !!tokens.refreshToken });
-      const response = isPublicPath
-        ? NextResponse.redirect(new URL("/dashboard", request.url))
-        : NextResponse.next();
+  // À partir d'ici : pas d'access valide. On ne rafraîchit JAMAIS ici.
 
-      response.cookies.set("accessToken", tokens.accessToken, {
-        httpOnly: true,
-        secure: IS_PROD,
-        sameSite: "lax",
-        maxAge: 15 * 60,
-        path: "/",
-      });
-
-      if (tokens.refreshToken) {
-        response.cookies.set("refreshToken", tokens.refreshToken, {
-          httpOnly: true,
-          secure: IS_PROD,
-          sameSite: "lax",
-          maxAge: 7 * 24 * 60 * 60,
-          path: "/",
-        });
-      }
-
-      log("refresh applied → proceeding ✅", { isPublicPath });
-      return response;
-    } catch (err) {
-      log("❌ refreshSession FAILED → CLEAR cookies + redirect /login", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-      // Refresh failed — clear cookies and redirect to login
-      const response = isPublicPath
-        ? NextResponse.next()
-        : NextResponse.redirect(new URL("/login", request.url));
-      response.cookies.set("accessToken", "", { path: "/", maxAge: 0 });
-      response.cookies.set("refreshToken", "", { path: "/", maxAge: 0 });
-      return response;
-    }
+  // Prefetch : ne toucher à rien. La vraie navigation déclenchera le refresh.
+  if (prefetch) {
+    log("prefetch sans access valide → next (cookies intacts)");
+    return NextResponse.next();
   }
 
-  // No tokens at all
-  if (!isPublicPath) {
-    log("❌ no tokens at all → redirect /login");
+  // Refresh token présent → on délègue la rotation à l'endpoint dédié, mais
+  // uniquement pour les vraies navigations GET (réponse commitée par le
+  // navigateur). Les non-GET (server actions) passent : leur propre garde
+  // getSession() renvoie « session expirée » et la navigation GET suivante
+  // rafraîchit. On ne redirige pas un POST (perdrait la méthode / le corps).
+  if (refreshToken) {
+    if (isGet) {
+      const url = new URL(REFRESH_ENDPOINT, request.url);
+      url.searchParams.set("next", buildNextParam(request, isPublicPath));
+      log("access expiré + refresh présent → redirect endpoint refresh", { next: url.searchParams.get("next") });
+      return NextResponse.redirect(url);
+    }
+    log("access expiré + refresh présent + non-GET → next (garde applicative)");
+    return NextResponse.next();
+  }
+
+  // Aucun token exploitable.
+  if (isPublicPath) {
+    return NextResponse.next();
+  }
+  if (isGet) {
+    log("❌ aucun token → redirect /login");
     return NextResponse.redirect(new URL("/login", request.url));
   }
-
-  log("no tokens, public path → next");
   return NextResponse.next();
 }
 
