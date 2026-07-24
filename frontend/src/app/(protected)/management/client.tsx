@@ -245,6 +245,73 @@ function MobileSubLine({ label, value, italic }: { label: string; value: number;
   );
 }
 
+type MonthData = { name: string; revenus: number; cotisations: number; autresDepenses: number; urssaf: number; carpimko: number; chargesPro: number; retrocession: number; madelin: number; impots: number; remuneration: number };
+
+// Sélecteur de mois « un mois à la fois » (vues sous lg).
+function MonthStepper({ month, setMonth, year }: { month: number; setMonth: (fn: (m: number) => number) => void; year: number }) {
+  return (
+    <div className="flex items-center justify-between">
+      <button
+        type="button"
+        onClick={() => setMonth((mm) => Math.max(0, mm - 1))}
+        disabled={month === 0}
+        className="w-9 h-9 flex items-center justify-center rounded-lg border border-ardoise-200 text-ardoise-600 hover:bg-ardoise-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        aria-label="Mois précédent"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <span className="text-sm font-semibold text-ardoise-800 capitalize">{MONTHS_LONG[month]} {year}</span>
+      <button
+        type="button"
+        onClick={() => setMonth((mm) => Math.min(11, mm + 1))}
+        disabled={month === 11}
+        className="w-9 h-9 flex items-center justify-center rounded-lg border border-ardoise-200 text-ardoise-600 hover:bg-ardoise-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        aria-label="Mois suivant"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+    </div>
+  );
+}
+
+// Graphe revenus / dépenses. `single` = vue sous lg, un seul mois affiché (calée
+// sur la carte détaillée en dessous) : barres bridées pour ne pas s'étaler sur
+// toute la largeur, le mois étant porté par le sélecteur au-dessus.
+function ActivityBarChart({ data, isEstimated, single = false }: { data: MonthData[]; isEstimated: boolean; single?: boolean }) {
+  const labels: Record<string, string> = {
+    revenus: isEstimated ? "Revenus (bordereaux)" : "Revenus",
+    cotisations: "Cotisations sociales",
+    autresDepenses: "Autres dépenses",
+  };
+  return (
+    <ResponsiveContainer width="100%" height={240}>
+      <BarChart data={data} barGap={single ? 8 : 2} barCategoryGap={single ? "10%" : "20%"} margin={{ left: 0, right: 0, top: 5, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+        <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#A79EB5" }} tickLine={false} axisLine={false} hide />
+        <YAxis tick={{ fontSize: 11, fill: "#A79EB5" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={0} />
+        <Tooltip
+          contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E1DBEC", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+          formatter={(value, name) => {
+            const num = typeof value === "number" ? value : Number(value ?? 0);
+            const key = String(name ?? "");
+            return [formatCurrency(num), labels[key] ?? key];
+          }}
+          labelStyle={{ fontWeight: 600, marginBottom: 4 }}
+        />
+        <Legend
+          iconType="circle"
+          iconSize={8}
+          wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+          formatter={(value: string) => labels[value] ?? value}
+        />
+        <Bar dataKey="revenus" fill="#3DB87A" radius={[3, 3, 0, 0]} maxBarSize={single ? 110 : undefined} />
+        <Bar dataKey="autresDepenses" stackId="depenses" fill="#ef4444" maxBarSize={single ? 110 : undefined} />
+        <Bar dataKey="cotisations" stackId="depenses" fill="#f97316" radius={[3, 3, 0, 0]} maxBarSize={single ? 110 : undefined} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 function ActivityTab() {
   const hp = usePractitioner();
   const { loadYearCore, bustYear, loadEstimate } = useManagementData();
@@ -258,7 +325,6 @@ function ActivityTab() {
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState({ encaissement: 0, decaissement: 0, cotisations: 0, remuneration: 0 });
   const [effectiveCA, setEffectiveCA] = useState<EffectiveCA>({ ca: 0, source: "none" });
-  type MonthData = { name: string; revenus: number; cotisations: number; autresDepenses: number; urssaf: number; carpimko: number; chargesPro: number; retrocession: number; madelin: number; impots: number; remuneration: number };
   const [chartData, setChartData] = useState<MonthData[]>([]);
   // Jours travaillés saisis par mois ; null = non saisi → défaut = jours ouvrés.
   const [workedDays, setWorkedDays] = useState<(number | null)[]>(Array(12).fill(null));
@@ -704,43 +770,19 @@ function ActivityTab() {
             {loading ? (
               <div className="h-60 bg-ardoise-100 rounded animate-pulse" />
             ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={chartData} barGap={2} barCategoryGap="20%" margin={{ left: 0, right: 0, top: 5, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#A79EB5" }} tickLine={false} axisLine={false} hide />
-                  <YAxis tick={{ fontSize: 11, fill: "#A79EB5" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={0} />
-                  <Tooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E1DBEC", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
-                    formatter={(value, name) => {
-                      const labels: Record<string, string> = {
-                        revenus: isEstimated ? "Revenus (bordereaux)" : "Revenus",
-                        cotisations: "Cotisations sociales",
-                        autresDepenses: "Autres dépenses",
-                      };
-                      const num = typeof value === "number" ? value : Number(value ?? 0);
-                      const key = String(name ?? "");
-                      return [formatCurrency(num), labels[key] ?? key];
-                    }}
-                    labelStyle={{ fontWeight: 600, marginBottom: 4 }}
-                  />
-                  <Legend
-                    iconType="circle"
-                    iconSize={8}
-                    wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-                    formatter={(value: string) => {
-                      const labels: Record<string, string> = {
-                        revenus: isEstimated ? "Revenus (bordereaux)" : "Revenus",
-                        cotisations: "Cotisations sociales",
-                        autresDepenses: "Autres dépenses",
-                      };
-                      return labels[value] ?? value;
-                    }}
-                  />
-                  <Bar dataKey="revenus" fill="#3DB87A" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="autresDepenses" stackId="depenses" fill="#ef4444" />
-                  <Bar dataKey="cotisations" stackId="depenses" fill="#f97316" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <>
+                {/* Sous lg : un seul mois, aligné sur la carte détaillée en dessous
+                    (le tableau 12 colonnes n'apparaît qu'à partir de lg). */}
+                <div className="lg:hidden px-4 pt-2 space-y-2">
+                  <MonthStepper month={mobileMonth} setMonth={setMobileMonth} year={year} />
+                  {chartData[mobileMonth] && (
+                    <ActivityBarChart data={[chartData[mobileMonth]]} isEstimated={isEstimated} single />
+                  )}
+                </div>
+                <div className="hidden lg:block">
+                  <ActivityBarChart data={chartData} isEstimated={isEstimated} />
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -1085,29 +1127,7 @@ function ActivityTab() {
 
           {/* ── Vue mobile : un mois à la fois (le tableau ci-dessus est masqué sous lg) ── */}
           <div className="border-t border-ardoise-100 lg:hidden p-4 space-y-3">
-            {/* Sélecteur de mois */}
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setMobileMonth((mm) => Math.max(0, mm - 1))}
-                disabled={mobileMonth === 0}
-                className="w-9 h-9 flex items-center justify-center rounded-lg border border-ardoise-200 text-ardoise-600 hover:bg-ardoise-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                aria-label="Mois précédent"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-              </button>
-              <span className="text-sm font-semibold text-ardoise-800 capitalize">{MONTHS_LONG[mobileMonth]} {year}</span>
-              <button
-                type="button"
-                onClick={() => setMobileMonth((mm) => Math.min(11, mm + 1))}
-                disabled={mobileMonth === 11}
-                className="w-9 h-9 flex items-center justify-center rounded-lg border border-ardoise-200 text-ardoise-600 hover:bg-ardoise-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                aria-label="Mois suivant"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-              </button>
-            </div>
-
+            {/* Le sélecteur de mois est au-dessus du graphe (il pilote les deux). */}
             {(() => {
               const mi = mobileMonth;
               const m = chartData[mi];
