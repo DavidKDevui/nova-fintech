@@ -273,10 +273,15 @@ export function DataProvider({ initialDataPromise, children }: { initialDataProm
         });
       return;
     }
+    // Fallback (pas de préchargement serveur) : refetch client. Ces refresh* font
+    // du setState, mais c'est un chargement initial one-shot gardé par
+    // initialLoadDoneRef → pas de cascade de rendus, on désactive la règle.
+    /* eslint-disable react-hooks/set-state-in-effect */
     refresh();
     refreshFacturation();
     refreshTransactions();
     refreshFiscal();
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [initialDataPromise, applyInitial, refresh, refreshFacturation, refreshTransactions, refreshFiscal]);
 
   return (
