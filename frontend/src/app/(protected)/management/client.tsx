@@ -63,13 +63,24 @@ type YearCore = {
   isEstimated: boolean;
 };
 
+type YearFiscal = Awaited<ReturnType<typeof getFiscalSituationAction>>;
+
+/** Données préchargées côté serveur (page.tsx) pour seeder le cache du provider :
+ *  l'onglet par défaut s'affiche sans server action au montage. */
+export type ManagementInitialData = {
+  years: Record<number, { core: YearCore; estimate: CotisationsEstimate | null; fiscal: YearFiscal }>;
+};
+
 type ManagementDataValue = {
   /** Cœur partagé pour une année : CA effectif + activité mensuelle (avec fallback). */
   loadYearCore: (year: number) => Promise<YearCore>;
   /** Estimation cotisations pour une année (null si CA nul). */
   loadEstimate: (year: number) => Promise<CotisationsEstimate | null>;
-  /** Invalide les caches d'une année (après édition des charges manuelles) : les
-   *  onglets non montés se rechargeront frais à leur prochaine ouverture. */
+  /** Situation fiscale d'une année (cachée pour éviter les refetch entre onglets). */
+  loadFiscal: (year: number) => Promise<YearFiscal>;
+  /** Invalide les caches d'une année (après édition des charges manuelles ou de la
+   *  situation fiscale) : les onglets non montés se rechargeront frais à leur
+   *  prochaine ouverture. */
   bustYear: (year: number) => void;
 };
 
@@ -83,9 +94,30 @@ function useManagementData(): ManagementDataValue {
 
 // Le provider est remonté (via `key`) quand la connexion bancaire change, donc
 // les caches repartent vides automatiquement — pas de logique d'invalidation ici.
-function ManagementDataProvider({ children }: { children: ReactNode }) {
+function ManagementDataProvider({ initial, children }: { initial?: ManagementInitialData; children: ReactNode }) {
   const coreCacheRef = useRef(new Map<number, Promise<YearCore>>());
   const estimateCacheRef = useRef(new Map<number, Promise<CotisationsEstimate | null>>());
+  const fiscalCacheRef = useRef(new Map<number, Promise<YearFiscal>>());
+
+  // Seed unique (au premier render) avec les données préchargées côté serveur.
+  // `hp` étant une prop serveur stable, la `key` du provider ne change pas en cours
+  // de session → ce seed n'a lieu qu'une fois, avant que les effets des onglets ne
+  // tournent. Un changement de banque passe par un nouveau rendu serveur → nouveau
+  // `initial` frais, donc pas de risque de seed périmé.
+  const seededRef = useRef(false);
+  /* eslint-disable react-hooks/refs -- seed unique et volontaire des caches au premier render (cf. commentaire ci-dessus) : lecture/écriture des refs sûre, avant tout effet des onglets. */
+  if (!seededRef.current) {
+    seededRef.current = true;
+    if (initial) {
+      for (const [y, d] of Object.entries(initial.years)) {
+        const year = Number(y);
+        coreCacheRef.current.set(year, Promise.resolve(d.core));
+        estimateCacheRef.current.set(year, Promise.resolve(d.estimate));
+        fiscalCacheRef.current.set(year, Promise.resolve(d.fiscal));
+      }
+    }
+  }
+  /* eslint-enable react-hooks/refs */
 
   const loadYearCore = useCallback((year: number) => {
     const cache = coreCacheRef.current;
@@ -125,16 +157,29 @@ function ManagementDataProvider({ children }: { children: ReactNode }) {
     return p;
   }, [loadYearCore]);
 
+  const loadFiscal = useCallback((year: number) => {
+    const cache = fiscalCacheRef.current;
+    const cached = cache.get(year);
+    if (cached) return cached;
+    const p = getFiscalSituationAction(year).catch((err) => {
+      fiscalCacheRef.current.delete(year);
+      throw err;
+    });
+    cache.set(year, p);
+    return p;
+  }, []);
+
   const bustYear = useCallback((year: number) => {
     coreCacheRef.current.delete(year);
     estimateCacheRef.current.delete(year);
+    fiscalCacheRef.current.delete(year);
   }, []);
 
-  const value = useMemo(() => ({ loadYearCore, loadEstimate, bustYear }), [loadYearCore, loadEstimate, bustYear]);
+  const value = useMemo(() => ({ loadYearCore, loadEstimate, loadFiscal, bustYear }), [loadYearCore, loadEstimate, loadFiscal, bustYear]);
   return <ManagementDataContext.Provider value={value}>{children}</ManagementDataContext.Provider>;
 }
 
-export function ManagementClient() {
+export function ManagementClient({ initial }: { initial?: ManagementInitialData }) {
   const hp = usePractitioner();
   const searchParams = useSearchParams();
   // Onglet deep-linkable via ?tab= (utilisé par la recherche de la sidebar).
@@ -153,15 +198,15 @@ export function ManagementClient() {
   return (
     // key = connexion bancaire : un changement remonte tout le sous-arbre et
     // vide le cache de données partagé (les montants CA/cotisations en dépendent).
-    <ManagementDataProvider key={hp?.bridgeUserUuid ?? "none"}><div>
+    <ManagementDataProvider key={hp?.bridgeUserUuid ?? "none"} initial={initial}><div>
       {/* Tabs */}
-      <div className="flex items-center gap-0 border-b border-ardoise-100 mb-6">
+      <div className="flex items-center gap-0 border-b border-ardoise-100 mb-6 overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
-            className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
+            className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap shrink-0 ${
               tab === t.key ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
             }`}
           >
@@ -188,14 +233,28 @@ export function ManagementClient() {
 
 // ── Activity Tab ──
 
+// Ligne de détail (libellé → montant) pour les vues mobiles "un mois à la fois".
+function MobileSubLine({ label, value, italic }: { label: string; value: number; italic?: boolean }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-ardoise-500">{label}</span>
+      <span className={`text-xs font-mono ${italic ? "text-ardoise-400 italic" : "text-ardoise-500"}`}>
+        {value > 0 ? formatCurrency(value) : "—"}
+      </span>
+    </div>
+  );
+}
+
 function ActivityTab() {
   const hp = usePractitioner();
-  const { loadYearCore, bustYear } = useManagementData();
+  const { loadYearCore, bustYear, loadEstimate } = useManagementData();
   const { notifyManualChargesChanged } = useData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
   const [year, setYear] = useState(currentYear);
+  // Détail mobile : mois actuellement affiché (le tableau 12 colonnes est masqué sous lg).
+  const [mobileMonth, setMobileMonth] = useState(currentMonth);
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState({ encaissement: 0, decaissement: 0, cotisations: 0, remuneration: 0 });
   const [effectiveCA, setEffectiveCA] = useState<EffectiveCA>({ ca: 0, source: "none" });
@@ -216,6 +275,11 @@ function ActivityTab() {
   // mais URSSAF/CARPIMKO/PAS estimés via getCotisationsEstimate. Sert à afficher
   // les badges "estim." et le bandeau d'incitation à connecter la banque.
   const [isEstimated, setIsEstimated] = useState(false);
+  // Estimation cotisations de l'année (même source que « Mes cotisations sociales »
+  // et « Ma synthèse ») : sert de repli mensuel URSSAF/CARPIMKO quand aucun
+  // prélèvement réel n'est encore observé. `null` en mode fallback bordereaux
+  // (cf. commentaire dans fetchData) et tant que le CA est nul.
+  const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
 
   const fetchData = useCallback(async (y: number) => {
     setLoading(true);
@@ -264,6 +328,7 @@ function ActivityTab() {
       setKpis({ encaissement: totalCA, decaissement: 0, cotisations: 0, remuneration: 0 });
       setEffectiveCA(effectiveCAResult);
       setChartData(toChartData(months));
+      setEstimate(null);
       setWorkedDays(workedDaysResult);
       setIsEstimated(true);
       setLoading(false);
@@ -272,14 +337,20 @@ function ActivityTab() {
 
     // Flux normal : transactions bancaires. Les KPIs encaissement/décaissement
     // proviennent d'une agrégation dédiée (distincte de l'activité mensuelle).
-    const kpiResult = await getTransactionKpisAction(null, y, true);
+    // L'estimation de cotisations sert de repli mensuel URSSAF/CARPIMKO (mois non
+    // encore prélevés) pour rester cohérent avec les onglets Cotisations/Synthèse.
+    const [kpiResult, est] = await Promise.all([
+      getTransactionKpisAction(null, y, true),
+      loadEstimate(y),
+    ]);
     setKpis({ encaissement: kpiResult.encaissement, decaissement: kpiResult.decaissement, cotisations: kpiResult.cotisations ?? 0, remuneration: kpiResult.remuneration ?? 0 });
     setEffectiveCA(effectiveCAResult);
     setChartData(toChartData(months));
+    setEstimate(est);
     setWorkedDays(workedDaysResult);
     setIsEstimated(false);
     setLoading(false);
-  }, [loadYearCore]);
+  }, [loadYearCore, loadEstimate]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
@@ -464,6 +535,50 @@ function ActivityTab() {
     [projectedCAByMonth],
   );
 
+  // ── Cotisations sociales : réel sinon estimé (cohérence inter-onglets) ──
+  // Calendrier des échéances URSSAF/CARPIMKO pour ventiler l'estimation par mois,
+  // exactement comme l'onglet « Mes cotisations sociales ».
+  const prefs: PaymentPreferences = useMemo(() => {
+    if (!hp) return DEFAULT_PREFERENCES;
+    return {
+      urssafFrequency: hp.urssafFrequency,
+      urssafPayDay: hp.urssafPayDay,
+      pasFrequency: hp.pasFrequency,
+      carpimkoFrequency: hp.carpimkoFrequency,
+      carpimkoPayDay: hp.carpimkoPayDay,
+      activityStartDate: hp.activityStartDate,
+    };
+  }, [hp]);
+  const calendar = useMemo(() => buildCalendar(prefs), [prefs]);
+
+  // Montant estimé par mois (0 hors mois d'échéance).
+  const estimatedCotisMonths = useMemo(() => {
+    if (!estimate) return Array.from({ length: 12 }, () => ({ urssaf: 0, carpimko: 0 }));
+    return Array.from({ length: 12 }, (_, i) => {
+      const events = calendar[i] ?? [];
+      return {
+        urssaf: events.some((e) => e.type === "urssaf") ? estimate.urssafParEcheance : 0,
+        carpimko: events.some((e) => e.type === "carpimko") ? estimate.carpimkoParEcheance : 0,
+      };
+    });
+  }, [estimate, calendar]);
+
+  // URSSAF/CARPIMKO effectifs par mois : le réel s'il a été prélevé, sinon
+  // l'estimation pour le mois courant et les mois à venir (même règle que
+  // « Mes cotisations sociales »). Les mois passés sans prélèvement restent à 0.
+  // `estimated` = true si la valeur affichée provient de l'estimation (→ style ~).
+  const cotisationsMonths = useMemo(() => {
+    const currentMonthIdx = new Date().getMonth();
+    return chartData.map((m, i) => {
+      const hasReel = m.urssaf > 0 || m.carpimko > 0;
+      const canEstimate = year > currentYear || (year === currentYear && i >= currentMonthIdx);
+      const est = estimatedCotisMonths[i] ?? { urssaf: 0, carpimko: 0 };
+      const urssaf = m.urssaf > 0 ? m.urssaf : (canEstimate ? est.urssaf : 0);
+      const carpimko = m.carpimko > 0 ? m.carpimko : (canEstimate ? est.carpimko : 0);
+      return { urssaf, carpimko, estimated: !hasReel && (urssaf > 0 || carpimko > 0) };
+    });
+  }, [chartData, estimatedCotisMonths, year, currentYear]);
+
   return (
     <div className="space-y-6">
       {/* Sélecteur d'année global du tab (au-dessus, comme dans "Mes cotisations sociales") */}
@@ -498,9 +613,9 @@ function ActivityTab() {
             </span>
           </div>
         )}
-        <div className="pb-2 flex">
+        <div className="pb-2 flex flex-col md:flex-row">
           {/* KPI cards stacked vertically */}
-          <div style={{ width: 260 }} className="flex flex-col items-center px-2 py-1 shrink-0">
+          <div className="flex flex-col items-center px-2 py-1 w-full md:w-[260px] md:shrink-0">
             <div className="w-[80%] mx-3 my-2 bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[10px] p-2.5">
               <div className="flex items-center gap-1.5">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-menthe-600 shrink-0">
@@ -630,19 +745,19 @@ function ActivityTab() {
           </div>
         </div>
 
-        {!loading && (
-          <div className="border-t border-ardoise-100 text-xs overflow-x-auto">
+        {!loading && (<>
+          <div className="border-t border-ardoise-100 text-xs overflow-x-auto hidden lg:block">
             <div className="min-w-[900px]">
               {/* Header */}
               <div className="grid border-b border-ardoise-100" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                <div className="px-3 py-3.5" />
+                <div className="px-3 py-3.5 sticky left-0 z-[1] bg-white border-r border-ardoise-100" />
                 {chartData.map((m) => (
                   <div key={m.name} className="py-3.5 text-center font-semibold text-ardoise-500">{m.name}</div>
                 ))}
               </div>
               {/* CA */}
               <div className="grid border-b border-ardoise-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700">Chiffre d&apos;affaires</div>
+                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 sticky left-0 z-[1] bg-white border-r border-ardoise-100">Chiffre d&apos;affaires</div>
                 {chartData.map((m, i) => {
                   const now = new Date();
                   const isPastYear = year < now.getFullYear();
@@ -707,7 +822,7 @@ function ActivityTab() {
                 style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}
                 onClick={() => setChargesProOpen((v) => !v)}
               >
-                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
+                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5 sticky left-0 z-[1] bg-white border-r border-ardoise-100">
                   Charges pro.
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`text-ardoise-400 transition-transform ${chargesProOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
                 </div>
@@ -729,7 +844,7 @@ function ActivityTab() {
                     { key: "madelin", label: "Madelin" },
                   ] as const).map((sub) => (
                     <div key={sub.key} className="grid border-b border-ardoise-50 bg-ardoise-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                      <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500">{sub.label}</div>
+                      <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500 sticky left-0 z-[1] bg-white border-r border-ardoise-100">{sub.label}</div>
                       {chartData.map((m, i) => {
                         // « Charges pro » = part bancaire seule : on retranche le manuel,
                         // affiché ci-dessous en lignes séparées, pour ne pas le compter deux fois.
@@ -743,10 +858,12 @@ function ActivityTab() {
                     </div>
                   ))}
 
-                  {/* Lignes de charges pro. saisies manuellement (montant éditable par mois) */}
+                  {/* Lignes de charges pro. saisies manuellement (montant éditable par mois).
+                      Fond blanc (vs. gris des sous-lignes calculées ci-dessus) : le contraste
+                      signale que la ligne est saisissable et non dérivée. */}
                   {manualLines.map((line) => (
-                    <div key={line.type} className="group grid border-b border-ardoise-50 bg-ardoise-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                      <div className="pl-7 pr-3 py-2 text-xs font-medium text-ardoise-500 flex items-center gap-1.5">
+                    <div key={line.type} className="group grid border-b border-ardoise-50 bg-white" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
+                      <div className="pl-7 pr-3 py-2 text-xs font-medium text-ardoise-600 flex items-center gap-1.5 sticky left-0 z-[1] bg-white border-r border-ardoise-100">
                         <button
                           type="button"
                           onClick={() => handleRemoveChargeLine(line.type)}
@@ -764,10 +881,11 @@ function ActivityTab() {
                             type="text"
                             inputMode="decimal"
                             defaultValue={line.amounts[i] ? String(line.amounts[i]) : ""}
-                            placeholder="—"
+                            placeholder="0"
+                            title="Cliquez pour saisir un montant"
                             onBlur={(e) => commitManualCell(line.type, i, e.target.value)}
                             onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                            className="w-full rounded border border-transparent hover:border-ardoise-200 focus:border-violet-400 focus:bg-white bg-transparent px-1 py-1 text-center text-xs font-mono text-ardoise-600 outline-none transition-colors placeholder:text-ardoise-300"
+                            className="w-full rounded border border-ardoise-200 bg-white hover:border-ardoise-400 focus:border-violet-500 focus:ring-1 focus:ring-violet-200 px-1 py-1 text-center text-xs font-mono text-ardoise-700 outline-none transition-colors placeholder:text-ardoise-300 cursor-text"
                           />
                         </div>
                       ))}
@@ -776,7 +894,7 @@ function ActivityTab() {
 
                   {/* Ajout d'une ligne : bouton + menu déroulant des types restants */}
                   <div className="grid border-b border-ardoise-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                    <div className="pl-7 pr-3 py-2 relative">
+                    <div className="pl-7 pr-3 py-2 sticky left-0 z-[1] bg-white border-r border-ardoise-100">
                       {availableChargeTypes.length > 0 ? (
                         <>
                           <button
@@ -788,7 +906,7 @@ function ActivityTab() {
                             Ajouter une charge
                           </button>
                           {addMenuOpen && (
-                            <div className="absolute z-20 left-7 top-full mt-1 w-56 max-h-64 overflow-y-auto rounded-md border border-ardoise-200 bg-white py-1 shadow-lg">
+                            <div className="mt-1.5 w-full max-h-64 overflow-y-auto rounded-md border border-ardoise-200 bg-white divide-y divide-ardoise-50">
                               {availableChargeTypes.map((t) => (
                                 <button
                                   key={t.key}
@@ -815,15 +933,18 @@ function ActivityTab() {
                 style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}
                 onClick={() => setImpotOpen((v) => !v)}
               >
-                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
+                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5 sticky left-0 z-[1] bg-white border-r border-ardoise-100">
                   Impôts
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`text-ardoise-400 transition-transform ${impotOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
                 </div>
-                {chartData.map((m) => {
-                  const val = m.urssaf + m.carpimko + m.impots;
+                {chartData.map((m, i) => {
+                  const c = cotisationsMonths[i] ?? { urssaf: m.urssaf, carpimko: m.carpimko, estimated: false };
+                  const val = c.urssaf + c.carpimko + m.impots;
+                  // Estimé tant qu'il n'y a que des cotisations estimées (aucun impôt réel).
+                  const isEst = c.estimated && m.impots === 0;
                   return (
-                    <div key={m.name} className="py-3.5 text-center font-medium text-ardoise-700 font-mono">
-                      {val > 0 ? formatCurrency(val) : "—"}
+                    <div key={m.name} className={`py-3.5 text-center font-medium font-mono ${isEst ? "text-ardoise-400 italic" : "text-ardoise-700"}`}>
+                      {val > 0 ? `${isEst ? "~" : ""}${formatCurrency(val)}` : "—"}
                     </div>
                   );
                 })}
@@ -837,12 +958,15 @@ function ActivityTab() {
                     { key: "impots", label: "Impôts versés" },
                   ] as const).map((sub) => (
                     <div key={sub.key} className="grid border-b border-ardoise-50 bg-ardoise-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                      <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500">{sub.label}</div>
-                      {chartData.map((m) => {
-                        const val = m[sub.key];
+                      <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500 sticky left-0 z-[1] bg-white border-r border-ardoise-100">{sub.label}</div>
+                      {chartData.map((m, i) => {
+                        const c = cotisationsMonths[i] ?? { urssaf: m.urssaf, carpimko: m.carpimko, estimated: false };
+                        // URSSAF/CARPIMKO : réel sinon estimé ; « Impôts versés » reste le réel.
+                        const val = sub.key === "urssaf" ? c.urssaf : sub.key === "carpimko" ? c.carpimko : m.impots;
+                        const isEst = (sub.key === "urssaf" || sub.key === "carpimko") && c.estimated && val > 0;
                         return (
-                          <div key={m.name} className="py-2.5 text-center text-xs font-medium text-ardoise-500 font-mono">
-                            {val > 0 ? formatCurrency(val) : "—"}
+                          <div key={m.name} className={`py-2.5 text-center text-xs font-medium font-mono ${isEst ? "text-ardoise-400 italic" : "text-ardoise-500"}`}>
+                            {val > 0 ? `${isEst ? "~" : ""}${formatCurrency(val)}` : "—"}
                           </div>
                         );
                       })}
@@ -856,7 +980,7 @@ function ActivityTab() {
                 style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}
                 onClick={() => setRemOpen((v) => !v)}
               >
-                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
+                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5 sticky left-0 z-[1] bg-white border-r border-ardoise-100">
                   Rém. avant impôt
                   {isEstimated && <EstimationBadge tooltip="En l'absence de données bancaires, la rémunération avant impôt est affichée en miroir du CA (charges inconnues). Connectez votre banque pour les charges réelles." />}
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`text-ardoise-400 transition-transform ${remOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
@@ -886,7 +1010,7 @@ function ActivityTab() {
               {remOpen && (
                 <>
                   <div className="grid border-b border-ardoise-50 bg-ardoise-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                    <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500">Rémunération versée</div>
+                    <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500 sticky left-0 z-[1] bg-white border-r border-ardoise-100">Rémunération versée</div>
                     {chartData.map((m) => (
                       <div key={m.name} className="py-2.5 text-center text-xs font-medium text-ardoise-500 font-mono">
                         {m.remuneration > 0 ? formatCurrency(m.remuneration) : "—"}
@@ -894,7 +1018,7 @@ function ActivityTab() {
                     ))}
                   </div>
                   <div className="grid border-b border-ardoise-50 bg-ardoise-50/30" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                    <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500">Provision d&apos;impôt estimée</div>
+                    <div className="pl-7 pr-3 py-2.5 text-xs font-medium text-ardoise-500 sticky left-0 z-[1] bg-white border-r border-ardoise-100">Provision d&apos;impôt estimée</div>
                     {chartData.map((m, i) => {
                       const isFuture = year > currentYear || (year === currentYear && i >= currentMonth);
                       // En fallback bordereaux : on n'estime rien dans Mon activité,
@@ -926,7 +1050,7 @@ function ActivityTab() {
               )}
               {/* Jours travaillés */}
               <div className="grid" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
+                <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-700 flex items-center gap-1.5 sticky left-0 z-[1] bg-white border-r border-ardoise-100">
                   Jours travaillés
                   <InfoTooltip text="Nombre de jours travaillés prévus dans le mois. Par défaut : les jours ouvrés (lundi→vendredi, hors jours fériés) selon votre rythme. Ajustez-le pour refléter vos congés — la projection de CA et les cotisations s'ajustent." />
                 </div>
@@ -958,7 +1082,181 @@ function ActivityTab() {
               </div>
             </div>
           </div>
-        )}
+
+          {/* ── Vue mobile : un mois à la fois (le tableau ci-dessus est masqué sous lg) ── */}
+          <div className="border-t border-ardoise-100 lg:hidden p-4 space-y-3">
+            {/* Sélecteur de mois */}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setMobileMonth((mm) => Math.max(0, mm - 1))}
+                disabled={mobileMonth === 0}
+                className="w-9 h-9 flex items-center justify-center rounded-lg border border-ardoise-200 text-ardoise-600 hover:bg-ardoise-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                aria-label="Mois précédent"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <span className="text-sm font-semibold text-ardoise-800 capitalize">{MONTHS_LONG[mobileMonth]} {year}</span>
+              <button
+                type="button"
+                onClick={() => setMobileMonth((mm) => Math.min(11, mm + 1))}
+                disabled={mobileMonth === 11}
+                className="w-9 h-9 flex items-center justify-center rounded-lg border border-ardoise-200 text-ardoise-600 hover:bg-ardoise-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                aria-label="Mois suivant"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+            </div>
+
+            {(() => {
+              const mi = mobileMonth;
+              const m = chartData[mi];
+              if (!m) return null;
+              const now = new Date();
+              const isPastMonth = year < now.getFullYear() || (year === now.getFullYear() && mi < now.getMonth());
+              const isFuture = year > currentYear || (year === currentYear && mi >= currentMonth);
+              const caProjected = !isPastMonth && dailyRate > 0;
+              const caVal = projectedCAByMonth[mi] ?? Math.round(m.revenus);
+              const chargesTotal = m.autresDepenses;
+              const chargesProBank = Math.max(0, m.chargesPro - (manualByMonth[mi] ?? 0));
+              const impotsTotal = m.urssaf + m.carpimko + m.impots;
+              const pasRate = hp ? parseFloat(hp.pasRate) / 100 : 0;
+              const remCharges = m.urssaf + m.carpimko + m.chargesPro + m.retrocession + m.madelin;
+              const remAvantImpot = m.revenus - remCharges;
+              const remEmpty = m.revenus === 0 && remCharges === 0;
+              const provisionEst = remAvantImpot > 0 ? Math.round(remAvantImpot * pasRate) : 0;
+              const fullMonth = countWorkingDays(year, mi + 1, daysPerWeek);
+              return (
+                <div className="rounded-[12px] border border-ardoise-100 overflow-hidden divide-y divide-ardoise-50">
+                  {/* CA */}
+                  <div className="flex items-center justify-between px-3.5 py-3">
+                    <span className="text-sm font-semibold text-ardoise-700 inline-flex items-center gap-1.5">
+                      Chiffre d&apos;affaires
+                      <CASourceIndicator source={effectiveCA.source} primary="transactions" />
+                    </span>
+                    <span className={`text-sm font-semibold font-mono ${caProjected ? "text-ardoise-400 italic" : "text-ardoise-900"}`}>
+                      {caVal > 0 ? (caProjected ? `~${formatCurrency(caVal)}` : formatCurrency(caVal)) : "—"}
+                    </span>
+                  </div>
+
+                  {/* Charges pro. */}
+                  <button type="button" onClick={() => setChargesProOpen((v) => !v)} className="w-full flex items-center justify-between px-3.5 py-3 text-left hover:bg-ardoise-50/50 transition-colors">
+                    <span className="text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
+                      Charges pro.
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`text-ardoise-400 transition-transform ${chargesProOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+                    </span>
+                    <span className="text-sm font-semibold font-mono text-ardoise-900">{chargesTotal > 0 ? formatCurrency(chargesTotal) : "—"}</span>
+                  </button>
+                  {chargesProOpen && (
+                    <div className="bg-ardoise-50/30 px-3.5 py-2.5 space-y-2">
+                      <MobileSubLine label="Charges pro" value={chargesProBank} />
+                      <MobileSubLine label="Rétrocession" value={m.retrocession} />
+                      <MobileSubLine label="Madelin" value={m.madelin} />
+                      {manualLines.map((line) => (
+                        <div key={line.type} className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-ardoise-600 flex items-center gap-1.5 min-w-0">
+                            <button type="button" onClick={() => handleRemoveChargeLine(line.type)} title="Supprimer cette ligne" className="shrink-0 text-ardoise-300 hover:text-red-500 transition-colors">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                            </button>
+                            <span className="truncate">{manualChargeLabel(line.type)}</span>
+                          </span>
+                          <input
+                            key={`m-${year}-${line.type}-${mi}`}
+                            type="text"
+                            inputMode="decimal"
+                            defaultValue={line.amounts[mi] ? String(line.amounts[mi]) : ""}
+                            placeholder="0"
+                            onBlur={(e) => commitManualCell(line.type, mi, e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                            className="w-24 shrink-0 rounded border border-ardoise-200 bg-white hover:border-ardoise-400 focus:border-violet-500 focus:ring-1 focus:ring-violet-200 px-2 py-1 text-right text-xs font-mono text-ardoise-700 outline-none transition-colors placeholder:text-ardoise-300"
+                          />
+                        </div>
+                      ))}
+                      {availableChargeTypes.length > 0 && (
+                        <div className="pt-0.5">
+                          <button type="button" onClick={() => setAddMenuOpen((v) => !v)} className="flex items-center gap-1.5 text-xs font-medium text-violet-700 hover:text-violet-900 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Ajouter une charge
+                          </button>
+                          {addMenuOpen && (
+                            <div className="mt-1.5 w-full max-h-64 overflow-y-auto rounded-md border border-ardoise-200 bg-white divide-y divide-ardoise-50">
+                              {availableChargeTypes.map((t) => (
+                                <button key={t.key} type="button" onClick={() => handleAddChargeLine(t.key)} className="w-full px-3 py-2 text-left text-xs text-ardoise-700 hover:bg-violet-50 transition-colors">{t.label}</button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Impôts */}
+                  <button type="button" onClick={() => setImpotOpen((v) => !v)} className="w-full flex items-center justify-between px-3.5 py-3 text-left hover:bg-ardoise-50/50 transition-colors">
+                    <span className="text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
+                      Impôts
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`text-ardoise-400 transition-transform ${impotOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+                    </span>
+                    <span className="text-sm font-semibold font-mono text-ardoise-900">{impotsTotal > 0 ? formatCurrency(impotsTotal) : "—"}</span>
+                  </button>
+                  {impotOpen && (
+                    <div className="bg-ardoise-50/30 px-3.5 py-2.5 space-y-2">
+                      <MobileSubLine label="URSSAF" value={m.urssaf} />
+                      <MobileSubLine label="CARPIMKO" value={m.carpimko} />
+                      <MobileSubLine label="Impôts versés" value={m.impots} />
+                    </div>
+                  )}
+
+                  {/* Rém. avant impôt */}
+                  <button type="button" onClick={() => setRemOpen((v) => !v)} className="w-full flex items-center justify-between px-3.5 py-3 text-left hover:bg-ardoise-50/50 transition-colors">
+                    <span className="text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
+                      Rém. avant impôt
+                      {isEstimated && <EstimationBadge tooltip="En l'absence de données bancaires, la rémunération avant impôt est affichée en miroir du CA (charges inconnues). Connectez votre banque pour les charges réelles." />}
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`text-ardoise-400 transition-transform ${remOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+                    </span>
+                    <span className={`text-sm font-semibold font-mono ${isEstimated ? "text-ardoise-400 italic" : remEmpty ? "text-ardoise-300" : "text-ardoise-900"}`}>
+                      {isEstimated ? (caVal > 0 ? `~${formatCurrency(caVal)}` : "—") : remEmpty ? "—" : formatCurrency(remAvantImpot)}
+                    </span>
+                  </button>
+                  {remOpen && (
+                    <div className="bg-ardoise-50/30 px-3.5 py-2.5 space-y-2">
+                      <MobileSubLine label="Rémunération versée" value={m.remuneration} />
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-ardoise-500">Provision d&apos;impôt estimée</span>
+                        <span className={`text-xs font-mono ${isEstimated ? "text-ardoise-300" : isFuture ? "text-ardoise-400 italic" : "text-ardoise-500"}`}>
+                          {isEstimated ? "—" : !isFuture ? (m.impots > 0 ? formatCurrency(m.impots) : "—") : (provisionEst > 0 ? `~${formatCurrency(provisionEst)}` : "—")}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Jours travaillés */}
+                  <div className="flex items-center justify-between px-3.5 py-3">
+                    <span className="text-sm font-semibold text-ardoise-700 flex items-center gap-1.5">
+                      Jours travaillés
+                      <InfoTooltip text="Nombre de jours travaillés prévus dans le mois. Par défaut : les jours ouvrés (lundi→vendredi, hors jours fériés) selon votre rythme. Ajustez-le pour refléter vos congés — la projection de CA et les cotisations s'ajustent." />
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={fullMonth}
+                      value={workedDays[mi] ?? fullMonth}
+                      disabled={isPastMonth}
+                      onChange={(e) => {
+                        const v = Math.max(0, Math.min(fullMonth, parseInt(e.target.value) || 0));
+                        setWorkedDays((prev) => { const next = [...prev]; next[mi] = v; return next; });
+                      }}
+                      onBlur={(e) => {
+                        const v = Math.max(0, Math.min(fullMonth, parseInt(e.target.value) || 0));
+                        void upsertWorkedDayAction(year, mi + 1, v);
+                      }}
+                      className="w-14 text-center text-sm font-medium text-ardoise-700 border border-ardoise-200 rounded hover:border-ardoise-300 focus:border-brand-500 focus:outline-none py-1 disabled:bg-ardoise-50 disabled:text-ardoise-300 disabled:cursor-not-allowed font-mono"
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </>)}
       </div>
     </div>
   );
@@ -977,6 +1275,9 @@ function ContributionsTab() {
   // Fallback bordereaux activé quand pas de banque connectée mais des
   // bordereaux exploitables. Tous les montants affichés deviennent estimés.
   const [isEstimated, setIsEstimated] = useState(false);
+  // Détail chiffré mois par mois — replié par défaut (le graphe suffit à lire la
+  // tendance ; le détail est là pour qui veut les montants exacts).
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
@@ -1046,6 +1347,23 @@ function ContributionsTab() {
       };
     });
   }, [estimate, calendar]);
+
+  // Ventilation mensuelle « réel sinon estimé » — alimente le graphe et le détail
+  // chiffré repliable (même logique que les anciennes cellules du tableau).
+  const monthChart = useMemo(() => {
+    const nowMonthIdx = new Date().getMonth();
+    return MONTH_LABELS.map((name, i) => {
+      const reelU = monthlyData[i]?.urssaf ?? 0;
+      const reelC = monthlyData[i]?.carpimko ?? 0;
+      const canEstimate = isEstimated || year > currentYear || (year === currentYear && i >= nowMonthIdx);
+      const urssaf = reelU > 0 ? reelU : (canEstimate ? (estimatedMonths[i]?.urssaf ?? 0) : 0);
+      const carpimko = reelC > 0 ? reelC : (canEstimate ? (estimatedMonths[i]?.carpimko ?? 0) : 0);
+      const hasReel = reelU > 0 || reelC > 0;
+      return { name, urssaf, carpimko, total: urssaf + carpimko, estimated: !hasReel && urssaf + carpimko > 0 };
+    });
+  }, [monthlyData, estimatedMonths, year, currentYear, isEstimated]);
+  const hasEstimatedMonth = useMemo(() => monthChart.some((m) => m.estimated), [monthChart]);
+  const nowMonthIdx = new Date().getMonth();
 
   const handleExportCotisationsCsv = useCallback(() => {
     const headers = ["Mois", "URSSAF", "CARPIMKO", "Total", "Type"];
@@ -1217,88 +1535,84 @@ function ContributionsTab() {
         </div>
       </div>
 
-      {/* Monthly table */}
+      {/* Détail mensuel : graphe (URSSAF + CARPIMKO empilés) + détail chiffré repliable */}
       <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 overflow-hidden">
-        <div className="px-5 pt-4 pb-3">
+        <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-1 flex-wrap">
           <h2 className="text-base font-bold text-ardoise-900">Détail mensuel</h2>
+          <div className="flex items-center gap-3 text-[11px] text-ardoise-500">
+            <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: "#9060B6" }} /> URSSAF</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: "#3DB87A" }} /> CARPIMKO</span>
+            {hasEstimatedMonth && <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-ardoise-300" /> estimé</span>}
+          </div>
         </div>
         {tableLoading ? (
-          <div className="px-5 pb-5">
-            <div className="h-32 bg-ardoise-100 rounded animate-pulse" />
+          <div className="px-5 pb-5 pt-2">
+            <div className="h-56 bg-ardoise-100 rounded animate-pulse" />
           </div>
         ) : (
-          <div className="border-t border-ardoise-100 text-xs overflow-x-auto">
-            <div className="min-w-[900px]">
-            {/* Header */}
-            <div className="grid border-b border-ardoise-100" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-              <div className="px-3 py-3.5" />
-              {MONTH_LABELS.map((m) => (
-                <div key={m} className="py-3.5 text-center font-semibold text-ardoise-500">{m}</div>
-              ))}
+          <>
+            {/* Graphe mensuel */}
+            <div className="px-3 pt-2 pb-3 h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EFEAF6" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#A79EB5" }} tickLine={false} axisLine={false} interval={0} />
+                  <YAxis tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`)} tick={{ fontSize: 11, fill: "#A79EB5" }} tickLine={false} axisLine={false} width={32} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E1DBEC", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                    labelStyle={{ fontWeight: 600, marginBottom: 4 }}
+                    formatter={(value, name) => {
+                      const labels: Record<string, string> = { urssaf: "URSSAF", carpimko: "CARPIMKO" };
+                      const num = typeof value === "number" ? value : Number(value ?? 0);
+                      return [formatCurrency(num), labels[String(name ?? "")] ?? String(name ?? "")];
+                    }}
+                  />
+                  <Bar dataKey="urssaf" stackId="cotis" fill="#9060B6">
+                    {monthChart.map((d, i) => <Cell key={i} fillOpacity={d.estimated ? 0.4 : 1} />)}
+                  </Bar>
+                  <Bar dataKey="carpimko" stackId="cotis" fill="#3DB87A" radius={[3, 3, 0, 0]}>
+                    {monthChart.map((d, i) => <Cell key={i} fillOpacity={d.estimated ? 0.4 : 1} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-            {/* URSSAF */}
-            <div className="grid border-b border-ardoise-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-              <div className="px-3 py-3.5 flex items-center gap-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo-urssaf.svg" alt="URSSAF" className="h-5" />
-                {isEstimated && <EstimationBadge />}
-              </div>
-              {monthlyData.map((m, i) => {
-                const reel = m.urssaf;
-                // En fallback bordereaux : aucun réel n'existe sur les mois écoulés,
-                // donc on autorise l'estimation pour tous les mois de l'année.
-                const canEstimate = isEstimated || year > currentYear || (year === currentYear && i >= new Date().getMonth());
-                const est = canEstimate ? (estimatedMonths[i]?.urssaf ?? 0) : 0;
-                if (reel > 0) {
-                  return <div key={i} className="py-3.5 text-center font-medium text-ardoise-700 font-mono">{formatCurrency(reel)}</div>;
-                }
-                if (est > 0) {
-                  return <div key={i} className="py-3.5 text-center font-medium text-ardoise-400 italic font-mono">~{formatCurrency(est)}</div>;
-                }
-                return <div key={i} className="py-3.5 text-center font-medium text-ardoise-300">—</div>;
-              })}
-            </div>
-            {/* CARPIMKO */}
-            <div className="grid border-b border-ardoise-50" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-              <div className="px-3 py-3.5 flex items-center gap-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo-carpimko.png" alt="CARPIMKO" className="h-5" />
-                {isEstimated && <EstimationBadge />}
-              </div>
-              {monthlyData.map((m, i) => {
-                const reel = m.carpimko;
-                const canEstimate = isEstimated || year > currentYear || (year === currentYear && i >= new Date().getMonth());
-                const est = canEstimate ? (estimatedMonths[i]?.carpimko ?? 0) : 0;
-                if (reel > 0) {
-                  return <div key={i} className="py-3.5 text-center font-medium text-ardoise-700 font-mono">{formatCurrency(reel)}</div>;
-                }
-                if (canEstimate) {
-                  return <div key={i} className="py-3.5 text-center font-medium text-ardoise-400 italic font-mono">{est > 0 ? `~${formatCurrency(est)}` : "0 €"}</div>;
-                }
-                return <div key={i} className="py-3.5 text-center font-medium text-ardoise-300">—</div>;
-              })}
-            </div>
-            {/* Total */}
-            <div className="grid" style={{ gridTemplateColumns: "260px repeat(12, 1fr)" }}>
-              <div className="px-3 py-3.5 text-sm font-semibold text-ardoise-900">Total</div>
-              {monthlyData.map((m, i) => {
-                const reelTotal = m.urssaf + m.carpimko;
-                const canEstimate = isEstimated || year > currentYear || (year === currentYear && i >= new Date().getMonth());
-                const estTotal = canEstimate ? ((estimatedMonths[i]?.urssaf ?? 0) + (estimatedMonths[i]?.carpimko ?? 0)) : 0;
-                const hasReel = reelTotal > 0;
-                const value = hasReel ? reelTotal : estTotal;
-                if (value > 0) {
+
+            {/* Bouton de repli du détail chiffré */}
+            <button
+              type="button"
+              onClick={() => setDetailOpen((v) => !v)}
+              className="w-full flex items-center justify-center gap-1.5 px-5 py-2.5 text-xs font-medium text-ardoise-500 hover:text-ardoise-800 hover:bg-ardoise-50/60 border-t border-ardoise-100 transition-colors"
+            >
+              {detailOpen ? "Masquer le détail chiffré" : "Voir le détail mois par mois"}
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${detailOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6" /></svg>
+            </button>
+
+            {/* Détail chiffré : liste verticale (lisible sur mobile, sans scroll horizontal) */}
+            {detailOpen && (
+              <div className="border-t border-ardoise-100">
+                <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr] px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-ardoise-400 border-b border-ardoise-50">
+                  <span>Mois</span>
+                  <span className="text-right">URSSAF</span>
+                  <span className="text-right">CARPIMKO</span>
+                  <span className="text-right">Total</span>
+                </div>
+                {monthChart.map((m, i) => {
+                  const isCurrent = year === currentYear && i === nowMonthIdx;
+                  const fmt = (v: number) => (v > 0 ? `${m.estimated ? "~" : ""}${formatCurrency(v)}` : "—");
+                  const est = m.estimated;
                   return (
-                    <div key={i} className={`py-3.5 text-center font-semibold font-mono ${hasReel ? "text-ardoise-900" : "text-ardoise-400 italic"}`}>
-                      {hasReel ? formatCurrency(value) : `~${formatCurrency(value)}`}
+                    <div key={i} className={`grid grid-cols-[1.2fr_1fr_1fr_1fr] px-5 py-2 text-xs border-b border-ardoise-50 last:border-0 ${isCurrent ? "bg-brand-50/40" : ""}`}>
+                      <span className="font-medium text-ardoise-700 capitalize">{MONTHS_LONG[i]}</span>
+                      <span className={`text-right font-mono ${est ? "text-ardoise-400 italic" : "text-ardoise-700"}`}>{fmt(m.urssaf)}</span>
+                      <span className={`text-right font-mono ${est ? "text-ardoise-400 italic" : "text-ardoise-700"}`}>{fmt(m.carpimko)}</span>
+                      <span className={`text-right font-mono font-semibold ${est ? "text-ardoise-400 italic" : "text-ardoise-900"}`}>{fmt(m.total)}</span>
                     </div>
                   );
-                }
-                return <div key={i} className="py-3.5 text-center font-semibold text-ardoise-300">—</div>;
-              })}
-            </div>
-            </div>
-          </div>
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -1444,7 +1758,7 @@ function TransactionsList({
 
 function TaxesTab() {
   const hp = usePractitioner();
-  const { loadYearCore, loadEstimate } = useManagementData();
+  const { loadYearCore, loadEstimate, bustYear } = useManagementData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
@@ -1456,6 +1770,12 @@ function TaxesTab() {
   const [declaredIr, setDeclaredIr] = useState<string>("");
   const [dbLoaded, setDbLoaded] = useState(false);
   const [saveState, saveAction, saving] = useActionState(upsertFiscalSituationAction, null);
+
+  // Après une sauvegarde fiscale réussie, invalider le cache partagé de l'année
+  // pour que la synthèse (seedée au chargement) relise la situation à jour.
+  useEffect(() => {
+    if (saveState && "success" in saveState) bustYear(year);
+  }, [saveState, year, bustYear]);
 
   // Monthly activity for the selected year (CA + charges)
   const [monthly, setMonthly] = useState<MonthlyActivityMonth[] | null>(null);
@@ -1974,9 +2294,10 @@ function TaxesTab() {
 
 // ── Summary Tab ──
 
-// Tooltip détaillé : pour la barre "Reste à vivre", on affiche la décomposition
-// du calcul (solde + encaissements − cotisations provisionnées − charges) plutôt
-// qu'un simple montant, pour que l'utilisateur comprenne d'où sort le chiffre.
+// Tooltip détaillé : pour la barre "Trésorerie projetée", on affiche la
+// décomposition du calcul (solde + encaissements − cotisations provisionnées −
+// charges) plutôt qu'un simple montant, pour que l'utilisateur comprenne d'où
+// sort le chiffre.
 // Défini au niveau module (pas dans le render) — reçoit les valeurs du calcul en props.
 function CashTooltip({ active, payload, defaultBalance, resteAVivre, horizonLabel }: {
   active?: boolean;
@@ -1996,13 +2317,13 @@ function CashTooltip({ active, payload, defaultBalance, resteAVivre, horizonLabe
   if (d.key === "reste") {
     return (
       <div className="rounded-lg border border-ardoise-200 bg-white px-3 py-2.5 text-[11px] shadow-lg space-y-1 min-w-[220px]">
-        <p className="font-semibold text-ardoise-900 mb-1.5">Reste à vivre — fin {horizonLabel}</p>
+        <p className="font-semibold text-ardoise-900 mb-1.5">Trésorerie projetée — fin {horizonLabel}</p>
         {line("Trésorerie actuelle", formatCurrency(defaultBalance))}
         {line("Encaissements estimés", `+ ${formatCurrency(resteAVivre.projIncome)}`)}
         {line("Cotisations provisionnées", `− ${formatCurrency(resteAVivre.provisionCotisations)}`)}
         {line("Charges pro. projetées", `− ${formatCurrency(resteAVivre.chargesProProjetees)}`)}
         <div className="h-px bg-ardoise-100 my-1.5" />
-        {line("Reste à vivre", formatCurrency(d.value), true)}
+        {line("Trésorerie projetée", formatCurrency(d.value), true)}
       </div>
     );
   }
@@ -2014,9 +2335,75 @@ function CashTooltip({ active, payload, defaultBalance, resteAVivre, horizonLabe
   );
 }
 
+// Mois agrégé pour les métriques de synthèse (sous-ensemble de MonthlyActivityMonth).
+type SummaryMonth = {
+  income: number;
+  urssaf: number;
+  carpimko: number;
+  autresDepenses: number;
+  chargesPro: number;
+  retrocession: number;
+  madelin: number;
+};
+
+type FiscalSituation = {
+  maritalStatus: string;
+  dependentChildren: number;
+  isSingleParent?: boolean;
+  otherIncome: string;
+};
+
+type SummaryMetricValues = { ca: number; ch: number; cot: number; rem: number; ir: number; rav: number };
+
+// Calcule les 6 métriques annuelles d'une année (CA, charges pro., cotisations
+// sociales, rém. avant impôt, IR, reste à vivre). Pour l'année courante, le YTD
+// est annualisé (× 12 / mois écoulés) ; pour une année passée (monthsElapsed = 12)
+// on prend les totaux réels sans extrapolation. Mêmes formules pour N et N-1 —
+// c'est ce qui rend la comparaison des barres homogène.
+function computeSummaryMetrics(params: {
+  taxRegime: string;
+  months: SummaryMonth[];
+  estimate: CotisationsEstimate | null;
+  fiscal: FiscalSituation | null;
+  year: number;
+  currentYear: number;
+}): SummaryMetricValues {
+  const { taxRegime, months, estimate, fiscal, year, currentYear } = params;
+  const monthsElapsed = year < currentYear ? 12 : new Date().getMonth() + 1;
+  const annualize = (ytd: number) => (monthsElapsed > 0 ? Math.round((ytd / monthsElapsed) * 12) : 0);
+
+  const annualCA = estimate?.revenuAnnualise ?? 0;
+  const annualChargesPro = annualize(months.reduce((s, m) => s + m.chargesPro, 0));
+  // Cotisations sociales : estimation annuelle ajustée OpenFisca/Carpimko.
+  const annualCotisations = (estimate?.urssafAnnuel ?? 0) + (estimate?.carpimkoAnnuel ?? 0);
+  const annualRetroMadelin = annualize(months.reduce((s, m) => s + m.retrocession + m.madelin, 0));
+  // Même formule que la ligne "Rém. avant impôt" de l'onglet Mon activité :
+  //   CA − (urssaf + carpimko + chargesPro + retrocession + madelin). Clamp à 0.
+  const annualRemAvantImpot = Math.max(0, annualCA - annualCotisations - annualChargesPro - annualRetroMadelin);
+
+  // IR estimé sur les revenus de l'année considérée (généré sur l'exercice, payé
+  // en N+1). Sert à la ligne "Impôt sur le revenu" et au reste à vivre annuel.
+  let ir = 0;
+  if (annualCA > 0) {
+    const revenuNet = taxRegime === "micro_bnc" ? annualCA * 0.66 : annualCA;
+    const otherIncome = fiscal ? Number(fiscal.otherIncome) : 0;
+    const revenuImposable = Math.round(revenuNet + otherIncome);
+    if (revenuImposable > 0) {
+      const { parts, partsDeReference } = computeParts({
+        maritalStatus: (fiscal?.maritalStatus as "celibataire" | "marie" | "pacse") ?? "celibataire",
+        dependentChildren: fiscal?.dependentChildren ?? 0,
+        isSingleParent: fiscal?.isSingleParent ?? false,
+      });
+      ir = computeIR({ revenuImposable, parts, partsDeReference, incomeYear: year }).impot;
+    }
+  }
+  const rav = Math.max(0, annualRemAvantImpot - ir);
+  return { ca: annualCA, ch: annualChargesPro, cot: annualCotisations, rem: annualRemAvantImpot, ir, rav };
+}
+
 function SummaryTab() {
   const hp = usePractitioner();
-  const { loadYearCore, loadEstimate } = useManagementData();
+  const { loadYearCore, loadEstimate, loadFiscal } = useManagementData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const { accounts, transactionsLoading } = useData();
   const currentYear = new Date().getFullYear();
@@ -2024,18 +2411,11 @@ function SummaryTab() {
 
   const [loading, setLoading] = useState(true);
   const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
-  const [monthlyData, setMonthlyData] = useState<{
-    income: number;
-    urssaf: number; carpimko: number; autresDepenses: number; chargesPro: number;
-    retrocession: number; madelin: number;
-  }[]>([]);
-  type FiscalSituation = {
-    maritalStatus: string;
-    dependentChildren: number;
-    isSingleParent?: boolean;
-    otherIncome: string;
-  };
+  const [prevEstimate, setPrevEstimate] = useState<CotisationsEstimate | null>(null);
+  const [monthlyData, setMonthlyData] = useState<SummaryMonth[]>([]);
+  const [prevMonthlyData, setPrevMonthlyData] = useState<SummaryMonth[]>([]);
   const [currentYearFiscal, setCurrentYearFiscal] = useState<FiscalSituation | null>(null);
+  const [prevYearFiscal, setPrevYearFiscal] = useState<FiscalSituation | null>(null);
   // Fallback bordereaux : CA mensuel + CA N-1 issus des passages, cotisations
   // estimées via getCotisationsEstimate. La carte "Trésorerie prévisionnelle"
   // reste indisponible (besoin du solde bancaire).
@@ -2050,35 +2430,52 @@ function SummaryTab() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setLoading(true);
     (async () => {
-      const core = await loadYearCore(currentYear);
+      // On charge l'année courante ET l'année N-1 pour la comparaison des
+      // métriques annuelles (barres N vs N-1 de la colonne de droite).
+      const [core, prevCore] = await Promise.all([
+        loadYearCore(currentYear),
+        loadYearCore(prevYear),
+      ]);
       setIsEstimated(core.isEstimated);
 
-      const [currFiscal, est] = await Promise.all([
-        getFiscalSituationAction(currentYear),
+      const [currFiscal, prevFiscal, est, prevEst] = await Promise.all([
+        loadFiscal(currentYear),
+        loadFiscal(prevYear),
         loadEstimate(currentYear),
+        loadEstimate(prevYear),
       ]);
-      const monthly = core.months.map((m) => ({
-        income: m.income,
-        urssaf: m.urssaf,
-        carpimko: m.carpimko,
-        autresDepenses: m.autresDepenses,
-        chargesPro: m.chargesPro,
-        retrocession: m.retrocession,
-        madelin: m.madelin,
-      }));
-      setMonthlyData(monthly);
+
+      const toMonths = (ms: MonthlyActivityMonth[]): SummaryMonth[] =>
+        ms.map((m) => ({
+          income: m.income,
+          urssaf: m.urssaf,
+          carpimko: m.carpimko,
+          autresDepenses: m.autresDepenses,
+          chargesPro: m.chargesPro,
+          retrocession: m.retrocession,
+          madelin: m.madelin,
+        }));
+      const toFiscal = (
+        f: Awaited<ReturnType<typeof getFiscalSituationAction>>,
+      ): FiscalSituation | null =>
+        f
+          ? {
+              maritalStatus: f.maritalStatus,
+              dependentChildren: f.dependentChildren,
+              isSingleParent: (f as { isSingleParent?: boolean }).isSingleParent,
+              otherIncome: f.otherIncome,
+            }
+          : null;
+
+      setMonthlyData(toMonths(core.months));
+      setPrevMonthlyData(toMonths(prevCore.months));
       setEstimate(est);
-      if (currFiscal) {
-        setCurrentYearFiscal({
-          maritalStatus: currFiscal.maritalStatus,
-          dependentChildren: currFiscal.dependentChildren,
-          isSingleParent: (currFiscal as { isSingleParent?: boolean }).isSingleParent,
-          otherIncome: currFiscal.otherIncome,
-        });
-      }
+      setPrevEstimate(prevEst);
+      setCurrentYearFiscal(toFiscal(currFiscal));
+      setPrevYearFiscal(toFiscal(prevFiscal));
       setLoading(false);
     })().catch(() => setLoading(false));
-  }, [currentYear, loadYearCore, loadEstimate, bankConnected]);
+  }, [currentYear, prevYear, loadYearCore, loadEstimate, loadFiscal, bankConnected]);
 
   // 1. Trésorerie actuelle = balance du compte par défaut
   const defaultBalance = useMemo(() => {
@@ -2087,55 +2484,55 @@ function SummaryTab() {
     return acc ? parseFloat(acc.balance) : 0;
   }, [accounts, hp]);
 
-  // 2. Reste à vivre projeté au mois cible. Calcul mutualisé avec le dashboard
-  // et l'onglet « Reste à vivre » via computeResteAVivre (modèle par accrual).
+  // 2. Reste à vivre projeté au mois cible (CA − charges, sans trésorerie).
+  // Calcul mutualisé avec le dashboard et l'onglet « Reste à vivre ».
   const resteAVivre = useMemo(
     () => computeResteAVivre({
       months: monthlyData,
       estimate,
-      startingBalance: defaultBalance,
       targetMonthIdx: targetMonth,
     }),
-    [estimate, monthlyData, defaultBalance, targetMonth],
+    [estimate, monthlyData, targetMonth],
   );
 
-  const solde = resteAVivre.total;
+  // Cette carte-ci est une PROJECTION DE TRÉSORERIE : on repart donc du solde
+  // bancaire et on y ajoute le reste à vivre (= CA − charges). Elle n'est
+  // affichée que banque connectée (cf. rendu conditionnel plus bas).
+  const soldeProjete = defaultBalance + resteAVivre.total;
 
-  // ── Annual projections (year-end) ──
-  const monthsElapsed = new Date().getMonth() + 1;
-  const annualize = (ytd: number) => monthsElapsed > 0 ? Math.round((ytd / monthsElapsed) * 12) : 0;
+  // ── Métriques annuelles N vs N-1 ──
+  // Calcul mutualisé (computeSummaryMetrics) : année courante annualisée sur le
+  // YTD, année N-1 sur ses totaux réels. N-1 reste `null` tant qu'il n'y a pas de
+  // CA sur l'exercice précédent → barre vide « — » plutôt qu'un trompeur « 0 € ».
+  const metricsN = useMemo(
+    () => computeSummaryMetrics({
+      taxRegime: hp?.taxRegime ?? "bnc_reel",
+      months: monthlyData,
+      estimate,
+      fiscal: currentYearFiscal,
+      year: currentYear,
+      currentYear,
+    }),
+    [hp, monthlyData, estimate, currentYearFiscal, currentYear],
+  );
 
-  const annualCA = estimate?.revenuAnnualise ?? 0;
-  const ytdChargesPro = monthlyData.reduce((s, m) => s + m.chargesPro, 0);
-  const annualChargesPro = annualize(ytdChargesPro);
-  // Cotisations sociales : estimation annuelle ajustée OpenFisca/Carpimko.
-  const annualCotisations = (estimate?.urssafAnnuel ?? 0) + (estimate?.carpimkoAnnuel ?? 0);
-  const ytdRetroMadelin = monthlyData.reduce((s, m) => s + m.retrocession + m.madelin, 0);
-  const annualRetroMadelin = annualize(ytdRetroMadelin);
-  // Même formule que la ligne "Rém. avant impôt" de l'onglet Mon activité :
-  //   CA − (urssaf + carpimko + chargesPro + retrocession + madelin)
-  // Clamp à 0 — pas de rémunération négative affichée.
-  const annualRemAvantImpot = Math.max(0, annualCA - annualCotisations - annualChargesPro - annualRetroMadelin);
-
-  // IR estimé sur les revenus de l'année en cours (généré cette année, payé en
-  // N+1). Sert à la fois à la ligne "Impôt sur le revenu" et au "Reste à vivre"
-  // = CA − charges − impôts : on retranche l'impôt que le praticien est en train
-  // de générer, pas celui de N-1 (nul pour un nouvel installé, ce qui rendait le
-  // reste à vivre = rémunération avant impôt).
-  const irCurrent = useMemo(() => {
-    if (!hp || annualCA <= 0) return 0;
-    const taxRegime = hp.taxRegime;
-    const revenuNet = taxRegime === "micro_bnc" ? annualCA * 0.66 : annualCA;
-    const otherIncome = currentYearFiscal ? Number(currentYearFiscal.otherIncome) : 0;
-    const revenuImposable = Math.round(revenuNet + otherIncome);
-    if (revenuImposable <= 0) return 0;
-    const { parts, partsDeReference } = computeParts({
-      maritalStatus: (currentYearFiscal?.maritalStatus as "celibataire" | "marie" | "pacse") ?? "celibataire",
-      dependentChildren: currentYearFiscal?.dependentChildren ?? 0,
-      isSingleParent: currentYearFiscal?.isSingleParent ?? false,
-    });
-    return computeIR({ revenuImposable, parts, partsDeReference, incomeYear: currentYear }).impot;
-  }, [hp, annualCA, currentYearFiscal, currentYear]);
+  const prevCA = useMemo(
+    () => prevMonthlyData.reduce((s, m) => s + m.income, 0),
+    [prevMonthlyData],
+  );
+  const metricsNm1 = useMemo(
+    () => (prevCA > 0 && prevEstimate
+      ? computeSummaryMetrics({
+          taxRegime: hp?.taxRegime ?? "bnc_reel",
+          months: prevMonthlyData,
+          estimate: prevEstimate,
+          fiscal: prevYearFiscal,
+          year: prevYear,
+          currentYear,
+        })
+      : null),
+    [prevCA, prevEstimate, hp, prevMonthlyData, prevYearFiscal, prevYear, currentYear],
+  );
 
   const metrics: {
     key: string;
@@ -2147,7 +2544,7 @@ function SummaryTab() {
     prevValue: number | null;
   }[] = [
     {
-      key: "ca", title: "Chiffre d'affaires", year: currentYear, value: annualCA, prevYear, prevValue: null,
+      key: "ca", title: "Chiffre d'affaires", year: currentYear, value: metricsN.ca, prevYear, prevValue: metricsNm1?.ca ?? null,
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
@@ -2155,7 +2552,7 @@ function SummaryTab() {
       ),
     },
     {
-      key: "ch", title: "Charges pro.", year: currentYear, value: annualChargesPro, prevYear, prevValue: null,
+      key: "ch", title: "Charges pro.", year: currentYear, value: metricsN.ch, prevYear, prevValue: metricsNm1?.ch ?? null,
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>
@@ -2163,7 +2560,7 @@ function SummaryTab() {
       ),
     },
     {
-      key: "cot", title: "Cotisations sociales", year: currentYear, value: annualCotisations, prevYear, prevValue: null,
+      key: "cot", title: "Cotisations sociales", year: currentYear, value: metricsN.cot, prevYear, prevValue: metricsNm1?.cot ?? null,
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -2171,7 +2568,7 @@ function SummaryTab() {
       ),
     },
     {
-      key: "rem", title: "Rémunération avant impôt", year: currentYear, value: annualRemAvantImpot, prevYear, prevValue: null,
+      key: "rem", title: "Rémunération avant impôt", year: currentYear, value: metricsN.rem, prevYear, prevValue: metricsNm1?.rem ?? null,
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4z"/>
@@ -2179,7 +2576,7 @@ function SummaryTab() {
       ),
     },
     {
-      key: "ir", title: "Impôt sur le revenu", year: currentYear, value: irCurrent, prevYear, prevValue: null,
+      key: "ir", title: "Impôt sur le revenu", year: currentYear, value: metricsN.ir, prevYear, prevValue: metricsNm1?.ir ?? null,
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>
@@ -2188,8 +2585,8 @@ function SummaryTab() {
     },
     {
       // Reste à vivre annuel = CA − charges − impôts = rémunération avant impôt
-      // − IR estimé sur les revenus de l'année en cours.
-      key: "rav", title: "Reste à vivre", year: currentYear, value: Math.max(0, annualRemAvantImpot - irCurrent), prevYear, prevValue: null,
+      // − IR estimé sur les revenus de l'année.
+      key: "rav", title: "Reste à vivre", year: currentYear, value: metricsN.rav, prevYear, prevValue: metricsNm1?.rav ?? null,
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>
@@ -2207,19 +2604,23 @@ function SummaryTab() {
 
   const chartData = isEstimated ? [] : [
     { key: "treso", name: "Trésorerie actuelle", value: Math.round(defaultBalance) },
-    { key: "reste", name: "Reste à vivre", value: Math.round(resteAVivre.total) },
+    { key: "reste", name: "Trésorerie projetée", value: Math.round(soldeProjete) },
   ];
 
   const formatSigned = (v: number) => `${v > 0 ? "+" : ""}${formatCurrency(v)}`;
   const isLoading = loading || transactionsLoading;
+  // La carte n'a de sens qu'avec un solde bancaire réel : masquée si la banque
+  // n'est pas connectée (ou données estimées via bordereaux), hormis au chargement.
+  const showTresoProjection = isLoading || (bankConnected && !isEstimated);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Trésorerie prévisionnelle — nécessite des vraies transactions bancaires
-          (pas juste un bridgeUserUuid posé). En fallback bordereaux on n'a pas
-          de solde de compte exploitable → on garde l'overlay affiché. */}
+          (pas juste un bridgeUserUuid posé). Sans banque connectée (ou en
+          fallback bordereaux), pas de solde exploitable → la carte n'est pas
+          rendue du tout. */}
+      {showTresoProjection && (
       <div className="relative bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6">
-        <DataMissingOverlay bankConnected={(bankConnected && !isEstimated) || isLoading} />
         <div className="flex items-center justify-between mb-4 gap-3">
           <h3 className="text-base font-semibold text-ardoise-900">Trésorerie prévisionnelle</h3>
           <select
@@ -2284,11 +2685,11 @@ function SummaryTab() {
 
             <div className="mt-6 pt-4 border-t border-ardoise-100">
               <div className="flex items-center gap-1.5 mb-1">
-                <p className="text-xs text-ardoise-400">Reste à vivre estimé fin {horizonLabel}</p>
+                <p className="text-xs text-ardoise-400">Trésorerie projetée fin {horizonLabel}</p>
                 <InfoTooltip text={`Trésorerie projetée à la fin ${horizonLabel} : solde actuel du compte par défaut, plus vos encaissements estimés, moins les échéances fiscales/sociales restantes et vos charges professionnelles projetées.`} />
               </div>
-              <p className={`text-3xl font-bold font-mono ${isEstimated ? "text-ardoise-300" : solde >= 0 ? "text-ardoise-900" : "text-red-500"}`}>
-                {isEstimated ? "—" : formatSigned(solde)}
+              <p className={`text-3xl font-bold font-mono ${isEstimated ? "text-ardoise-300" : soldeProjete >= 0 ? "text-ardoise-900" : "text-red-500"}`}>
+                {isEstimated ? "—" : formatSigned(soldeProjete)}
               </p>
             </div>
 
@@ -2301,6 +2702,7 @@ function SummaryTab() {
           </>
         )}
       </div>
+      )}
 
       {/* Métriques annuelles N vs N-1 */}
       <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6">
@@ -2329,15 +2731,17 @@ function SummaryTab() {
               const pctN = scale > 0 ? Math.min(100, (m.value / scale) * 100) : 0;
               const pctNm1 = scale > 0 && m.prevValue != null ? Math.min(100, (m.prevValue / scale) * 100) : 0;
               return (
-                <div key={m.key} className={`flex items-center gap-4 ${idx === 0 ? "pb-4" : idx === metrics.length - 1 ? "pt-4" : "py-4"}`}>
-                  {/* Icon */}
-                  <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
-                    {m.icon}
+                <div key={m.key} className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 ${idx === 0 ? "pb-4" : idx === metrics.length - 1 ? "pt-4" : "py-4"}`}>
+                  <div className="flex items-center gap-4 min-w-0 flex-1">
+                    {/* Icon */}
+                    <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+                      {m.icon}
+                    </div>
+                    {/* Title */}
+                    <p className="text-sm font-medium text-ardoise-900 flex-1 min-w-0">{m.title}</p>
                   </div>
-                  {/* Title */}
-                  <p className="text-sm font-medium text-ardoise-900 flex-1 min-w-0">{m.title}</p>
                   {/* Years + bars stacked */}
-                  <div className="flex flex-col gap-2 w-[55%] shrink-0">
+                  <div className="flex flex-col gap-2 w-full sm:w-[55%] sm:shrink-0">
                     {/* Year N */}
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-medium text-ardoise-500 w-10 shrink-0 font-mono">{m.year}</span>
@@ -2373,24 +2777,20 @@ function SummaryTab() {
 
 // ── Remainder Tab ──
 //
-// "Reste à vivre" : trésorerie projetée à 3 horizons (fin du mois, fin du
-// trimestre, fin de l'année). Part du solde du compte par défaut, ajoute les
-// encaissements estimés (moyenne mensuelle des mois écoulés × mois restants
-// jusqu'à l'horizon), soustrait les échéances fiscales/sociales lues dans le
-// calendrier × montant par échéance issu de getCotisationsEstimate, et
-// soustrait les charges pro projetées (moyenne YTD × mois restants). Vue
-// purement indicative — pas de prise en compte de régul ou dépenses ponctuelles.
+// "Reste à vivre" : CA − charges projetés à 3 horizons (fin du mois, fin du
+// trimestre, fin de l'année). Ajoute les encaissements estimés (moyenne
+// mensuelle des mois écoulés × mois restants jusqu'à l'horizon), soustrait les
+// cotisations sociales et l'impôt provisionnés au prorata, et soustrait les
+// charges pro projetées (moyenne YTD × mois restants). La trésorerie n'entre
+// PAS dans le calcul. Vue purement indicative — pas de prise en compte de régul
+// ou dépenses ponctuelles.
 
 function RemainderTab() {
   const hp = usePractitioner();
   const { loadYearCore, loadEstimate } = useManagementData();
   const bankConnected = !!hp?.bridgeUserUuid;
-  const { accounts, transactionsLoading, defaultBankAccountMissing } = useData();
+  const { transactionsLoading } = useData();
   const currentYear = new Date().getFullYear();
-  // "Solde disponible" = banque liée + compte par défaut choisi + compte
-  // effectivement présent dans la liste synchronisée. Sans ça, defaultBalance
-  // retombait à 0 et on affichait "0 €" au lieu d'un message explicite.
-  const hasBalance = bankConnected && !!hp?.defaultBankAccountId && !defaultBankAccountMissing;
 
   const [loading, setLoading] = useState(true);
   const [estimate, setEstimate] = useState<CotisationsEstimate | null>(null);
@@ -2427,12 +2827,6 @@ function RemainderTab() {
     })().catch(() => setLoading(false));
   }, [currentYear, loadYearCore, loadEstimate, bankConnected]);
 
-  const defaultBalance = useMemo(() => {
-    if (!hp?.defaultBankAccountId) return 0;
-    const acc = accounts.find((a) => a.id === hp.defaultBankAccountId);
-    return acc ? parseFloat(acc.balance) : 0;
-  }, [accounts, hp]);
-
   type Breakdown = {
     key: string;
     label: string;
@@ -2460,7 +2854,6 @@ function RemainderTab() {
       const b = computeResteAVivre({
         months: monthlyData,
         estimate,
-        startingBalance: defaultBalance,
         targetMonthIdx: targetIdx,
       });
       return {
@@ -2478,7 +2871,7 @@ function RemainderTab() {
     if (eoqIdx !== eomIdx) out.push(compute("eoq", "Fin du trimestre", eoqIdx));
     if (eoyIdx !== eoqIdx && eoyIdx !== eomIdx) out.push(compute("eoy", "Fin de l'année", eoyIdx));
     return out;
-  }, [estimate, monthlyData, defaultBalance, currentYear]);
+  }, [estimate, monthlyData, currentYear]);
 
   const isLoading = loading || transactionsLoading;
 
@@ -2486,7 +2879,7 @@ function RemainderTab() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <h2 className="text-lg font-bold text-ardoise-900">Reste à vivre</h2>
-        <InfoTooltip text="Trésorerie projetée à différents horizons : on part de votre solde bancaire, on y ajoute vos encaissements estimés (moyenne mensuelle des mois écoulés) et on déduit les cotisations provisionnées au prorata (URSSAF, CARPIMKO, impôt) ainsi qu'une moyenne de vos charges pro. Indicatif — ne tient pas compte de régularisations ou de dépenses ponctuelles." />
+        <InfoTooltip text="Chiffre d'affaires moins charges, projeté à différents horizons : vos encaissements estimés (moyenne mensuelle des mois écoulés) moins les cotisations sociales et l'impôt provisionnés au prorata (URSSAF, CARPIMKO, PAS) et une moyenne de vos charges pro. Ne tient pas compte de la trésorerie, ni des régularisations ou dépenses ponctuelles." />
       </div>
 
       {isEstimated && (
@@ -2505,29 +2898,6 @@ function RemainderTab() {
           </span>
         </div>
       )}
-
-      <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5">
-        <p className="text-xs text-ardoise-400 mb-1">Trésorerie actuelle (compte par défaut)</p>
-        {isLoading ? (
-          <div className="h-8 w-32 bg-ardoise-100 rounded animate-pulse" />
-        ) : (
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <p className={`text-3xl font-bold font-mono ${!hasBalance ? "text-ardoise-300" : defaultBalance >= 0 ? "text-ardoise-900" : "text-alerte-600"}`}>
-              {formatCurrency(hasBalance ? defaultBalance : 0)}
-            </p>
-            {!hasBalance && (
-              <p className="text-xs text-ardoise-500">
-                {!bankConnected ? "Banque non connectée" : !hp?.defaultBankAccountId ? "Aucun compte par défaut configuré" : "Compte par défaut introuvable"}
-                {" — "}
-                <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-700">
-                  {!bankConnected ? "connecter ma banque" : "configurer un compte par défaut"}
-                </Link>{" "}
-                pour afficher le solde.
-              </p>
-            )}
-          </div>
-        )}
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {breakdowns.map((b) => {
@@ -2549,12 +2919,6 @@ function RemainderTab() {
                 <div className="h-48 bg-ardoise-100 rounded animate-pulse" />
               ) : (
                 <>
-                  <div className="flex items-baseline justify-between pb-3 border-b border-ardoise-100">
-                    <p className="text-xs text-ardoise-500">Trésorerie de départ</p>
-                    <p className={`text-sm font-medium tabular-nums font-mono ${hasBalance ? "text-ardoise-900" : "text-ardoise-300"}`}>
-                      {formatCurrency(hasBalance ? defaultBalance : 0)}
-                    </p>
-                  </div>
                   {rows.length === 0 ? (
                     <p className="py-4 text-xs text-ardoise-400 italic">Aucune charge ni encaissement projeté sur la période.</p>
                   ) : (
@@ -2574,15 +2938,6 @@ function RemainderTab() {
                     <p className={`text-2xl font-bold tabular-nums font-mono ${b.remainder >= 0 ? "text-ardoise-900" : "text-alerte-600"}`}>
                       {formatCurrency(b.remainder)}
                     </p>
-                    {!hasBalance && (
-                      <p className="text-[11px] text-ardoise-500 mt-1 leading-relaxed">
-                        Calcul partant d&apos;une trésorerie à 0 € : {!bankConnected ? "banque non connectée" : !hp?.defaultBankAccountId ? "aucun compte par défaut configuré" : "compte par défaut introuvable"}.{" "}
-                        <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-700">
-                          {!bankConnected ? "Connecter ma banque" : "Configurer un compte"}
-                        </Link>{" "}
-                        pour partir d&apos;un solde réel.
-                      </p>
-                    )}
                   </div>
                 </>
               )}
@@ -3223,7 +3578,7 @@ function CAForecastSection({
 
       <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-4 space-y-4">
       {/* Cartes fourchette */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-[12px] bg-ardoise-50 border border-ardoise-100 px-3 py-2.5">
           <p className="text-[11px] uppercase tracking-wide text-ardoise-500">Basse</p>
           <p className="text-base font-bold text-ardoise-700 font-mono">{formatCurrency(forecast.annualLow)}</p>
@@ -3367,7 +3722,7 @@ function CAForecastSection({
                 const setLine = (patch: Partial<typeof line>) =>
                   setManualLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
                 return (
-                  <div key={idx} className="flex items-center gap-1.5">
+                  <div key={idx} className="flex flex-wrap items-center gap-1.5">
                     <select
                       value={line.key}
                       onChange={(e) => {
@@ -3375,7 +3730,7 @@ function CAForecastSection({
                         setLine({ key: e.target.value, unitAmount: p ? p.unitPrice : line.unitAmount });
                         setManualFeedback(null);
                       }}
-                      className="flex-1 min-w-0 px-2 py-1 text-xs rounded-md border border-ardoise-200 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400"
+                      className="flex-1 min-w-[150px] px-2 py-1 text-xs rounded-md border border-ardoise-200 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400"
                     >
                       {actOptions.mine.length > 0 && (
                         <optgroup label="Vos actes (tarif réel)">

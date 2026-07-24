@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import Link from "next/link";
 import { useUser } from "@/providers/user-provider";
@@ -32,7 +32,17 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   rejete: { label: "Rejeté", color: "text-alerte-600", bg: "bg-alerte-50" },
 };
 
-export function DashboardClient() {
+// Données préchargées côté serveur (page.tsx) pour éviter la cascade de server
+// actions au montage. `initial` absent = rendu sans preload (fallback client).
+export type DashboardInitialData = {
+  healthScore: HealthScore | null;
+  kpis: { encaissement: number; decaissement: number; nbTransactionsDepenses: number } | null;
+  rav: { months: MonthlyActivityMonth[]; estimate: CotisationsEstimate | null; source: EffectiveCASource };
+  defaultMonthlyNet: number[];
+};
+
+export function DashboardClient({ initial }: { initial?: DashboardInitialData }) {
+  const seeded = !!initial;
   const user = useUser();
   const hp = usePractitioner();
   const {
@@ -61,14 +71,19 @@ export function DashboardClient() {
   const solde = defaultAccount ? Number(defaultAccount.balance) : null;
 
   // KPIs from server (same as /transactions)
-  const [kpiEncaissement, setKpiEncaissement] = useState(0);
-  const [kpiDecaissement, setKpiDecaissement] = useState(0);
-  const [kpiNbDepenses, setKpiNbDepenses] = useState(0);
-  const [kpiLoading, setKpiLoading] = useState(true);
-  const [healthScore, setHealthScore] = useState<HealthScore | null>(null);
-  const [healthScoreLoading, setHealthScoreLoading] = useState(true);
+  const [kpiEncaissement, setKpiEncaissement] = useState(initial?.kpis?.encaissement ?? 0);
+  const [kpiDecaissement, setKpiDecaissement] = useState(initial?.kpis?.decaissement ?? 0);
+  const [kpiNbDepenses, setKpiNbDepenses] = useState(initial?.kpis?.nbTransactionsDepenses ?? 0);
+  const [kpiLoading, setKpiLoading] = useState(!seeded);
+  const [healthScore, setHealthScore] = useState<HealthScore | null>(initial?.healthScore ?? null);
+  const [healthScoreLoading, setHealthScoreLoading] = useState(!seeded);
 
+  // Garde `done`/clé stables au double-invoke du Strict Mode (dev) : contrairement
+  // à un simple « skip au 1er run », elles ne relancent pas le fetch au 2e invoke.
+  const healthDoneRef = useRef(seeded);
   useEffect(() => {
+    if (healthDoneRef.current) return; // seedé serveur, ou déjà chargé
+    healthDoneRef.current = true;
     let cancelled = false;
     getHealthScoreAction().then((result) => {
       if (cancelled) return;
@@ -78,7 +93,13 @@ export function DashboardClient() {
     return () => { cancelled = true; };
   }, []);
 
+  // Clé = valeurs dont dépend le KPI : on ne refetch que si elle change réellement
+  // (ex. édition des charges manuelles), pas au montage seedé ni au 2e invoke Strict.
+  const kpiKeyRef = useRef(seeded ? `${hp?.bridgeUserUuid ?? ""}|${hp?.defaultBankAccountId ?? ""}|${manualChargesVersion}` : null);
   useEffect(() => {
+    const key = `${hp?.bridgeUserUuid ?? ""}|${hp?.defaultBankAccountId ?? ""}|${manualChargesVersion}`;
+    if (kpiKeyRef.current === key) return;
+    kpiKeyRef.current = key;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     if (!hp?.bridgeUserUuid) { setKpiLoading(false); return; }
     getTransactionKpisAction(hp.defaultBankAccountId, undefined, true).then((result) => {
@@ -108,15 +129,19 @@ export function DashboardClient() {
   // ── Reste à vivre (horizon « fin du mois ») ──
   // Mêmes requêtes que /management (RemainderTab) : CA effectif + activité
   // mensuelle (avec fallback bordereaux) + estimation cotisations.
-  const [ravMonths, setRavMonths] = useState<MonthlyActivityMonth[]>([]);
-  const [ravEstimate, setRavEstimate] = useState<CotisationsEstimate | null>(null);
-  const [ravLoading, setRavLoading] = useState(true);
+  const [ravMonths, setRavMonths] = useState<MonthlyActivityMonth[]>(initial?.rav.months ?? []);
+  const [ravEstimate, setRavEstimate] = useState<CotisationsEstimate | null>(initial?.rav.estimate ?? null);
+  const [ravLoading, setRavLoading] = useState(!seeded);
   // Source réelle des données mensuelles : "transactions" = données bancaires,
   // "bordereaux"/"none" = pas de transactions bancaires exploitables. Optimiste au
   // départ pour ne pas faire clignoter le message pendant le chargement.
-  const [ravSource, setRavSource] = useState<EffectiveCASource>("transactions");
+  const [ravSource, setRavSource] = useState<EffectiveCASource>(initial?.rav.source ?? "transactions");
 
+  const ravKeyRef = useRef(seeded ? `${currentYear}|${manualChargesVersion}` : null);
   useEffect(() => {
+    const key = `${currentYear}|${manualChargesVersion}`;
+    if (ravKeyRef.current === key) return;
+    ravKeyRef.current = key;
     let cancelled = false;
     (async () => {
       const eca = await getEffectiveCAAction(currentYear, "transactions");
@@ -142,11 +167,13 @@ export function DashboardClient() {
     () => computeResteAVivre({
       months: ravMonths,
       estimate: ravEstimate,
-      startingBalance: solde ?? 0,
       targetMonthIdx: new Date().getMonth(),
     }).total,
-    [ravMonths, ravEstimate, solde],
+    [ravMonths, ravEstimate],
   );
+  // Le reste à vivre = CA − charges : il ne dépend plus de la trésorerie, donc il
+  // s'affiche dès qu'on a une estimation de CA (banque OU bordereaux).
+  const hasResteAVivre = ravEstimate !== null;
 
   // ── Solde de fin de mois reconstruit ──
   // `transactions` du DataProvider n'est pas peuplé ; on reconstruit donc le solde
@@ -171,9 +198,13 @@ export function DashboardClient() {
   // La card « Trésorerie disponible » affiche le solde du compte par défaut ; sa tendance
   // doit donc porter sur le MÊME compte. `getMonthlyActivityAction` agrège tous les comptes,
   // on récupère donc le net mensuel du seul compte par défaut via une action dédiée.
-  const [defaultMonthlyNet, setDefaultMonthlyNet] = useState<number[]>([]);
+  const [defaultMonthlyNet, setDefaultMonthlyNet] = useState<number[]>(initial?.defaultMonthlyNet ?? []);
+  const netKeyRef = useRef(seeded ? `${hp?.defaultBankAccountId ?? ""}|${currentYear}` : null);
   useEffect(() => {
     const accId = hp?.defaultBankAccountId;
+    const key = `${accId ?? ""}|${currentYear}`;
+    if (netKeyRef.current === key) return;
+    netKeyRef.current = key;
     if (!accId) return; // sans compte par défaut, `solde` est null → pas de tendance de toute façon
     let cancelled = false;
     getAccountMonthlyNetAction(accId, currentYear).then((nets) => {
@@ -218,14 +249,15 @@ export function DashboardClient() {
   const noBankData = ravSource !== "transactions";
   const kpiCardsLoading = bankLoading || kpiLoading;
 
-  // Message expliquant l'absence de trésorerie / reste à vivre (indicateurs liés au
-  // compte bancaire par défaut). Mêmes états que /management.
+  // Message expliquant l'absence de trésorerie / dépenses (indicateurs liés au
+  // compte bancaire par défaut). Le reste à vivre, lui, ne dépend plus de la
+  // banque (CA − charges) : il n'est plus mentionné ici. Mêmes états que /management.
   const bankHint: { text: string; cta: boolean } | null = !bankConnected
-    ? { text: "La trésorerie, les dépenses et le reste à vivre sont calculés à partir de votre compte bancaire. Connectez votre banque pour les afficher.", cta: true }
+    ? { text: "La trésorerie et les dépenses sont calculées à partir de votre compte bancaire. Connectez votre banque pour les afficher.", cta: true }
     : !hp?.defaultBankAccountId
-      ? { text: "Aucun compte par défaut n'est sélectionné : choisissez votre compte bancaire principal pour afficher la trésorerie et le reste à vivre.", cta: true }
+      ? { text: "Aucun compte par défaut n'est sélectionné : choisissez votre compte bancaire principal pour afficher la trésorerie.", cta: true }
       : defaultBankAccountMissing
-        ? { text: "Votre compte par défaut est introuvable (compte déconnecté ou supprimé). Reconfigurez-le pour retrouver la trésorerie et le reste à vivre.", cta: true }
+        ? { text: "Votre compte par défaut est introuvable (compte déconnecté ou supprimé). Reconfigurez-le pour retrouver la trésorerie.", cta: true }
         : noBankData
           ? { text: "Aucune transaction bancaire exploitable pour l'instant : la trésorerie et les dépenses ne peuvent pas être calculées.", cta: false }
           : null;
@@ -233,7 +265,7 @@ export function DashboardClient() {
   return (
     <div className="flex flex-col gap-6">
       {/* En-tête */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
         <div>
           <h1 className="text-xl md:text-2xl font-extrabold mb-1">Bonjour {name} <span className="inline-block">👋</span></h1>
           <p className="text-sm text-ardoise-400">Voici la vue d&apos;ensemble de votre activité</p>
@@ -249,6 +281,7 @@ export function DashboardClient() {
           loading={kpiCardsLoading}
           icon={<KpiWalletIcon />}
           trend={{ pct: tresoTrend }}
+          href="/transactions"
         />
         <StatCard
           label="Chiffre d'affaires"
@@ -256,6 +289,7 @@ export function DashboardClient() {
           loading={ravLoading}
           icon={<KpiChartIcon />}
           trend={{ pct: monthTrends.ca }}
+          href="/management?tab=activity"
         />
         <StatCard
           label="Dépenses"
@@ -263,13 +297,15 @@ export function DashboardClient() {
           loading={ravLoading}
           icon={<KpiExpenseIcon />}
           trend={noBankData ? undefined : { pct: monthTrends.depenses, invert: true }}
+          href="/management?tab=activity"
         />
         <StatCard
           label="Reste à vivre"
-          value={solde !== null ? formatCurrencyRounded(resteAVivre) : "—"}
+          value={hasResteAVivre ? formatCurrencyRounded(resteAVivre) : "—"}
           loading={ravLoading}
           icon={<KpiCoinIcon />}
-          sub={solde !== null ? "D'ici la fin du mois" : undefined}
+          sub={hasResteAVivre ? "D'ici la fin du mois" : undefined}
+          href="/management?tab=remainder"
         />
       </div>
 
@@ -793,12 +829,12 @@ function MonthSelector({ value, onChange, year }: { value: number; onChange: (m:
 }
 
 /* ─── Stat card (rangée du haut) ─── */
-function StatCard({ label, value, icon, loading, empty, trend, sub }: { label?: string; value?: string; icon?: React.ReactNode; loading?: boolean; empty?: boolean; trend?: { pct: number | null; invert?: boolean }; sub?: string }) {
+function StatCard({ label, value, icon, loading, empty, trend, sub, href }: { label?: string; value?: string; icon?: React.ReactNode; loading?: boolean; empty?: boolean; trend?: { pct: number | null; invert?: boolean }; sub?: string; href?: string }) {
   if (empty) {
     return <div className="rounded-[14px] border border-dashed border-ardoise-200 min-h-[104px]" />;
   }
-  return (
-    <Card className="min-h-[104px]">
+  const card = (
+    <Card className={`min-h-[104px] h-full ${href ? "transition-colors group-hover:border-ardoise-300" : ""}`}>
       <div className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wide text-ardoise-400 mb-2">
         <span className="text-violet-700">{icon}</span>
         {label}
@@ -811,6 +847,16 @@ function StatCard({ label, value, icon, loading, empty, trend, sub }: { label?: 
       {!loading && trend?.pct != null && <TrendLine pct={trend.pct} invert={trend.invert} />}
       {!loading && sub && <p className="mt-1.5 text-xs text-ardoise-400">{sub}</p>}
     </Card>
+  );
+  if (!href) return card;
+  return (
+    <Link
+      href={href}
+      aria-label={label ? `${label} — voir le détail` : undefined}
+      className="group block rounded-[14px] transition-shadow hover:shadow-[0_4px_14px_rgba(26,15,46,0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
+    >
+      {card}
+    </Link>
   );
 }
 

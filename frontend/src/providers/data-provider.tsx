@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getPendingSuggestions, getPendingSuggestionsCount } from "@/actions/practice-links";
 import { getFacturationData, type FacturationSummary, type CarePassageRow } from "@/actions/facturation";
 import { fetchLocalAccountsAction } from "@/actions/bridge";
@@ -109,7 +109,21 @@ const DataContext = createContext<DataContextValue>({
   notifyManualChargesChanged: () => {},
 });
 
-export function DataProvider({ children }: { children: ReactNode }) {
+// Données préchargées côté serveur (layout protégé) pour éviter les 4 refresh*
+// client en cascade au montage. Voir preload-protected-data.ts.
+export type DataProviderInitialData = {
+  pendingSuggestionsCount: number;
+  suggestions: Suggestion[];
+  facturationSummary: FacturationSummary | null;
+  facturationPassages: CarePassageRow[];
+  accounts: Account[];
+  uncategorizedCount: number;
+  transactionsError: string;
+  effectiveCA: EffectiveCA;
+  cotisationsEstimate: CotisationsEstimate | null;
+};
+
+export function DataProvider({ initialDataPromise, children }: { initialDataPromise?: Promise<DataProviderInitialData> | null; children: ReactNode }) {
   const user = useUser();
   const hp = usePractitioner();
   const isAdmin = user.accountType === "admin";
@@ -217,14 +231,53 @@ export function DataProvider({ children }: { children: ReactNode }) {
     ]);
   }, [refresh, refreshFacturation, refreshTransactions, refreshFiscal]);
 
-  // Initial load
+  // Applique les données préchargées côté serveur (résolution de la promesse que
+  // le layout streame en parallèle du rendu de la page — pas de POST client).
+  const applyInitial = useCallback((d: DataProviderInitialData) => {
+    setPendingSuggestionsCount(d.pendingSuggestionsCount);
+    setSuggestions(d.suggestions);
+    setSuggestionsLoading(false);
+    setFacturationSummary(d.facturationSummary);
+    setFacturationPassages(d.facturationPassages);
+    setFacturationLoading(false);
+    setAccounts(d.accounts);
+    setUncategorizedCount(d.uncategorizedCount);
+    setTransactionsError(d.transactionsError);
+    setTransactionsLoading(false);
+    setEffectiveCA(d.effectiveCA);
+    setCotisationsEstimate(d.cotisationsEstimate);
+    setFiscalLoading(false);
+  }, []);
+
+  // Chargement initial. Si le layout a fourni une promesse de préchargement serveur,
+  // on l'attend (streamée en parallèle du rendu, un seul aller-retour) ; sinon
+  // fallback sur les refresh client. Ref stable au double-invoke du Strict Mode
+  // (dev). Les refreshs manuels (bouton Actualiser, charges) passent par
+  // refreshAll/refresh* et ne sont donc pas concernés.
+  const initialLoadDoneRef = useRef(false);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch
+    if (initialLoadDoneRef.current) return;
+    initialLoadDoneRef.current = true;
+    if (initialDataPromise) {
+      // `initialDataPromise` est un thenable React (promesse streamée serveur→client),
+      // pas une vraie Promise : son `.then` n'est pas chaînable. On l'adopte via
+      // Promise.resolve pour pouvoir enchaîner `.then().catch()`.
+      Promise.resolve(initialDataPromise)
+        .then(applyInitial)
+        .catch(() => {
+          // Préchargement serveur échoué → on refait le fetch côté client.
+          refresh();
+          refreshFacturation();
+          refreshTransactions();
+          refreshFiscal();
+        });
+      return;
+    }
     refresh();
     refreshFacturation();
     refreshTransactions();
     refreshFiscal();
-  }, [refresh, refreshFacturation, refreshTransactions, refreshFiscal]);
+  }, [initialDataPromise, applyInitial, refresh, refreshFacturation, refreshTransactions, refreshFiscal]);
 
   return (
     <DataContext.Provider value={{

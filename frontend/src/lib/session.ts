@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import { eq, and, isNull } from "drizzle-orm";
@@ -39,8 +40,14 @@ async function getUserFromToken(token: string): Promise<SessionUser | null> {
 
 /**
  * Read-only session check. Token refresh is handled by the proxy.
+ *
+ * Mémoïsé par requête via React `cache()` : un rendu serveur qui précharge N
+ * actions (page.tsx / layout) les voit toutes appeler getSession() → sans cache,
+ * c'est N vérifs JWT + N lookups user en DB pour une seule requête. Le cache est
+ * scellé par requête (pas de fuite entre utilisateurs) ; hors rendu (server action
+ * POST isolée) il n'y a qu'un appel, donc aucun changement de comportement.
  */
-export async function getSession(): Promise<SessionUser | null> {
+export const getSession = cache(async (): Promise<SessionUser | null> => {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get("accessToken")?.value;
   console.log("[SESSION] getSession", { hasAccessToken: !!accessToken });
@@ -55,7 +62,7 @@ export async function getSession(): Promise<SessionUser | null> {
 
   console.log("[SESSION] getSession → NULL (le layout protégé va rediriger vers /login)");
   return null;
-}
+});
 
 export async function setSessionCookies(accessToken: string, refreshToken: string) {
   console.log("[SESSION] setSessionCookies → pose accessToken + refreshToken", { secure: IS_PROD, sameSite: "lax", env: process.env.NODE_ENV });

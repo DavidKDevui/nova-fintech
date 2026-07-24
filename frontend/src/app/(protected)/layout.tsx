@@ -9,6 +9,7 @@ import { OnboardingModal } from "@/components/onboarding-modal";
 import { PageTransition } from "@/components/page-transition";
 import { dbReady } from "@/lib/db";
 import * as practitionerService from "@/lib/services/practitioner.service";
+import { preloadProtectedData } from "@/lib/data/preload-protected-data";
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   await dbReady;
@@ -40,10 +41,19 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   const needsOnboarding = !practitionerProfile;
 
+  // Précharge les données du DataProvider côté serveur, mais SANS `await` : on passe
+  // la promesse au provider (client) qui la déroule en streaming. Le layout ne bloque
+  // donc pas → la page (dashboard/…) rend et précharge EN PARALLÈLE au lieu d'attendre
+  // le layout. Rien à précharger tant que le profil praticien n'existe pas (onboarding).
+  // Le rejet éventuel est géré côté client (fallback fetch), pas de 500 ici.
+  const initialDataPromise = practitionerProfile
+    ? preloadProtectedData(!!practitionerProfile.bridgeUserUuid)
+    : null;
+
   return (
     <UserProvider user={session}>
       <PractitionerProvider profile={practitionerProfile}>
-        <DataProvider>
+        <DataProvider initialDataPromise={initialDataPromise}>
           <AssistantProvider>
             <div className="flex h-screen flex-col lg:flex-row">
               <Navbar />
