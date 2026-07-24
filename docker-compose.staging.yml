@@ -64,33 +64,37 @@ services:
     deploy:
       resources:
         limits:
-          memory: 384M
-          cpus: "0.5"
+          # VPS = 2 vCPU / 2 Go. L'ancienne limite (0.5 CPU) throttlait le
+          # container ~39% du temps : le rendu SSR a froid prenait plusieurs
+          # secondes. Les limites ne sont pas des reservations, on peut
+          # sur-souscrire sans risque pour les autres containers.
+          memory: 768M
+          cpus: "1.5"
     labels:
       ofelia.enabled: "true"
 
       # Sync bancaire — toutes les heures, à la minute 0
       ofelia.job-exec.sync-bank.schedule: "0 0 * * * *"
-      ofelia.job-exec.sync-bank.command: "pnpm cron:sync-bank"
+      ofelia.job-exec.sync-bank.command: "npm run cron:sync-bank"
       ofelia.job-exec.sync-bank.no-overlap: "true"
 
       # Check alertes tréso — toutes les 15 minutes
       ofelia.job-exec.check-alerts.schedule: "0 */15 * * * *"
-      ofelia.job-exec.check-alerts.command: "pnpm cron:check-alerts"
+      ofelia.job-exec.check-alerts.command: "npm run cron:check-alerts"
       ofelia.job-exec.check-alerts.no-overlap: "true"
 
       # Rappels échéances — chaque jour à 8h
       ofelia.job-exec.deadlines-reminder.schedule: "0 0 8 * * *"
-      ofelia.job-exec.deadlines-reminder.command: "pnpm cron:deadlines-reminder"
+      ofelia.job-exec.deadlines-reminder.command: "npm run cron:deadlines-reminder"
 
       # Check alertes taux de rejet — chaque jour à 8h30 (cooldown 14 jours côté job)
       ofelia.job-exec.check-rejection-alerts.schedule: "0 30 8 * * *"
-      ofelia.job-exec.check-rejection-alerts.command: "pnpm cron:check-rejection-alerts"
+      ofelia.job-exec.check-rejection-alerts.command: "npm run cron:check-rejection-alerts"
       ofelia.job-exec.check-rejection-alerts.no-overlap: "true"
 
       # Récap mensuel — le 1er du mois à 9h
       ofelia.job-exec.monthly-recap.schedule: "0 0 9 1 * *"
-      ofelia.job-exec.monthly-recap.command: "pnpm cron:monthly-recap"
+      ofelia.job-exec.monthly-recap.command: "npm run cron:monthly-recap"
 
   # Landing page (marketing) — Next.js standalone, sans DB ni cron.
   # Exposee sur le port hote 3002 ; nginx proxie le domaine vitrine vers ce container.

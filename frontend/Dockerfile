@@ -40,8 +40,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# pnpm via corepack (les labels Ofelia appellent `pnpm cron:xxx`)
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# PAS de pnpm ici : le projet est en npm (package-lock.json). pnpm >= 10 lance
+# un "deps status check" avant chaque `pnpm run`, ne reconnait pas un
+# node_modules installe par npm, et declenche un `pnpm install` implicite qui
+# deplace les dependances dans node_modules/.ignored puis meurt en OOM.
+# Les crons Ofelia appellent donc `npm run cron:xxx` (npm est deja dans l'image).
 
 # User non-root pour la sécurité
 RUN addgroup --system --gid 1001 nodejs && \

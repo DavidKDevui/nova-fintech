@@ -13,12 +13,12 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "seed": "npx tsx scripts/seed-admin.ts",
-    "admin:create": "tsx --env-file=.env scripts/create-admin.ts",
-    "cron:monthly-recap": "tsx --env-file=.env scripts/run-monthly-recap.ts",
-    "cron:deadlines-reminder": "tsx --env-file=.env scripts/run-deadlines-reminder.ts",
-    "cron:check-alerts": "tsx --env-file=.env scripts/run-check-alerts.ts",
-    "cron:check-rejection-alerts": "tsx --env-file=.env scripts/run-check-rejection-alerts.ts",
-    "cron:sync-bank": "tsx --env-file=.env scripts/run-sync-bank.ts"
+    "admin:create": "tsx --env-file-if-exists=.env scripts/create-admin.ts",
+    "cron:monthly-recap": "tsx --env-file-if-exists=.env scripts/run-monthly-recap.ts",
+    "cron:deadlines-reminder": "tsx --env-file-if-exists=.env scripts/run-deadlines-reminder.ts",
+    "cron:check-alerts": "tsx --env-file-if-exists=.env scripts/run-check-alerts.ts",
+    "cron:check-rejection-alerts": "tsx --env-file-if-exists=.env scripts/run-check-rejection-alerts.ts",
+    "cron:sync-bank": "tsx --env-file-if-exists=.env scripts/run-sync-bank.ts"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
