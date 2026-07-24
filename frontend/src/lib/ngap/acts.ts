@@ -29,7 +29,10 @@ export const ACT_LABELS: Record<string, Record<string, string>> = {
 const GENERIC_LABELS: Record<string, string> = {
   AMI: "Soins infirmiers (AMI)",
   AMX: "Soins — patient dépendant (AMX)",
-  AIS: "Séance de soins infirmiers (AIS)",
+  // AIS retiré de la NGAP (→ BSI). Réaffecté à BSA en amont (parse-cotation.ts),
+  // donc ce libellé n'est en principe jamais atteint : gardé comme filet pour
+  // d'éventuels appels directs à actLabel("AIS", …).
+  AIS: "Séance de soins infirmiers (AIS — obsolète)",
   BSA: "Bilan de soins infirmiers (BSI) — charge légère",
   BSB: "Bilan de soins infirmiers (BSI) — charge moyenne",
   BSC: "Bilan de soins infirmiers (BSI) — charge lourde",
@@ -60,7 +63,7 @@ export interface NgapCatalogEntry {
  * Catalogue des actes de soin NGAP chiffrables, au tarif conventionnel.
  * - Pour les lettres-clés dont le prix dépend du coefficient (AMI, AMX), on émet
  *   les couples explicitement répertoriés dans ACT_LABELS.
- * - Pour les autres actes (forfaits à coefficient 1 : DI, BSA/B/C, AIS…), un
+ * - Pour les autres actes (forfaits à coefficient 1 : DI, BSA/B/C…), un
  *   seul couple au coefficient 1.
  * Sert de second niveau au menu de saisie manuelle (actes jamais facturés).
  */

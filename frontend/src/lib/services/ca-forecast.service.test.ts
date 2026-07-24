@@ -36,7 +36,7 @@ function assertInvariants(f: ReturnType<typeof forecastCA>) {
   assert.ok(Math.abs(sum(f.seasonality) - 1) < 1e-9, `saisonnalité somme à 1 (got ${sum(f.seasonality)})`);
 }
 
-test("saisonnalité reconstruite à partir des années complètes", () => {
+test("saisonnalité reconstruite à partir des années complètes (régularisée vers le plat)", () => {
   const f = forecastCA({
     completedYears: [yr(2023, 70000), yr(2024, 76000), yr(2025, 82000)],
     targetYear: 2026,
@@ -44,10 +44,45 @@ test("saisonnalité reconstruite à partir des années complètes", () => {
     monthsElapsed: 0,
   });
   assertInvariants(f);
-  // Les poids doivent retrouver la forme SHAPE (à l'arrondi près).
+  // La forme SHAPE reste reconnaissable : décembre (max) domine, août (min) est
+  // le creux, et l'ordre des mois est préservé.
+  const maxIdx = f.seasonality.indexOf(Math.max(...f.seasonality));
+  const minIdx = f.seasonality.indexOf(Math.min(...f.seasonality));
+  assert.equal(maxIdx, 11, "décembre reste le mois le plus fort");
+  assert.equal(minIdx, 7, "août reste le creux");
+  // Mais les poids sont ramenés vers le plat (1/12) : le contraste est atténué.
+  // Chaque mois se rapproche de la part plate par rapport au poids brut SHAPE.
+  const flat = 1 / 12;
   f.seasonality.forEach((s, i) => {
-    assert.ok(Math.abs(s * 100 - SHAPE[i]) < 0.3, `poids mois ${i + 1}: ${(s * 100).toFixed(2)} ≈ ${SHAPE[i]}`);
+    const rawWeight = SHAPE[i] / 100;
+    assert.ok(
+      Math.abs(s - flat) <= Math.abs(rawWeight - flat) + 1e-9,
+      `mois ${i + 1} ramené vers le plat: |${s.toFixed(4)}-${flat.toFixed(4)}| ≤ |${rawWeight.toFixed(4)}-${flat.toFixed(4)}|`,
+    );
   });
+});
+
+test("robustesse : un mois aberrant (rattrapage) ne capte pas la projection", () => {
+  // Année de type « rattrapage de bordereaux » : 11 mois à 3000, décembre à
+  // 40000. Sur les poids bruts, décembre pèserait ~55 % de l'année et sa
+  // projection mensuelle serait un ordre de grandeur au-dessus des autres.
+  const months = Array<number>(12).fill(3000);
+  months[11] = 40000;
+  const total = sum(months);
+  const f = forecastCA({
+    completedYears: [{ year: 2025, total, months }],
+    targetYear: 2026,
+    ytdMonths: zeros(),
+    monthsElapsed: 0,
+  });
+  assertInvariants(f);
+  // Décembre reste le mois le plus fort mais son poids est écrêté sous le plafond
+  // (2,5 × la part plate), et davantage encore après régularisation vers le plat.
+  assert.equal(f.seasonality.indexOf(Math.max(...f.seasonality)), 11, "décembre reste le max");
+  assert.ok(f.seasonality[11] <= 2.5 / 12 + 1e-9, `déc plafonné (got ${(f.seasonality[11] * 100).toFixed(1)} %)`);
+  // La projection de décembre reste au plus ~3× un mois normal, pas 10×+.
+  const normal = f.monthly[0];
+  assert.ok(f.monthly[11] < normal * 4, `déc < 4× un mois normal (déc ${f.monthly[11]} vs ${normal})`);
 });
 
 test("saisonnalité plate quand aucune année complète", () => {

@@ -26,7 +26,11 @@ export const NGAP_RATES: Record<string, NgapRate> = {
   // ── Actes de soin ──
   AMI: { label: "AMI — Actes médico-infirmiers", unitPrice: 3.15, kind: "acte" },
   AMX: { label: "AMX — Actes infirmiers (patient dépendant)", unitPrice: 3.15, kind: "acte" },
-  AIS: { label: "AIS — Soins infirmiers", unitPrice: 2.65, kind: "acte" },
+  // AIS — RETIRÉ de la NGAP : remplacé par le Bilan de Soins Infirmiers (BSA/BSB/BSC)
+  // depuis la généralisation du BSI (2023). On ne le facture ni ne le propose plus à
+  // la saisie. Les AIS historiques/rattrapages sont réaffectés à BSA (voir
+  // DEPRECATED_ACTS dans parse-cotation.ts). Conservé en commentaire pour mémoire.
+  // AIS: { label: "AIS — Soins infirmiers", unitPrice: 2.65, kind: "acte" },
   DI: { label: "DI — Démarche de soins infirmiers", unitPrice: 10, kind: "acte" },
   BSA: { label: "BSA — Bilan de soins infirmiers (charge légère)", unitPrice: 13.0, kind: "acte" },
   BSB: { label: "BSB — Bilan de soins infirmiers (charge moyenne)", unitPrice: 18.2, kind: "acte" },

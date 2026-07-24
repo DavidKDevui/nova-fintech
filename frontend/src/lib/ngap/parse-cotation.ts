@@ -49,6 +49,24 @@ export function parseCotation(raw: string): CotationToken[] {
 }
 
 /**
+ * Actes retirés de la NGAP, réaffectés à leur équivalent conventionnel actuel.
+ * L'AIS (séances de soins infirmiers) a disparu avec la généralisation du Bilan
+ * de Soins Infirmiers (BSI, 2023) : on ne facture plus d'AIS. Les passages
+ * historiques ou rattrapages portant un AIS sont réaffectés au forfait BSI
+ * « charge légère » (BSA), à coefficient 1 — le coefficient AIS n'a pas
+ * d'équivalent sur un forfait BSI. La redirection ne change aucun montant
+ * (le CA vient du passage), seulement le rattachement à une prestation.
+ */
+const DEPRECATED_ACTS: Record<string, CotationToken> = {
+  AIS: { code: "BSA", coefficient: 1 },
+};
+
+/** Réaffecte un acte retiré de la NGAP vers son équivalent actuel (sinon inchangé). */
+function redirectDeprecated(token: CotationToken): CotationToken {
+  return DEPRECATED_ACTS[token.code] ?? token;
+}
+
+/**
  * Détermine la lettre-clé PRINCIPALE d'un passage : le premier acte de soin
  * de la cotation. Si la cotation ne contient que des modificateurs
  * (ex. "IFI" ou "IFI + F"), on retient le premier code rencontré.
@@ -59,14 +77,16 @@ export function principalCode(raw: string): string | null {
 }
 
 /**
- * Acte principal d'un passage : premier acte de soin de la cotation (code + coefficient).
+ * Acte principal d'un passage : premier acte de soin de la cotation (code + coefficient),
+ * après réaffectation des actes retirés de la NGAP (ex. AIS → BSA).
  * Si la cotation ne contient que des modificateurs, retient le premier token.
  * Renvoie null pour une cotation vide/illisible.
  */
 export function principalToken(raw: string): CotationToken | null {
   const tokens = parseCotation(raw);
   if (tokens.length === 0) return null;
-  return tokens.find((t) => isActe(t.code)) ?? tokens[0]!;
+  const principal = tokens.find((t) => isActe(t.code)) ?? tokens[0]!;
+  return redirectDeprecated(principal);
 }
 
 /** Clé stable identifiant une prestation (lettre-clé + coefficient principal). */

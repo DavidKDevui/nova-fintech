@@ -2,17 +2,20 @@ import type { CotisationsEstimate } from "@/actions/cotisations-estimate";
 import type { MonthlyActivityMonth } from "@/actions/transaction";
 
 // Calcul unique du « reste à vivre » projeté, partagé entre le dashboard et
-// l'espace Gestion (carte « Trésorerie prévisionnelle » + onglet « Reste à
-// vivre »). Auparavant dupliqué à trois endroits, ce qui avait fini par diverger.
+// l'espace Gestion (onglet « Reste à vivre »). Auparavant dupliqué à trois
+// endroits, ce qui avait fini par diverger.
 //
-// Modèle : on part du solde bancaire, on ajoute les encaissements estimés
-// (moyenne mensuelle des mois actifs écoulés × nombre de mois projetés) et on
-// déduit :
-//   - les cotisations provisionnées AU PRORATA des encaissements projetés
-//     (taux effectif = montant annuel / CA brut annualisé), et non aux seules
-//     dates d'échéance — sinon le chiffre gonfle mécaniquement plus l'horizon
-//     s'éloigne ;
+// Modèle : reste à vivre = chiffre d'affaires − charges. On part des
+// encaissements estimés (moyenne mensuelle des mois actifs écoulés × nombre de
+// mois projetés) et on déduit :
+//   - les cotisations sociales et l'impôt provisionnés AU PRORATA des
+//     encaissements projetés (taux effectif = montant annuel / CA brut
+//     annualisé), et non aux seules dates d'échéance — sinon le chiffre gonfle
+//     mécaniquement plus l'horizon s'éloigne ;
 //   - les charges pro. et rétrocessions/Madelin projetées.
+//
+// La trésorerie (solde bancaire) n'entre PAS dans le calcul : le reste à vivre
+// mesure ce que l'activité dégage, indépendamment du solde de départ.
 
 type ActivityMonth = Pick<MonthlyActivityMonth, "income" | "chargesPro" | "retrocession" | "madelin">;
 
@@ -20,8 +23,6 @@ export type ResteAVivreInput = {
   /** Activité mensuelle, index 0 = janvier. */
   months: ActivityMonth[];
   estimate: CotisationsEstimate | null;
-  /** Solde de départ (compte par défaut). */
-  startingBalance: number;
   /** Mois cible de la projection (0-11). Borné au mois courant (pas de passé). */
   targetMonthIdx: number;
   /** Date de référence — injectable pour les tests. Défaut : maintenant. */
@@ -46,7 +47,6 @@ export type ResteAVivreBreakdown = {
 export function computeResteAVivre({
   months,
   estimate,
-  startingBalance,
   targetMonthIdx,
   now = new Date(),
 }: ResteAVivreInput): ResteAVivreBreakdown {
@@ -88,7 +88,7 @@ export function computeResteAVivre({
   const provisionCotisations = urssafDue + carpimkoDue + pasDue;
 
   const chargesProProjetees = projChargesPro + projRetroMadelin;
-  const total = startingBalance + projIncome - provisionCotisations - chargesProProjetees;
+  const total = projIncome - provisionCotisations - chargesProProjetees;
 
   return {
     projIncome,

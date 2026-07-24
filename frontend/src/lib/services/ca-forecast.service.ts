@@ -72,6 +72,19 @@ const Z80 = 1.2816;
 const BASE_CV = 0.08;
 /** Jours/mois minimaux avant de faire confiance à la projection YTD seule. */
 const MIN_MONTHS_FOR_YTD = 3;
+/**
+ * Poids saisonnier maximal d'un mois, exprimé en multiple de la part plate
+ * (1/12 ≈ 8,3 %). Au-delà de 2,5× (~20,8 %), on suspecte un mois aberrant —
+ * rattrapage de bordereaux, prime exceptionnelle, ou première année d'activité
+ * partielle traitée comme complète — et on l'écrête.
+ */
+const SEASONALITY_MONTH_CAP = 2.5;
+/**
+ * Régularisation finale vers une saisonnalité plate (0 = brut, 1 = plat). Absorbe
+ * le bruit résiduel et empêche un mois creux de tomber à ~0, ce qui exagérait le
+ * contraste entre décembre et les mois calmes.
+ */
+const SEASONALITY_FLAT_BLEND = 0.15;
 
 function round(n: number): number {
   return Math.round(n);
@@ -82,10 +95,53 @@ function sum(arr: number[]): number {
 }
 
 /**
+ * Écrête chaque poids mensuel à `cap` (fraction du CA annuel) et redistribue
+ * l'excédent sur les mois restés sous le plafond, au prorata de leur poids (à
+ * défaut, uniformément). Itère car une redistribution peut faire repasser un
+ * mois au-dessus du plafond. Conserve la somme des poids (= 1).
+ */
+function capMonthlyWeights(weights: number[], cap: number): number[] {
+  const w = weights.slice();
+  for (let iter = 0; iter < 12; iter++) {
+    let excess = 0;
+    for (let m = 0; m < 12; m++) {
+      if (w[m] > cap) {
+        excess += w[m] - cap;
+        w[m] = cap;
+      }
+    }
+    if (excess <= 1e-12) break;
+
+    const below: number[] = [];
+    let belowSum = 0;
+    for (let m = 0; m < 12; m++) {
+      if (w[m] < cap) {
+        below.push(m);
+        belowSum += w[m];
+      }
+    }
+    // cap ≥ 1/12 garantit qu'au moins un mois reste sous le plafond ; garde-fou.
+    if (below.length === 0) break;
+    if (belowSum > 0) {
+      for (const m of below) w[m] += excess * (w[m] / belowSum);
+    } else {
+      for (const m of below) w[m] += excess / below.length;
+    }
+  }
+  return w;
+}
+
+/**
  * Calcule les poids saisonniers (12 valeurs sommant à 1) à partir des années
  * complètes. Chaque année est normalisée par son total puis on moyenne, afin
  * qu'une grosse année ne pèse pas plus qu'une petite dans la *forme* saisonnière.
  * Repli sur une saisonnalité plate (1/12) si aucune donnée exploitable.
+ *
+ * Robustesse : les poids bruts sont ensuite écrêtés (un mois disproportionné ne
+ * doit pas capter l'essentiel de la projection) puis légèrement ramenés vers une
+ * saisonnalité plate. Un seul décembre gonflé — rattrapage de bordereaux ou
+ * année de début d'activité partielle — ne produit donc plus une projection
+ * mensuelle d'un ordre de grandeur au-dessus des autres mois.
  */
 function computeSeasonality(completedYears: CompletedYear[]): number[] {
   const flat = Array<number>(12).fill(1 / 12);
@@ -100,7 +156,10 @@ function computeSeasonality(completedYears: CompletedYear[]): number[] {
   }
   const total = sum(acc);
   if (total <= 0) return flat;
-  return acc.map((v) => v / total);
+
+  const raw = acc.map((v) => v / total);
+  const capped = capMonthlyWeights(raw, SEASONALITY_MONTH_CAP / 12);
+  return capped.map((w) => (1 - SEASONALITY_FLAT_BLEND) * w + SEASONALITY_FLAT_BLEND / 12);
 }
 
 /**
