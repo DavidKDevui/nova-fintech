@@ -11,22 +11,8 @@ const FOOTER_COLUMNS = [
     ],
   },
   {
-    title: "Professions",
-    links: [
-      { href: "#", label: "Infirmiers" },
-      { href: "#", label: "Kinésithérapeutes" },
-      { href: "#", label: "Sages-femmes" },
-      { href: "#", label: "Orthophonistes" },
-    ],
-  },
-  {
-    title: "Ressources",
-    links: [
-      { href: "#faq", label: "FAQ" },
-      { href: "#", label: "Guide URSSAF" },
-      { href: "#", label: "Sécurité & RGPD" },
-      { href: "#", label: "Nous contacter" },
-    ],
+    title: "Contact",
+    links: [{ href: "mailto:team@actidec.com", label: "Nous contacter" }],
   },
 ];
 
