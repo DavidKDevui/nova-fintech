@@ -3,8 +3,8 @@ const PROFESSIONS = [
   "Kinésithérapeutes",
   "Sages-femmes",
   "Orthophonistes",
-  "Ostéopathes",
   "Podologues",
+  "Médecins",
 ];
 
 export function TrustStrip() {

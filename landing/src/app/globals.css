@@ -61,7 +61,7 @@
   a { color: inherit; text-decoration: none; }
   .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 32px; }
 
-  h1, h2, h3 { letter-spacing: -0.045em; margin: 0; text-wrap: balance; }
+  h1, h2, h3 { letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
   p { text-wrap: pretty; }
 
   /* ── Buttons ── */
@@ -122,7 +122,7 @@
     background: radial-gradient(circle, rgba(251,176,122,0.20), transparent 60%); pointer-events: none;
   }
   .hero-inner { position: relative; z-index: 2; padding: 84px 0 72px; display: grid; grid-template-columns: 1.05fr 1.1fr; gap: 56px; align-items: center; }
-  .hero h1 { font-size: clamp(40px, 5.4vw, 66px); line-height: 1.02; font-weight: 800; letter-spacing: -0.055em; }
+  .hero h1 { font-size: clamp(38px, 4.6vw, 54px); line-height: 1.08; font-weight: 700; letter-spacing: -0.02em; }
   .hero h1 em { font-style: normal; color: var(--violet-900); position: relative; white-space: nowrap; }
   .hero h1 em::after {
     content: ""; position: absolute; left: 0; right: 0; bottom: 4px; height: 12px;
@@ -191,7 +191,7 @@
   /* ════ SECTION SHELL ════ */
   section.block { padding: 96px 0; }
   .sec-head { max-width: 680px; margin: 0 auto 56px; text-align: center; }
-  .sec-head h2 { font-size: clamp(30px, 4vw, 44px); line-height: 1.05; font-weight: 800; margin: 14px 0 0; }
+  .sec-head h2 { font-size: clamp(28px, 3.4vw, 38px); line-height: 1.1; font-weight: 700; margin: 14px 0 0; }
   .sec-head p { font-size: 18px; color: var(--ink-3); margin: 16px 0 0; }
 
   /* ════ FEATURES (problem cards) ════ */
@@ -213,7 +213,7 @@
   .frow { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; padding: 56px 0; }
   .frow.rev .ftext { order: 2; }
   .frow .ftext .eyebrow { display: block; margin-bottom: 14px; }
-  .frow .ftext h3 { font-size: clamp(26px, 3.2vw, 36px); line-height: 1.08; font-weight: 800; }
+  .frow .ftext h3 { font-size: clamp(24px, 2.8vw, 31px); line-height: 1.12; font-weight: 700; }
   .frow .ftext p { font-size: 17px; color: var(--ink-3); margin: 16px 0 0; }
   .frow .flist { margin: 22px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
   .frow .flist li { display: flex; gap: 11px; align-items: flex-start; font-size: 15.5px; color: var(--ink-2); }
@@ -335,13 +335,13 @@
   .final::before { content: ""; position: absolute; top: -120px; right: -80px; width: 380px; height: 380px; background: radial-gradient(circle, rgba(236,108,18,0.34), transparent 62%); }
   .final::after { content: ""; position: absolute; bottom: -140px; left: -90px; width: 380px; height: 380px; background: radial-gradient(circle, rgba(144,96,182,0.5), transparent 62%); }
   .final > * { position: relative; z-index: 2; }
-  .final h2 { font-size: clamp(30px, 4vw, 46px); font-weight: 800; line-height: 1.05; }
+  .final h2 { font-size: clamp(28px, 3.4vw, 39px); font-weight: 700; line-height: 1.1; }
   .final p { font-size: 18px; color: rgba(255,255,255,0.8); margin: 16px auto 30px; max-width: 48ch; }
   .final .hero-cta { justify-content: center; }
 
   /* ════ FOOTER ════ */
   footer { background: var(--violet-950); color: rgba(255,255,255,0.7); padding: 64px 0 36px; margin-top: 96px; }
-  .foot-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 36px; padding-bottom: 44px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .foot-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 36px; padding-bottom: 44px; border-bottom: 1px solid rgba(255,255,255,0.1); }
   .foot-grid .logo { color: #fff; margin-bottom: 16px; }
   .foot-grid .logo .cap { color: var(--orange-600); }
   .foot-about { font-size: 14px; color: rgba(255,255,255,0.6); max-width: 32ch; }
@@ -372,4 +372,27 @@
     .nav-actions .login { display: none; }
     .nav .btn-cta { padding: 11px 15px; font-size: 14px; }
     .hero-note { flex-wrap: wrap; gap: 10px 14px; }
+
+    /* Héros : typographie desserrée (les valeurs desktop sont pensées pour 66 px) */
+    /* padding-top/bottom seulement : le raccourci écraserait le padding horizontal de .wrap (même élément) */
+    .hero-inner { padding-top: 48px; padding-bottom: 56px; gap: 32px; }
+    .hero h1 { font-size: 34px; line-height: 1.12; letter-spacing: -0.03em; }
+    .hero h1 em { white-space: normal; }
+    .hero-lede { font-size: 16.5px; margin: 18px 0 24px; }
+    .hero .hero-cta { flex-direction: column; align-items: stretch; }
+    .hero .hero-cta .btn { justify-content: center; }
+
+    /* Mockup : les badges flottants encombrent la carte, les KPIs passent en rangée défilable */
+    /* min-width: 0 : sans ça, la largeur mini de la rangée KPI (3 × 138 px) élargit la colonne de grille et fait déborder toute la page */
+    .mock { min-width: 0; }
+    .float-badge { display: none; }
+    .mock-body { padding: 14px; }
+    .mock-nav .t:last-child { display: none; }
+    .mock-kpis {
+      display: flex; gap: 10px; overflow-x: auto;
+      scroll-snap-type: x mandatory; scrollbar-width: none;
+      margin: 0 -14px 14px; padding: 0 14px;
+    }
+    .mock-kpis::-webkit-scrollbar { display: none; }
+    .mk-kpi { flex: 0 0 138px; scroll-snap-align: start; }
   }

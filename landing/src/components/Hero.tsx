@@ -138,7 +138,7 @@ export function Hero() {
         <div>
           <span className="pill-tag">
             <span className="dot" />
-            Conçu pour les soignants libéraux
+            Vaut mieux prévenir que guérir
           </span>
           <h1 style={{ marginTop: 20 }}>
             Votre trésorerie de soignant, <em>enfin lisible.</em>
