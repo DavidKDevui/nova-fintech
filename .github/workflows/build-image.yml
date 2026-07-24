@@ -67,8 +67,10 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # Cache GHA cloisonne par image pour eviter que les 2 builds se marchent dessus.
-          # Suffixe "-v2" : bust d'un cache corrompu (04/07/2026) qui avait produit une
-          # image actidec-app cassee (toutes les pages 500 en prod alors que le build
-          # local sans cache etait sain). Increment le suffixe si le probleme reapparait.
-          cache-from: type=gha,scope=${{ matrix.context }}-v2
-          cache-to: type=gha,mode=max,scope=${{ matrix.context }}-v2
+          # Suffixe versionne : bust d'un cache corrompu qui produit une image
+          # actidec-app cassee (pages 500 / "Cannot find module bcrypt" en prod alors que
+          # le build local sans cache est sain). Increment le suffixe si le probleme reapparait.
+          #   -v2 : 04/07/2026 (pages 500 en prod)
+          #   -v3 : 24/07/2026 (bcrypt "Failed to load external module" -> server actions 500)
+          cache-from: type=gha,scope=${{ matrix.context }}-v3
+          cache-to: type=gha,mode=max,scope=${{ matrix.context }}-v3
