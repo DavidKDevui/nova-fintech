@@ -17,7 +17,6 @@ import {
 } from "@/lib/data/fiscal-calendar";
 import { downloadCSV, downloadPDF } from "@/lib/export";
 import { ExportButtons } from "@/components/export-buttons";
-import { DataMissingOverlay } from "@/components/data-missing-overlay";
 import { CASourceIndicator } from "@/components/ca-source-indicator";
 
 const DAY_NAMES = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -83,8 +82,6 @@ export function DeadlinesClient() {
   const currentMonth = now.getMonth();
   const currentDay = now.getDate();
   const currentYear = now.getFullYear();
-
-  const bankConnected = !!hp?.bridgeUserUuid;
 
   // Build calendar from practitioner preferences
   const prefs: PaymentPreferences = useMemo(() => {
@@ -271,7 +268,6 @@ export function DeadlinesClient() {
 
       {/* Upcoming + Calendar side by side */}
       <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <DataMissingOverlay bankConnected={bankConnected} />
 
       {/* Upcoming list */}
       <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 overflow-hidden flex flex-col lg:max-h-[540px]">
@@ -315,7 +311,7 @@ export function DeadlinesClient() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-ardoise-800">{evt.label}</p>
+                    <p className="text-sm text-ardoise-800 truncate" title={evt.label}>{evt.label}</p>
                     <p className="text-xs text-ardoise-400 mt-0.5">
                       {daysUntil === 0 ? "Aujourd'hui" : daysUntil === 1 ? "Demain" : `Dans ${daysUntil} jours`}
                     </p>
@@ -324,8 +320,8 @@ export function DeadlinesClient() {
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span className="text-sm font-semibold text-ardoise-900 font-mono">~{formatCurrency(evt.estimatedAmount)}</span>
                       <div className="relative group">
-                        <div className="w-4 h-4 rounded-full bg-ardoise-100 text-ardoise-400 flex items-center justify-center text-[10px] font-bold cursor-help hover:bg-ardoise-200 hover:text-ardoise-600 transition-colors">i</div>
-                        <div className="absolute right-0 top-6 w-72 bg-ardoise-900 text-white text-xs rounded-lg px-3.5 py-3 hidden group-hover:block z-[9999] shadow-lg space-y-2">
+                        <button type="button" aria-label="Détail de l'estimation" className="w-4 h-4 rounded-full bg-ardoise-100 text-ardoise-400 flex items-center justify-center text-[10px] font-bold cursor-help hover:bg-ardoise-200 hover:text-ardoise-600 focus:outline-none focus:ring-1 focus:ring-ardoise-300 transition-colors">i</button>
+                        <div className="absolute right-0 top-6 w-72 max-w-[calc(100vw-2rem)] bg-ardoise-900 text-white text-xs rounded-lg px-3.5 py-3 hidden group-hover:block group-focus-within:block z-[9999] shadow-lg space-y-2">
                           {getEstimateTooltip(evt.type, estimate, prefs)}
                         </div>
                       </div>

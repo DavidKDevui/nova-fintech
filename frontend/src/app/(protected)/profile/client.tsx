@@ -152,11 +152,11 @@ export function ProfileClient() {
       <h1 className="text-xl md:text-2xl font-bold mb-6 md:mb-8">Mon profil</h1>
 
       {/* Tabs */}
-      <div className="flex items-center gap-0 border-b border-ardoise-100 mb-6">
+      <div className="flex items-center gap-0 border-b border-ardoise-100 mb-6 overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
         <button
           type="button"
           onClick={() => setTab("profile")}
-          className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
+          className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap shrink-0 ${
             tab === "profile" ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
           }`}
         >
@@ -165,7 +165,7 @@ export function ProfileClient() {
         <button
           type="button"
           onClick={() => setTab("payments")}
-          className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
+          className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap shrink-0 ${
             tab === "payments" ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
           }`}
         >
@@ -174,7 +174,7 @@ export function ProfileClient() {
         <button
           type="button"
           onClick={() => setTab("notifications")}
-          className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
+          className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap shrink-0 ${
             tab === "notifications" ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
           }`}
         >
@@ -183,7 +183,7 @@ export function ProfileClient() {
         <button
           type="button"
           onClick={() => setTab("account")}
-          className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
+          className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap shrink-0 ${
             tab === "account" ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
           }`}
         >
@@ -359,7 +359,7 @@ export function ProfileClient() {
             {/* URSSAF */}
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wider text-ardoise-400 mb-3">URSSAF</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-ardoise-500 mb-1.5">Fréquence</label>
                   <select
@@ -400,7 +400,7 @@ export function ProfileClient() {
             {/* Impôt sur le revenu (PAS) */}
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wider text-ardoise-400 mb-3">Impôt sur le revenu (PAS)</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-ardoise-500 mb-1.5">Fréquence</label>
                   <select
@@ -435,7 +435,7 @@ export function ProfileClient() {
             {/* CARPIMKO */}
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wider text-ardoise-400 mb-3">CARPIMKO</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-ardoise-500 mb-1.5">Fréquence</label>
                   <select

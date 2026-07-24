@@ -99,7 +99,9 @@ body {
    héritent des tailles agrandies ; la navbar, rendue hors du <main>, garde
    l'échelle par défaut. `--font-scale` = facteur d'agrandissement (un seul levier). */
 .app-content {
-  --font-scale: 1.125;
+  /* Sur mobile on garde l'échelle standard (1) : plus dense, elle évite les
+     débordements (onglets, grilles, montants). À partir de md on agrandit. */
+  --font-scale: 1;
   font-size: calc(1rem * var(--font-scale)); /* texte sans utilitaire de taille explicite */
 
   --text-xs: calc(0.75rem * var(--font-scale));
@@ -110,6 +112,12 @@ body {
   --text-2xl: calc(1.5rem * var(--font-scale));
   --text-3xl: calc(1.875rem * var(--font-scale));
   --text-4xl: calc(2.25rem * var(--font-scale));
+}
+
+@media (min-width: 768px) {
+  .app-content {
+    --font-scale: 1.125;
+  }
 }
 
 @keyframes fade-up {

@@ -656,11 +656,11 @@ export function FacturationClient() {
       {/* Table */}
       <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1">
         {/* Header */}
-        <div className="px-5 pt-4 pb-0 border-b border-ardoise-100 flex items-center justify-between">
+        <div className="px-5 pt-4 pb-0 border-b border-ardoise-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 className="text-base font-bold text-ardoise-900 mb-4">Détail des passages</h2>
+            <h2 className="text-base font-bold text-ardoise-900 mb-2 sm:mb-4">Détail des passages</h2>
           </div>
-          <div className="flex items-center gap-3 pb-3">
+          <div className="flex items-center gap-3 pb-3 flex-wrap">
             <span className="text-xs text-ardoise-400">
               {filteredPassages.length} passage{filteredPassages.length > 1 ? "s" : ""} — {formatCurrency(filteredTotal)}
             </span>
@@ -933,7 +933,7 @@ function InfoBadge({ tooltip }: { tooltip: { dot: string; text: string } }) {
         i
       </button>
       {open && (
-        <div className="absolute top-7 left-0 w-64 bg-white border border-ardoise-200 rounded-lg shadow-lg p-3 text-xs text-ardoise-600 z-[60]">
+        <div className="absolute top-7 left-0 w-64 max-w-[calc(100vw-2rem)] bg-white border border-ardoise-200 rounded-lg shadow-lg p-3 text-xs text-ardoise-600 z-[60]">
           <span className={`inline-block w-2 h-2 rounded-full ${tooltip.dot} mr-2`} />
           {tooltip.text}
         </div>

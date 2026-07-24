@@ -556,14 +556,14 @@ export function TransactionsClient() {
 
       {/* Transactions list */}
       <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 mt-6">
-        <div className="px-5 pt-4 pb-0 border-b border-ardoise-100 flex items-center justify-between">
-          <div>
+        <div className="px-5 pt-4 pb-0 border-b border-ardoise-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="text-base font-bold text-ardoise-900 mb-4">Transactions bancaires</h2>
-            <div className="flex items-center gap-0">
+            <div className="flex items-center gap-0 overflow-x-auto -mx-5 px-5 sm:mx-0 sm:px-0">
               <button
                 type="button"
                 onClick={() => { setTxTab("all"); setTxPage(1); }}
-                className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
+                className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap shrink-0 ${
                   txTab === "all" ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
                 }`}
               >
@@ -572,7 +572,7 @@ export function TransactionsClient() {
               <button
                 type="button"
                 onClick={() => { setTxTab("uncategorized"); setTxPage(1); }}
-                className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all ${
+                className={`px-1.5 pb-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap shrink-0 ${
                   txTab === "uncategorized" ? "border-brand-600 text-brand-600" : "border-transparent text-ardoise-400 hover:text-ardoise-600"
                 }`}
               >
@@ -585,7 +585,7 @@ export function TransactionsClient() {
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap pb-3 sm:pb-0">
             {paginatedTotal > 0 && (
               <>
                 <Button
@@ -754,8 +754,8 @@ export function TransactionsClient() {
 
                   {/* Expandable category panel */}
                   <div
-                    className="overflow-hidden transition-all duration-300 ease-in-out"
-                    style={{ maxHeight: isExpanded ? "200px" : "0", opacity: isExpanded ? 1 : 0 }}
+                    className={`transition-all duration-300 ease-in-out ${isExpanded ? "overflow-y-auto" : "overflow-hidden"}`}
+                    style={{ maxHeight: isExpanded ? "min(70vh, 600px)" : "0", opacity: isExpanded ? 1 : 0 }}
                   >
                     <div className="px-5 pb-4 pt-1">
                       <div className="flex flex-wrap gap-2 justify-center">
