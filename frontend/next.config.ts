@@ -15,9 +15,6 @@ const nextConfig: NextConfig = {
   experimental: {
     proxyClientMaxBodySize: "15mb",
   },
-  // Modules natifs : ne pas les bundler, les laisser require()-er au runtime.
-  // bcrypt utilise un .node natif qui ne passe pas dans Turbopack.
-  serverExternalPackages: ["bcrypt"],
   async headers() {
     return [
       {

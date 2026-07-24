@@ -1,11 +1,12 @@
 # syntax=docker/dockerfile:1
 
 # ============================================================
-# Stage 1 — deps : install des node_modules (avec build tools
-# pour les natifs comme bcrypt / pg)
+# Stage 1 — deps : install des node_modules. Plus aucun module
+# natif (bcrypt -> bcryptjs pur JS, pg est pur JS) : pas besoin
+# de python3/make/g++ ni de toolchain de compilation.
 # ============================================================
 FROM node:22-alpine AS deps
-RUN apk add --no-cache libc6-compat python3 make g++
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json ./

@@ -10,7 +10,7 @@
  * Si l'email existe déjà, le script affiche un message et sort sans rien modifier.
  */
 
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import pg from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq } from "drizzle-orm";

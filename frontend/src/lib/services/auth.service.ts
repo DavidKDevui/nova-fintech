@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { eq, and, isNull, gt, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
