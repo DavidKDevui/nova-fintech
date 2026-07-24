@@ -114,7 +114,7 @@ const cards: OptimCard[] = [
 
 export function OptimizationClient() {
   const hp = usePractitioner();
-  const { effectiveCA, cotisationsEstimate: estimate } = useData();
+  const { effectiveCA, cotisationsEstimate: estimate, fiscalLoading } = useData();
   const [selected, setSelected] = useState<Set<OptimKey>>(new Set());
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [fiscal, setFiscal] = useState<FiscalSituation>(null);
@@ -125,6 +125,10 @@ export function OptimizationClient() {
   const currentYear = new Date().getFullYear();
   const totalCA = effectiveCA.ca;
   const bankConnected = !!hp?.bridgeUserUuid;
+  // Les calculs d'optimisation tournent sur le CA effectif, qui peut venir des
+  // bordereaux (sans banque). On ne bloque donc la page que s'il n'existe aucune
+  // source de CA exploitable — pas sur la seule connexion bancaire.
+  const hasCA = effectiveCA.source !== "none";
 
   // effectiveCA + estimation cotisations de base : centralisés dans DataProvider (useData ci-dessus).
   // Le recalcul URSSAF dynamique (avec déductionSociale) reste local plus bas.
@@ -486,7 +490,7 @@ export function OptimizationClient() {
       </div>
 
         <RecommendationsSection />
-        <DataMissingOverlay bankConnected={bankConnected} />
+        <DataMissingOverlay bankConnected={bankConnected || hasCA || fiscalLoading} />
       </div>
 
       <FloatingChat
