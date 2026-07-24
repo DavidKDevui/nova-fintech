@@ -118,6 +118,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon.svg|api).*)",
+    // Les fichiers statiques de /public sont exclus par extension : sans ça, le
+    // proxy renvoie un 307 vers /login sur /mon-image.png, et l'optimiseur
+    // d'images (qui refetch l'URL en interne, sans cookie) reçoit une redirection
+    // au lieu d'une image → "The requested resource isn't a valid image" (400).
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|api|.*\\.png$|.*\\.jpg$|.*\\.jpeg$|.*\\.gif$|.*\\.webp$|.*\\.avif$|.*\\.svg$|.*\\.ico$|.*\\.woff$|.*\\.woff2$|.*\\.ttf$).*)",
   ],
 };
