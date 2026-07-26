@@ -274,6 +274,13 @@ function MonthStepper({ month, setMonth, year }: { month: number; setMonth: (fn:
   );
 }
 
+// Graduations de l'axe des ordonnées : k€ au-delà du millier, € en dessous
+// (sinon un CA de quelques centaines d'euros afficherait « 0 k€ » partout).
+function formatAxisAmount(v: number): string {
+  if (!v) return "0";
+  return Math.abs(v) >= 1000 ? `${Math.round(v / 1000)} k€` : `${Math.round(v)} €`;
+}
+
 // Graphe revenus / dépenses. `single` = vue sous lg, un seul mois affiché (calée
 // sur la carte détaillée en dessous) : barres bridées pour ne pas s'étaler sur
 // toute la largeur, le mois étant porté par le sélecteur au-dessus.
@@ -287,8 +294,24 @@ function ActivityBarChart({ data, isEstimated, single = false }: { data: MonthDa
     <ResponsiveContainer width="100%" height={240}>
       <BarChart data={data} barGap={single ? 8 : 2} barCategoryGap={single ? "10%" : "20%"} margin={{ left: 0, right: 0, top: 5, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+        {/* Abscisses masquées : les mois sont déjà portés par les en-têtes du
+            tableau en dessous (vue 12 mois) et par le sélecteur (vue `single`). */}
         <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#A79EB5" }} tickLine={false} axisLine={false} hide />
-        <YAxis tick={{ fontSize: 11, fill: "#A79EB5" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={0} />
+        {/* Ordonnées en `mirror` : les graduations sont dessinées DANS le plot et
+            l'axe ne consomme aucune largeur (cf. selectChartOffsetInternal, qui
+            n'ampute l'offset que si `!mirror`) — les barres restent alignées sur
+            les colonnes du tableau en dessous. `width` n'est PAS une largeur d'axe
+            ici mais la largeur de wrap des libellés : à 0 ils se replient dans le
+            vide et rien ne s'affiche. Le liseré blanc (stroke + paintOrder) garde
+            le libellé lisible quand il passe par-dessus une barre. */}
+        <YAxis
+          mirror
+          width={60}
+          tickLine={false}
+          axisLine={false}
+          tickFormatter={formatAxisAmount}
+          tick={{ fontSize: 10, fill: "#A79EB5", stroke: "#fff", strokeWidth: 3, paintOrder: "stroke" }}
+        />
         <Tooltip
           contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E1DBEC", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
           formatter={(value, name) => {
