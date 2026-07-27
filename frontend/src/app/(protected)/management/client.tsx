@@ -2400,8 +2400,9 @@ type SummaryMetricValues = { ca: number; ch: number; cot: number; rem: number; i
 
 // Calcule les 6 métriques annuelles d'une année (CA, charges pro., cotisations
 // sociales, rém. avant impôt, IR, reste à vivre). Pour l'année courante, le YTD
-// est annualisé (× 12 / mois écoulés) ; pour une année passée (monthsElapsed = 12)
-// on prend les totaux réels sans extrapolation. Mêmes formules pour N et N-1 —
+// est annualisé (charges/rétrocessions : × 12 / mois écoulés ; CA : annualisation
+// de `getCotisationsEstimate`) ; pour une année passée (monthsElapsed = 12) on
+// prend les totaux réels sans extrapolation. Mêmes formules pour N et N-1 —
 // c'est ce qui rend la comparaison des barres homogène.
 function computeSummaryMetrics(params: {
   taxRegime: string;
@@ -2415,20 +2416,44 @@ function computeSummaryMetrics(params: {
   const monthsElapsed = year < currentYear ? 12 : new Date().getMonth() + 1;
   const annualize = (ytd: number) => (monthsElapsed > 0 ? Math.round((ytd / monthsElapsed) * 12) : 0);
 
-  const annualCA = estimate?.revenuAnnualise ?? 0;
+  // CA **brut** annualisé — même objet que « Estimation du C.A. » de l'onglet
+  // Simulation. On n'utilise surtout pas `revenuAnnualise` : c'est le CA NET de
+  // rétrocession, la bonne assiette pour les cotisations mais pas un chiffre
+  // d'affaires. L'afficher ici montrait un CA amputé de la rétrocession sous le
+  // libellé « Chiffre d'affaires », d'où l'écart avec l'onglet Simulation.
+  const annualCA = estimate?.caBrutAnnualise ?? 0;
   const annualChargesPro = annualize(months.reduce((s, m) => s + m.chargesPro, 0));
   // Cotisations sociales : estimation annuelle ajustée OpenFisca/Carpimko.
   const annualCotisations = (estimate?.urssafAnnuel ?? 0) + (estimate?.carpimkoAnnuel ?? 0);
-  const annualRetroMadelin = annualize(months.reduce((s, m) => s + m.retrocession + m.madelin, 0));
+  // Rétrocession : UNE SEULE source. Celle du profil (`retrocessionAnnualise`,
+  // déjà annualisée, et qui sert d'assiette aux cotisations) fait foi dès
+  // qu'elle est renseignée ; sinon on retombe sur celle observée dans les
+  // transactions. Additionner les deux déduisait deux fois la même charge.
+  const annualRetrocessionObservee = annualize(months.reduce((s, m) => s + m.retrocession, 0));
+  const annualRetrocessionProfil = estimate?.retrocessionAnnualise ?? 0;
+  const annualRetrocession = annualRetrocessionProfil > 0
+    ? annualRetrocessionProfil
+    : annualRetrocessionObservee;
+  const annualMadelin = annualize(months.reduce((s, m) => s + m.madelin, 0));
   // Même formule que la ligne "Rém. avant impôt" de l'onglet Mon activité :
   //   CA − (urssaf + carpimko + chargesPro + retrocession + madelin). Clamp à 0.
-  const annualRemAvantImpot = Math.max(0, annualCA - annualCotisations - annualChargesPro - annualRetroMadelin);
+  const annualRemAvantImpot = Math.max(
+    0,
+    annualCA - annualCotisations - annualChargesPro - annualRetrocession - annualMadelin,
+  );
 
   // IR estimé sur les revenus de l'année considérée (généré sur l'exercice, payé
   // en N+1). Sert à la ligne "Impôt sur le revenu" et au reste à vivre annuel.
+  //
+  // Assiette : même définition que `computeBNC` de l'onglet « Mes impôts » —
+  // micro-BNC, abattement 34 % sur les recettes ; BNC réel, bénéfice = recettes
+  // − charges déductibles (cotisations, charges pro., rétrocession, Madelin),
+  // soit exactement `annualRemAvantImpot`. L'IR était auparavant calculé sur le
+  // CA sans déduire aucune charge : surestimé, et différent du montant affiché
+  // dans « Mes impôts » pour le même praticien et la même année.
   let ir = 0;
   if (annualCA > 0) {
-    const revenuNet = taxRegime === "micro_bnc" ? annualCA * 0.66 : annualCA;
+    const revenuNet = taxRegime === "micro_bnc" ? annualCA * 0.66 : annualRemAvantImpot;
     const otherIncome = fiscal ? Number(fiscal.otherIncome) : 0;
     const revenuImposable = Math.round(revenuNet + otherIncome);
     if (revenuImposable > 0) {
@@ -2652,18 +2677,19 @@ function SummaryTab() {
 
   const formatSigned = (v: number) => `${v > 0 ? "+" : ""}${formatCurrency(v)}`;
   const isLoading = loading || transactionsLoading;
-  // La carte n'a de sens qu'avec un solde bancaire réel : masquée si la banque
-  // n'est pas connectée (ou données estimées via bordereaux), hormis au chargement.
-  const showTresoProjection = isLoading || (bankConnected && !isEstimated);
+  // La carte nécessite un solde bancaire réel (pas juste un bridgeUserUuid posé).
+  // Sans banque connectée — ou en fallback bordereaux —, on garde la carte à
+  // l'écran sous un overlay « Connecter ma banque » plutôt que de la masquer :
+  // c'est le seul point d'entrée vers la connexion du compte pro depuis cette
+  // page, et la faire disparaître retirait l'incitation en même temps que la
+  // donnée. Le chart est vide dans ce cas (cf. `chartData`), donc rien de
+  // trompeur ne transparaît sous l'overlay.
+  const tresoDataAvailable = (bankConnected && !isEstimated) || isLoading;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Trésorerie prévisionnelle — nécessite des vraies transactions bancaires
-          (pas juste un bridgeUserUuid posé). Sans banque connectée (ou en
-          fallback bordereaux), pas de solde exploitable → la carte n'est pas
-          rendue du tout. */}
-      {showTresoProjection && (
       <div className="relative bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6">
+        <DataMissingOverlay bankConnected={tresoDataAvailable} />
         <div className="flex items-center justify-between mb-4 gap-3">
           <h3 className="text-base font-semibold text-ardoise-900">Trésorerie prévisionnelle</h3>
           <select
@@ -2745,7 +2771,6 @@ function SummaryTab() {
           </>
         )}
       </div>
-      )}
 
       {/* Métriques annuelles N vs N-1 */}
       <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6">
