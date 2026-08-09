@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, useEffect, useActionState } from "react";
+import { useState, useEffect, useRef, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { completeOnboardingAction } from "@/actions/onboarding";
 import { verifyRppsAction } from "@/actions/verify-rpps";
+import { connectBankAction, bankConnectionStatusAction } from "@/actions/bridge";
+import {
+  markBankConnectFromOnboarding,
+  clearBankConnectFromOnboarding,
+} from "@/lib/bank-connect-context";
 import { Button } from "@/components/button";
 
 const FORM_STEPS = [
@@ -13,6 +18,15 @@ const FORM_STEPS = [
   { id: "activity", label: "Activité" },
   { id: "tax", label: "Régime fiscal" },
 ] as const;
+
+// L'étape bancaire suit le récapitulatif : elle a besoin du profil praticien en base
+// (connectBankAction le refuse sinon), donc elle ne peut pas vivre dans FORM_STEPS.
+// Elle n'apparaît que dans l'indicateur de progression.
+const BANK_STEP = { id: "bank", label: "Banque" } as const;
+const ALL_STEPS = [...FORM_STEPS, BANK_STEP];
+
+const POLL_INTERVAL_MS = 3000;
+const POLL_TIMEOUT_MS = 180_000;
 
 const PROFESSIONS = [
   { value: "nurse", label: "Infirmier(e)", icon: NurseIcon },
@@ -31,12 +45,21 @@ const TAX_REGIMES = [
   },
 ] as const;
 
-type Screen = "welcome" | "form" | "recap";
+type Screen = "welcome" | "form" | "recap" | "bank";
+type BankState = "idle" | "connecting" | "waiting" | "timeout";
 
-export function OnboardingModal({ open }: { open: boolean }) {
-  const [screen, setScreen] = useState<Screen>("welcome");
+export function OnboardingModal({
+  open,
+  startAtBank = false,
+  initialFirstName = "",
+}: {
+  open: boolean;
+  startAtBank?: boolean;
+  initialFirstName?: string;
+}) {
+  const [screenState, setScreen] = useState<Screen>(startAtBank ? "bank" : "welcome");
   const [formStep, setFormStep] = useState(0);
-  const [firstName, setFirstName] = useState("");
+  const [firstName, setFirstName] = useState(initialFirstName);
   const [lastName, setLastName] = useState("");
   const [rppsNumber, setRppsNumber] = useState("");
   const [rppsVerifying, setRppsVerifying] = useState(false);
@@ -45,14 +68,90 @@ export function OnboardingModal({ open }: { open: boolean }) {
   const [activityStartDate, setActivityStartDate] = useState("");
   const [taxRegime, setTaxRegime] = useState("");
   const [state, action, pending] = useActionState(completeOnboardingAction, null);
+  const [bankState, setBankState] = useState<BankState>("idle");
+  const [bankError, setBankError] = useState("");
+  const [bankConnected, setBankConnected] = useState(false);
   const router = useRouter();
+  const pollStartedAt = useRef(0);
+  const submitRef = useRef<HTMLFormElement>(null);
 
+  // Écran dérivé plutôt que setScreen dans un effet : la dernière étape du formulaire
+  // enregistre le profil (state.success) et enchaîne sur la connexion bancaire, qui
+  // débouche sur le récapitulatif final une fois la banque rattachée.
+  const screen: Screen = bankConnected
+    ? "recap"
+    : state?.success
+      ? "bank"
+      : screenState;
+
+  // Pendant que l'utilisateur connecte sa banque dans l'autre onglet, on interroge
+  // la DB jusqu'à voir apparaître un compte synchronisé par le callback.
   useEffect(() => {
-    if (state?.success) {
-      toast.success(`Bienvenue ${firstName} ! Votre espace est prêt.`);
-      router.refresh();
+    if (bankState !== "waiting") return;
+
+    if (!pollStartedAt.current) {
+      pollStartedAt.current = Date.now();
     }
-  }, [state?.success, router, firstName]);
+
+    const interval = setInterval(async () => {
+      if (Date.now() - pollStartedAt.current > POLL_TIMEOUT_MS) {
+        setBankState("timeout");
+        return;
+      }
+
+      const result = await bankConnectionStatusAction();
+
+      if (result.connected) {
+        clearInterval(interval);
+
+        // Profil déjà existant : rien n'a été saisi dans cette session, un
+        // récapitulatif n'aurait rien à récapituler — on rend la main directement.
+        if (startAtBank) {
+          toast.success(`Bienvenue ${firstName} ! Votre espace est prêt.`);
+          router.refresh();
+          return;
+        }
+
+        setBankConnected(true);
+      }
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [bankState, firstName, router, startAtBank]);
+
+  async function handleConnectBank() {
+    setBankError("");
+    setBankState("connecting");
+
+    // L'onglet doit être ouvert dans le geste utilisateur, avant tout await, sinon
+    // le navigateur bloque la popup. On y pousse l'URL une fois la session créée.
+    markBankConnectFromOnboarding();
+    const tab = window.open("", "_blank");
+
+    const result = await connectBankAction();
+
+    if (result.error || !result.url) {
+      tab?.close();
+      clearBankConnectFromOnboarding();
+      setBankError(result.error ?? "Impossible d'ouvrir la connexion bancaire.");
+      setBankState("idle");
+      return;
+    }
+
+    if (tab) {
+      tab.location.href = result.url;
+    } else {
+      // Popup bloquée : on bascule dans l'onglet courant. Le callback doit alors
+      // reprendre son comportement normal (redirection vers l'app), pas inviter à
+      // refermer l'unique onglet ouvert.
+      clearBankConnectFromOnboarding();
+      window.location.href = result.url;
+      return;
+    }
+
+    pollStartedAt.current = 0;
+    setBankState("waiting");
+  }
 
   if (!open) return null;
 
@@ -62,7 +161,8 @@ export function OnboardingModal({ open }: { open: boolean }) {
     (formStep === 2 && activityStartDate !== "") ||
     (formStep === 3 && taxRegime !== "");
 
-  const progress = ((formStep + 1) / FORM_STEPS.length) * 100;
+  const currentStepIndex = screen === "bank" ? FORM_STEPS.length : formStep;
+  const progress = ((currentStepIndex + 1) / ALL_STEPS.length) * 100;
 
   const professionLabel = PROFESSIONS.find((p) => p.value === profession)?.label ?? "";
   const taxRegimeLabel = TAX_REGIMES.find((r) => r.value === taxRegime)?.label ?? "";
@@ -123,33 +223,7 @@ export function OnboardingModal({ open }: { open: boolean }) {
             <div className="flex-1 flex flex-col p-5 sm:p-10">
               {/* Step indicators */}
               <div className="mb-8">
-                <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-ardoise-400 mb-3 overflow-x-auto">
-                  {FORM_STEPS.map((s, i) => (
-                    <span key={s.id} className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                      <span
-                        className={`flex items-center justify-center w-6 h-6 text-xs font-medium border-2 rounded-full transition-all ${
-                          i < formStep
-                            ? "border-brand-600 bg-brand-600 text-white"
-                            : i === formStep
-                              ? "border-brand-600 text-brand-600"
-                              : "border-ardoise-200 text-ardoise-300"
-                        }`}
-                      >
-                        {i < formStep ? (
-                          <CheckIcon size={12} />
-                        ) : (
-                          i + 1
-                        )}
-                      </span>
-                      <span className={`hidden sm:inline ${i === formStep ? "text-ardoise-900 font-medium" : ""}`}>
-                        {s.label}
-                      </span>
-                      {i < FORM_STEPS.length - 1 && (
-                        <span className="w-6 h-px bg-ardoise-200" />
-                      )}
-                    </span>
-                  ))}
-                </div>
+                <StepIndicator current={formStep} />
                 <h2 className="text-2xl font-bold text-ardoise-900">
                   {formStep === 0 && "Comment vous appelez-vous ?"}
                   {formStep === 1 && "Quelle est votre profession ?"}
@@ -316,6 +390,10 @@ export function OnboardingModal({ open }: { open: boolean }) {
 
               </div>
 
+              {state?.error && (
+                <p className="mt-6 bg-red-50 p-3 text-sm text-red-600">{state.error}</p>
+              )}
+
               {/* Navigation */}
               <div className="flex items-center justify-between mt-8 pt-6 border-t border-ardoise-100">
                 <Button
@@ -344,12 +422,14 @@ export function OnboardingModal({ open }: { open: boolean }) {
                     if (formStep < FORM_STEPS.length - 1) {
                       setFormStep(formStep + 1);
                     } else {
-                      setScreen("recap");
+                      // Dernière étape du formulaire : on enregistre le profil, requis
+                      // par la connexion bancaire qui suit.
+                      submitRef.current?.requestSubmit();
                     }
                   }}
-                  disabled={!canGoNext || rppsVerifying || undefined}
+                  disabled={!canGoNext || rppsVerifying || pending || undefined}
                 >
-                  {rppsVerifying ? "Vérification..." : "Continuer"}
+                  {rppsVerifying ? "Vérification..." : pending ? "Enregistrement..." : "Continuer"}
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 </Button>
               </div>
@@ -357,7 +437,7 @@ export function OnboardingModal({ open }: { open: boolean }) {
           </div>
         )}
 
-        {/* ── Recap screen ── */}
+        {/* ── Recap screen (bilan final, tout est déjà enregistré) ── */}
         {screen === "recap" && (
           <div className="flex-1 flex flex-col p-5 sm:p-10 overflow-y-auto animate-step-in">
             <div className="text-center mb-8">
@@ -367,10 +447,10 @@ export function OnboardingModal({ open }: { open: boolean }) {
                 </div>
               </div>
               <h2 className="text-2xl font-bold text-ardoise-900">
-                Tout est bon, {firstName} ?
+                Votre espace est prêt, {firstName}
               </h2>
               <p className="mt-1 text-sm text-ardoise-500">
-                Vérifiez vos informations avant de finaliser.
+                Voici le récapitulatif de votre configuration.
               </p>
             </div>
 
@@ -380,43 +460,160 @@ export function OnboardingModal({ open }: { open: boolean }) {
               <RecapRow label="Profession" value={professionLabel} />
               <RecapRow label="Début d'activité" value={formatDate(activityStartDate)} />
               <RecapRow label="Régime fiscal" value={taxRegimeLabel} />
+              <div className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-sm text-ardoise-500">Compte bancaire</span>
+                <span className="flex items-center gap-1.5 text-sm font-medium text-green-700">
+                  <CheckIcon size={13} stroke="#15803d" />
+                  Connecté
+                </span>
+              </div>
             </div>
 
-            {state?.error && (
-              <p className="mb-4 bg-red-50 p-3 text-sm text-red-600">{state.error}</p>
-            )}
-
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-end">
               <Button
-                variant="ghost"
+                variant="cta"
                 type="button"
-                onClick={() => setScreen("form")}
+                onClick={() => {
+                  toast.success(`Bienvenue ${firstName} ! Votre espace est prêt.`);
+                  router.refresh();
+                }}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-                Modifier
+                Commencer
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
               </Button>
-
-              <form action={action}>
-                <input type="hidden" name="firstName" value={firstName} />
-                <input type="hidden" name="lastName" value={lastName} />
-                <input type="hidden" name="rppsNumber" value={rppsNumber} />
-                <input type="hidden" name="profession" value={profession} />
-                <input type="hidden" name="activityStartDate" value={activityStartDate} />
-                <input type="hidden" name="taxRegime" value={taxRegime} />
-                <Button
-                  variant="cta"
-                  type="submit"
-                  disabled={pending}
-                >
-                  {pending ? "Enregistrement..." : "Confirmer et commencer"}
-                  <CheckIcon size={16} />
-                </Button>
-              </form>
             </div>
           </div>
         )}
 
+        {/* ── Bank connection step ── */}
+        {screen === "bank" && (
+          <div className="flex-1 flex flex-col">
+            <div className="h-1 bg-ardoise-100">
+              <div
+                className="h-full bg-gradient-to-r from-brand-500 to-brand-600 transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+
+            <div className="flex-1 flex flex-col p-5 sm:p-10 overflow-y-auto animate-step-in">
+              <div className="mb-8">
+                <StepIndicator current={FORM_STEPS.length} />
+                <h2 className="text-2xl font-bold text-ardoise-900">
+                  Connectez votre compte bancaire
+                </h2>
+                <p className="mt-1 text-sm text-ardoise-500">
+                  Actidec suit vos encaissements et votre trésorerie à partir de vos
+                  transactions. Cette étape est nécessaire pour accéder à votre espace.
+                </p>
+              </div>
+
+              <div className="flex-1 flex flex-col items-center justify-center text-center">
+                {bankState === "waiting" ? (
+                  <>
+                    <div className="h-10 w-10 mb-5 animate-spin rounded-full border-4 border-ardoise-200 border-t-brand-600" />
+                    <p className="font-medium text-ardoise-900">
+                      En attente de votre banque...
+                    </p>
+                    <p className="mt-1 text-sm text-ardoise-500 max-w-sm">
+                      Terminez la connexion dans l&apos;onglet qui vient de s&apos;ouvrir.
+                      Cette page se mettra à jour automatiquement.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleConnectBank}
+                      className="mt-5 text-sm text-brand-600 underline"
+                    >
+                      Rouvrir la fenêtre de connexion
+                    </button>
+                  </>
+                ) : bankState === "timeout" ? (
+                  <>
+                    <div className="flex items-center justify-center w-14 h-14 mb-5 rounded-full bg-amber-100 text-amber-600">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                    </div>
+                    <p className="font-medium text-ardoise-900">
+                      Aucune connexion détectée
+                    </p>
+                    <p className="mt-1 text-sm text-ardoise-500 max-w-sm">
+                      La connexion n&apos;a pas abouti, ou elle a été interrompue.
+                      Vous pouvez réessayer.
+                    </p>
+                    <Button
+                      variant="cta"
+                      type="button"
+                      onClick={handleConnectBank}
+                      className="mt-6"
+                    >
+                      Réessayer
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-center w-16 h-16 mb-6 rounded-2xl bg-brand-50">
+                      <BankIcon />
+                    </div>
+                    <p className="text-sm text-ardoise-500 max-w-sm mb-6">
+                      Vous serez redirigé vers notre partenaire bancaire dans un nouvel
+                      onglet. Actidec n&apos;accède jamais à vos identifiants.
+                    </p>
+                    <Button
+                      variant="cta"
+                      type="button"
+                      onClick={handleConnectBank}
+                      disabled={bankState === "connecting" || undefined}
+                    >
+                      {bankState === "connecting" ? "Ouverture..." : "Connecter ma banque"}
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                    </Button>
+                  </>
+                )}
+
+                {bankError && (
+                  <p className="mt-5 bg-red-50 p-3 text-sm text-red-600">{bankError}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Soumission du profil, déclenchée par « Continuer » à la dernière étape du
+            formulaire : useActionState a besoin d'un <form> réel pour porter l'action. */}
+        <form action={action} className="hidden" ref={submitRef}>
+          <input type="hidden" name="firstName" value={firstName} />
+          <input type="hidden" name="lastName" value={lastName} />
+          <input type="hidden" name="rppsNumber" value={rppsNumber} />
+          <input type="hidden" name="profession" value={profession} />
+          <input type="hidden" name="activityStartDate" value={activityStartDate} />
+          <input type="hidden" name="taxRegime" value={taxRegime} />
+        </form>
+
       </div>
+    </div>
+  );
+}
+
+function StepIndicator({ current }: { current: number }) {
+  return (
+    <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-ardoise-400 mb-3 overflow-x-auto">
+      {ALL_STEPS.map((s, i) => (
+        <span key={s.id} className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <span
+            className={`flex items-center justify-center w-6 h-6 text-xs font-medium border-2 rounded-full transition-all ${
+              i < current
+                ? "border-brand-600 bg-brand-600 text-white"
+                : i === current
+                  ? "border-brand-600 text-brand-600"
+                  : "border-ardoise-200 text-ardoise-300"
+            }`}
+          >
+            {i < current ? <CheckIcon size={12} /> : i + 1}
+          </span>
+          <span className={`hidden sm:inline ${i === current ? "text-ardoise-900 font-medium" : ""}`}>
+            {s.label}
+          </span>
+          {i < ALL_STEPS.length - 1 && <span className="w-6 h-px bg-ardoise-200" />}
+        </span>
+      ))}
     </div>
   );
 }
@@ -465,6 +662,17 @@ function RppsIcon() {
       <rect x="3" y="5" width="18" height="5" rx="2" fill="#C2580F" />
       <rect x="6" y="13" width="8" height="2" rx="1" fill="#FEF3C7" />
       <rect x="6" y="16" width="5" height="1" rx="0.5" fill="#FDBA74" />
+    </svg>
+  );
+}
+
+function BankIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none">
+      <rect x="1" y="5" width="22" height="14" rx="2.5" fill="#EC6C12" />
+      <rect x="3.5" y="8.5" width="6" height="4.5" rx="1" fill="#FEF3C7" />
+      <rect x="12" y="15" width="5" height="1.2" rx="0.6" fill="white" opacity="0.35" />
+      <rect x="12" y="12.5" width="8" height="1.2" rx="0.6" fill="white" opacity="0.35" />
     </svg>
   );
 }

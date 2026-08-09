@@ -39,14 +39,25 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   const practitionerProfile = await practitionerService.getByUserId(session.id);
 
-  const needsOnboarding = !practitionerProfile;
+  // La connexion bancaire fait partie de l'onboarding : un profil créé mais sans
+  // compte bancaire synchronisé = parcours inachevé (onglet fermé en cours de route,
+  // ou compte antérieur à l'ajout de cette étape). La modale reprend alors directement
+  // à l'étape bancaire.
+  const hasBankAccount = practitionerProfile
+    ? await practitionerService.hasBankAccount(practitionerProfile.id)
+    : false;
+
+  const needsOnboarding = !practitionerProfile || !hasBankAccount;
 
   // Précharge les données du DataProvider côté serveur, mais SANS `await` : on passe
   // la promesse au provider (client) qui la déroule en streaming. Le layout ne bloque
   // donc pas → la page (dashboard/…) rend et précharge EN PARALLÈLE au lieu d'attendre
   // le layout. Rien à précharger tant que le profil praticien n'existe pas (onboarding).
   // Le rejet éventuel est géré côté client (fallback fetch), pas de 500 ici.
-  const initialDataPromise = practitionerProfile
+  // Rien à précharger tant que l'onboarding n'est pas terminé : la modale couvre
+  // l'app, ces données sont invisibles, et une promesse rejetée passée au client
+  // pendant que la modale s'hydrate casserait son interactivité.
+  const initialDataPromise = practitionerProfile && !needsOnboarding
     ? preloadProtectedData(!!practitionerProfile.bridgeUserUuid)
     : null;
 
@@ -59,7 +70,13 @@ export default async function ProtectedLayout({ children }: { children: React.Re
               <Navbar />
               <main id="main-content" className="app-content relative flex-1 overflow-y-auto p-4 md:p-6 lg:mt-3 lg:mx-auto lg:p-8 w-full max-w-[96rem]"><PageTransition>{children}</PageTransition></main>
             </div>
-            {needsOnboarding && <OnboardingModal open />}
+            {needsOnboarding && (
+              <OnboardingModal
+                open
+                startAtBank={!!practitionerProfile}
+                initialFirstName={practitionerProfile?.firstName ?? ""}
+              />
+            )}
           </AssistantProvider>
         </DataProvider>
       </PractitionerProvider>

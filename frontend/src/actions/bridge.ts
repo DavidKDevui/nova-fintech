@@ -41,11 +41,21 @@ export async function connectBankAction() {
     // Get access token
     const { access_token } = await bridge.getAccessToken(bridgeUserUuid);
 
-    // Build redirect URL back to our app
-    const headersList = await headers();
-    const host = headersList.get("host") || "localhost:3000";
-    const protocol = headersList.get("x-forwarded-proto") || "http";
-    const redirectUrl = `${protocol}://${host}/callback/bridge`;
+    // Une seule URL de retour, la seule whitelistée côté Bridge : le callback
+    // distingue le contexte onboarding via un drapeau navigateur, pas via l'URL.
+    // Bridge rejette par ailleurs tout callback_url non-https. Derrière le proxy de
+    // prod, x-forwarded-proto le garantit ; en dev (next dev en http), il faut pointer
+    // une origine https joignable — tunnel ou `next dev --experimental-https`.
+    let origin = process.env.BRIDGE_CALLBACK_ORIGIN?.replace(/\/$/, "");
+
+    if (!origin) {
+      const headersList = await headers();
+      const host = headersList.get("host") || "localhost:3000";
+      const protocol = headersList.get("x-forwarded-proto") || "http";
+      origin = `${protocol}://${host}`;
+    }
+
+    const redirectUrl = `${origin}/callback/bridge`;
 
     // Create connect session
     const connectSession = await bridge.createConnectSession(access_token, session.email, redirectUrl);
@@ -64,7 +74,44 @@ export async function connectBankAction() {
     if (raw.includes("500") || raw.includes("502") || raw.includes("503")) {
       return { error: "Le service bancaire est temporairement indisponible." };
     }
+    // Erreur de configuration, pas un incident passager : le message générique
+    // « réessayez » enverrait l'utilisateur boucler pour rien.
+    if (raw.includes("callback_url")) {
+      return { error: "L'adresse de retour bancaire est invalide (https requis). Contactez le support." };
+    }
     return { error: "Erreur lors de la connexion bancaire. Veuillez réessayer." };
+  }
+}
+
+// Interrogée en boucle par l'onboarding pendant que l'utilisateur connecte sa banque
+// dans un autre onglet. Volontairement limitée à une lecture DB : c'est le callback
+// qui déclenche la synchro Bridge, pas ce polling (sinon rate-limit garanti).
+export async function bankConnectionStatusAction() {
+  const session = await getSession();
+  if (!session || session.accountType !== "practitioner") {
+    return { error: "Non autorisé" };
+  }
+
+  try {
+    const [hp] = await db
+      .select({ id: practitioners.id })
+      .from(practitioners)
+      .where(eq(practitioners.userId, session.id));
+
+    if (!hp) {
+      return { connected: false };
+    }
+
+    const [account] = await db
+      .select({ id: bankAccounts.id })
+      .from(bankAccounts)
+      .where(eq(bankAccounts.practitionerId, hp.id))
+      .limit(1);
+
+    return { connected: !!account };
+  } catch (err: unknown) {
+    console.error("[BRIDGE] bankConnectionStatus:", err);
+    return { error: "Impossible de vérifier la connexion bancaire." };
   }
 }
 
