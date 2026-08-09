@@ -10,6 +10,8 @@ const messages: Record<string, { type: "success" | "info"; text: string }> = {
   "setup-password": { type: "success", text: "Compte activé avec succès" },
   "reset-password": { type: "success", text: "Mot de passe réinitialisé" },
   "account-deleted": { type: "info", text: "Votre compte a été supprimé" },
+  "bank-connected": { type: "success", text: "Banque connectée avec succès" },
+  "onboarding-done": { type: "success", text: "Bienvenue ! Votre espace est prêt." },
 };
 
 export function ToastHandler() {

@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useActionState } from "react";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { completeOnboardingAction } from "@/actions/onboarding";
 import { verifyRppsAction } from "@/actions/verify-rpps";
 import { connectBankAction, bankConnectionStatusAction } from "@/actions/bridge";
@@ -27,6 +25,17 @@ const ALL_STEPS = [...FORM_STEPS, BANK_STEP];
 
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 180_000;
+
+// Sortie de l'onboarding : rechargement dur du document, et non router.refresh().
+// Le DataProvider scelle son chargement initial derrière un ref one-shot
+// (data-provider.tsx) : un refresh RSC ne le remonte pas, il resterait donc sur
+// l'état d'avant connexion — aucun compte, aucune transaction, CA non recalculé.
+// Le toast passe par l'URL : émis ici, il ne survivrait pas à la navigation.
+function finishOnboarding() {
+  const url = new URL(window.location.href);
+  url.searchParams.set("toast", "onboarding-done");
+  window.location.replace(url.toString());
+}
 
 const PROFESSIONS = [
   { value: "nurse", label: "Infirmier(e)", icon: NurseIcon },
@@ -71,7 +80,6 @@ export function OnboardingModal({
   const [bankState, setBankState] = useState<BankState>("idle");
   const [bankError, setBankError] = useState("");
   const [bankConnected, setBankConnected] = useState(false);
-  const router = useRouter();
   const pollStartedAt = useRef(0);
   const submitRef = useRef<HTMLFormElement>(null);
 
@@ -107,8 +115,7 @@ export function OnboardingModal({
         // Profil déjà existant : rien n'a été saisi dans cette session, un
         // récapitulatif n'aurait rien à récapituler — on rend la main directement.
         if (startAtBank) {
-          toast.success(`Bienvenue ${firstName} ! Votre espace est prêt.`);
-          router.refresh();
+          finishOnboarding();
           return;
         }
 
@@ -117,7 +124,7 @@ export function OnboardingModal({
     }, POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [bankState, firstName, router, startAtBank]);
+  }, [bankState, startAtBank]);
 
   async function handleConnectBank() {
     setBankError("");
@@ -473,10 +480,7 @@ export function OnboardingModal({
               <Button
                 variant="cta"
                 type="button"
-                onClick={() => {
-                  toast.success(`Bienvenue ${firstName} ! Votre espace est prêt.`);
-                  router.refresh();
-                }}
+                onClick={finishOnboarding}
               >
                 Commencer
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
