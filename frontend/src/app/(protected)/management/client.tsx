@@ -22,6 +22,7 @@ import { CASourceIndicator } from "@/components/ca-source-indicator";
 import { EstimationBadge } from "@/components/estimation-badge";
 import { buildCalendar, type PaymentPreferences, DEFAULT_PREFERENCES } from "@/lib/data/fiscal-calendar";
 import { computeResteAVivre } from "@/lib/data/reste-a-vivre";
+import { computeChargesAnnuelles, hasRetrocessionProfil } from "@/lib/data/charges-annualisees";
 import { countWorkingDays, countRemainingWorkingDays } from "@/lib/data/fr-holidays";
 import { computeIR, computeParts, getBareme } from "@/lib/data/fr-tax";
 import { downloadCSV, downloadPDF, getChartImage } from "@/lib/export";
@@ -95,6 +96,11 @@ function useManagementData(): ManagementDataValue {
 // Le provider est remonté (via `key`) quand la connexion bancaire change, donc
 // les caches repartent vides automatiquement — pas de logique d'invalidation ici.
 function ManagementDataProvider({ initial, children }: { initial?: ManagementInitialData; children: ReactNode }) {
+  const hp = usePractitioner();
+  // Rétrocession configurée au profil : détermine si la rétrocession observée
+  // dans les transactions doit être ajoutée aux charges passées à l'estimation
+  // (cf. computeChargesAnnuelles — jamais les deux, sinon double déduction).
+  const retrocessionProfil = hasRetrocessionProfil(hp?.retrocessionType, hp?.retrocessionValue);
   const coreCacheRef = useRef(new Map<number, Promise<YearCore>>());
   const estimateCacheRef = useRef(new Map<number, Promise<CotisationsEstimate | null>>());
   const fiscalCacheRef = useRef(new Map<number, Promise<YearFiscal>>());
@@ -146,16 +152,27 @@ function ManagementDataProvider({ initial, children }: { initial?: ManagementIni
     const cached = cache.get(year);
     if (cached) return cached;
     const p = (async (): Promise<CotisationsEstimate | null> => {
-      const { totalCA } = await loadYearCore(year);
-      if (totalCA <= 0) return null;
-      return getCotisationsEstimate(totalCA, 0, year);
+      // L'estimation dépend des données mensuelles (charges pro observées) : le
+      // cœur de l'année est TOUJOURS chargé d'abord — l'ordre des états loading
+      // des onglets est inchangé (ils attendaient déjà loadYearCore ici).
+      const core = await loadYearCore(year);
+      if (core.totalCA <= 0) return null;
+      // Assiette BNC réel = bénéfice : on transmet les charges déductibles
+      // annualisées (chargesPro + Madelin, + rétrocession observée seulement si
+      // le profil n'en configure pas — l'estimation déduit déjà celle du profil).
+      const chargesAnnuelles = computeChargesAnnuelles({
+        months: core.months,
+        year,
+        retrocessionProfil,
+      });
+      return getCotisationsEstimate(core.totalCA, 0, year, chargesAnnuelles);
     })().catch((err) => {
       estimateCacheRef.current.delete(year);
       throw err;
     });
     cache.set(year, p);
     return p;
-  }, [loadYearCore]);
+  }, [loadYearCore, retrocessionProfil]);
 
   const loadFiscal = useCallback((year: number) => {
     const cache = fiscalCacheRef.current;
@@ -2417,18 +2434,23 @@ function computeSummaryMetrics(params: {
   const annualize = (ytd: number) => (monthsElapsed > 0 ? Math.round((ytd / monthsElapsed) * 12) : 0);
 
   // CA **brut** annualisé — même objet que « Estimation du C.A. » de l'onglet
-  // Simulation. On n'utilise surtout pas `revenuAnnualise` : c'est le CA NET de
-  // rétrocession, la bonne assiette pour les cotisations mais pas un chiffre
-  // d'affaires. L'afficher ici montrait un CA amputé de la rétrocession sous le
-  // libellé « Chiffre d'affaires », d'où l'écart avec l'onglet Simulation.
+  // Simulation. On n'utilise surtout pas `revenuAnnualise` : c'est le bénéfice
+  // estimé (CA net de rétrocession ET de charges déductibles), la bonne assiette
+  // pour les cotisations mais pas un chiffre d'affaires. L'afficher ici
+  // montrerait un CA amputé des charges sous le libellé « Chiffre d'affaires »,
+  // d'où un écart avec l'onglet Simulation.
   const annualCA = estimate?.caBrutAnnualise ?? 0;
   const annualChargesPro = annualize(months.reduce((s, m) => s + m.chargesPro, 0));
   // Cotisations sociales : estimation annuelle ajustée OpenFisca/Carpimko.
   const annualCotisations = (estimate?.urssafAnnuel ?? 0) + (estimate?.carpimkoAnnuel ?? 0);
   // Rétrocession : UNE SEULE source. Celle du profil (`retrocessionAnnualise`,
-  // déjà annualisée, et qui sert d'assiette aux cotisations) fait foi dès
-  // qu'elle est renseignée ; sinon on retombe sur celle observée dans les
+  // déjà annualisée, et déjà déduite de l'assiette des cotisations) fait foi
+  // dès qu'elle est renseignée ; sinon on retombe sur celle observée dans les
   // transactions. Additionner les deux déduisait deux fois la même charge.
+  // NB : les cotisations sont désormais assises sur le bénéfice (charges
+  // déduites via `loadEstimate`) — la cascade ci-dessous reste correcte : ce
+  // n'est PAS un double comptage, les charges réduisent l'assiette des
+  // cotisations ET restent des charges dans la rémunération.
   const annualRetrocessionObservee = annualize(months.reduce((s, m) => s + m.retrocession, 0));
   const annualRetrocessionProfil = estimate?.retrocessionAnnualise ?? 0;
   const annualRetrocession = annualRetrocessionProfil > 0
@@ -3067,7 +3089,16 @@ function SimulationTab() {
           otherIncome: currFiscal.otherIncome,
         });
       }
-      const annualCA = est?.revenuAnnualise ?? 0;
+      // Baseline du slider = CA net de rétrocession, PAS `revenuAnnualise`
+      // (désormais net des charges pro : le reste à vivre ci-dessous redéduit
+      // lui-même charges fixes + rétrocession de ce montant — partir du bénéfice
+      // les déduirait deux fois). En micro-BNC, CA brut (l'abattement 34 %
+      // couvre la rétrocession).
+      const annualCA = est
+        ? (hp?.taxRegime === "micro_bnc"
+            ? est.caBrutAnnualise
+            : Math.max(0, est.caBrutAnnualise - est.retrocessionAnnualise))
+        : 0;
       const baseSim = annualCA > 0 ? await simulateCotisations(annualCA) : null;
       setBaselineCA(annualCA);
       setBaseline(baseSim);
@@ -3075,7 +3106,7 @@ function SimulationTab() {
       setSimulated(baseSim);
       setLoading(false);
     })().catch(() => setLoading(false));
-  }, [currentYear, loadYearCore, loadEstimate, bankConnected]);
+  }, [currentYear, loadYearCore, loadEstimate, bankConnected, hp?.taxRegime]);
 
   // Recalcul simulé (debounced sur 300 ms)
   useEffect(() => {

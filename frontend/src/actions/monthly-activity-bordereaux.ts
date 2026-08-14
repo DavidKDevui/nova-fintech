@@ -5,13 +5,16 @@ import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { practitioners, practiceLinks, carePassages } from "@/lib/db/schema";
 import { namesMatch } from "@/lib/name-matching";
+import { getPaidCAByMonth } from "@/lib/services/ca-paid.service";
 import { addManualChargesToMonths } from "@/lib/db/manual-charges";
 import type { MonthlyActivityMonth } from "./transaction";
 
 /**
  * Fallback "Mon activité" quand le praticien n'a pas connecté sa banque mais a
- * des bordereaux. Agrège `carePassages` (status = paye) par mois en filtrant
- * par cabinets liés + name matching, à l'identique de `getCAFromBordereaux`.
+ * des bordereaux. Agrège en priorité les ENCAISSEMENTS (`carePayments`, mois de
+ * paiement) ; à défaut, les passages `carePassages` (status = paye) par mois de
+ * soin, en filtrant par cabinets liés + name matching, à l'identique de
+ * `getCAFromBordereaux`.
  * Seul `income` est rempli — les autres champs restent à 0 car les dépenses ne
  * peuvent pas être dérivées des bordereaux (cf. estimation des cotisations
  * gérée côté UI via `getCotisationsEstimate`).
@@ -41,9 +44,24 @@ export async function getMonthlyActivityFromBordereauxAction(
     }
 
     const practiceIds = links.map((l) => l.practiceId);
+    const fullName = `${hp.firstName} ${hp.lastName}`;
+
+    // Priorité aux montants ENCAISSÉS (care_payments, mois de paiement) : en
+    // BNC c'est le CA correct. Repli sur les passages (facturé, date de soin)
+    // pour les cabinets sans retours NOEMIE joignables.
+    const paid = await getPaidCAByMonth(practiceIds, fullName, hp.lastName, year);
+    if (paid.total > 0) {
+      const months = emptyMonths();
+      for (let i = 0; i < 12; i++) {
+        months[i]!.income = paid.byMonth[i] ?? 0;
+      }
+      // Charges pro. manuelles ajoutées par-dessus le CA encaissé.
+      await addManualChargesToMonths(months, hp.id, year);
+      return { months };
+    }
+
     const yearStart = `${year}-01-01`;
     const yearEnd = `${year}-12-31`;
-    const fullName = `${hp.firstName} ${hp.lastName}`;
     const lastNamePattern = `%${hp.lastName}%`;
 
     const passages = await db

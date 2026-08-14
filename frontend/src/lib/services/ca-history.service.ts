@@ -8,6 +8,7 @@ import {
   bankTransactions,
 } from "@/lib/db/schema";
 import { namesMatch } from "@/lib/name-matching";
+import { getPaidCAMonthlyMap } from "@/lib/services/ca-paid.service";
 
 export type CASource = "bordereaux" | "transactions" | "none";
 
@@ -81,6 +82,31 @@ async function getMonthlyFromTransactions(
   return map;
 }
 
+/** Cabinets liés au praticien (ids), prérequis des deux sources bordereaux. */
+async function getLinkedPracticeIds(hp: Practitioner): Promise<string[]> {
+  const links = await db
+    .select({ practiceId: practiceLinks.practiceId })
+    .from(practiceLinks)
+    .where(eq(practiceLinks.practitionerId, hp.id));
+  return links.map((l) => l.practiceId);
+}
+
+/**
+ * CA mensuel issu des encaissements NOEMIE (care_payments 'paid', mois de
+ * paiement), praticien attribué via la jointure sur les passages — cf.
+ * `ca-paid.service.ts`.
+ */
+async function getMonthlyFromPayments(
+  hp: Practitioner,
+  practiceIds: string[],
+  startYear: number,
+  endYear: number,
+): Promise<MonthlyMap> {
+  if (practiceIds.length === 0) return new Map();
+  const fullName = `${hp.firstName} ${hp.lastName}`;
+  return getPaidCAMonthlyMap(practiceIds, fullName, hp.lastName, startYear, endYear);
+}
+
 /**
  * CA mensuel issu des bordereaux (care_passages payés). Le name matching ne
  * peut pas être fait en SQL (logique JS dans `namesMatch`), donc on récupère
@@ -88,18 +114,13 @@ async function getMonthlyFromTransactions(
  */
 async function getMonthlyFromBordereaux(
   hp: Practitioner,
+  practiceIds: string[],
   startYear: number,
   endYear: number,
 ): Promise<MonthlyMap> {
   const map: MonthlyMap = new Map();
+  if (practiceIds.length === 0) return map;
 
-  const links = await db
-    .select({ practiceId: practiceLinks.practiceId })
-    .from(practiceLinks)
-    .where(eq(practiceLinks.practitionerId, hp.id));
-  if (links.length === 0) return map;
-
-  const practiceIds = links.map((l) => l.practiceId);
   const fullName = `${hp.firstName} ${hp.lastName}`;
   const lastNamePattern = `%${hp.lastName}%`;
 
@@ -142,10 +163,12 @@ function yearMonths(map: MonthlyMap, year: number): number[] {
  * Historique de CA mensuel d'un praticien sur les `lookbackYears` dernières
  * années + l'année courante.
  *
- * Source : banque (encaissements réels) en priorité, repli sur bordereaux
- * (CA facturé/payé) — décision prise **année par année**. Si une année n'a
- * aucune donnée bancaire mais des bordereaux, on prend les bordereaux pour
- * cette année-là, sans contaminer les autres.
+ * Source : banque (encaissements réels) en priorité, repli sur bordereaux —
+ * décision prise **année par année**. Si une année n'a aucune donnée bancaire
+ * mais des bordereaux, on prend les bordereaux pour cette année-là, sans
+ * contaminer les autres. Côté bordereaux, priorité aux ENCAISSEMENTS
+ * (care_payments, mois de paiement — le CA correct en BNC), repli sur les
+ * passages (facturé, date de soin) pour les années sans NOEMIE joignable.
  */
 export async function getCAHistoryForPractitioner(
   hp: Practitioner,
@@ -155,15 +178,20 @@ export async function getCAHistoryForPractitioner(
   const currentYear = now.getFullYear();
   const startYear = currentYear - lookbackYears;
 
-  const [txMap, brdMap] = await Promise.all([
+  const practiceIds = await getLinkedPracticeIds(hp);
+  const [txMap, paidMap, passagesMap] = await Promise.all([
     getMonthlyFromTransactions(hp, startYear, currentYear),
-    getMonthlyFromBordereaux(hp, startYear, currentYear),
+    getMonthlyFromPayments(hp, practiceIds, startYear, currentYear),
+    getMonthlyFromBordereaux(hp, practiceIds, startYear, currentYear),
   ]);
 
   const years: YearlyCA[] = [];
   for (let year = startYear; year <= currentYear; year++) {
     const txMonths = yearMonths(txMap, year);
-    const brdMonths = yearMonths(brdMap, year);
+    // Bordereaux : encaissements si l'année en a, sinon passages.
+    const paidMonths = yearMonths(paidMap, year);
+    const paidTotal = paidMonths.reduce((a, b) => a + b, 0);
+    const brdMonths = paidTotal > 0 ? paidMonths : yearMonths(passagesMap, year);
     const txTotal = txMonths.reduce((a, b) => a + b, 0);
     const brdTotal = brdMonths.reduce((a, b) => a + b, 0);
 

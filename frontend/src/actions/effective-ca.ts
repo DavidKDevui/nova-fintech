@@ -11,6 +11,7 @@ import {
   bankTransactions,
 } from "@/lib/db/schema";
 import { namesMatch } from "@/lib/name-matching";
+import { getPaidCATotal } from "@/lib/services/ca-paid.service";
 
 export type EffectiveCASource = "bordereaux" | "transactions" | "none";
 
@@ -30,9 +31,16 @@ async function getCAFromBordereaux(hp: Practitioner, year: number): Promise<numb
   if (links.length === 0) return 0;
 
   const practiceIds = links.map((l) => l.practiceId);
+  const fullName = `${hp.firstName} ${hp.lastName}`;
+
+  // Priorité aux montants ENCAISSÉS (care_payments, date de paiement) : en BNC
+  // c'est le CA correct. Repli sur les passages (facturé, date de soin) pour
+  // les cabinets sans retours NOEMIE joignables.
+  const paidTotal = await getPaidCATotal(practiceIds, fullName, hp.lastName, year);
+  if (paidTotal > 0) return paidTotal;
+
   const yearStart = `${year}-01-01`;
   const yearEnd = `${year}-12-31`;
-  const fullName = `${hp.firstName} ${hp.lastName}`;
   const lastNamePattern = `%${hp.lastName}%`;
 
   const passages = await db

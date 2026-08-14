@@ -6,6 +6,7 @@ import { practitioners, practiceLinks, carePassages, practitionerVacations } fro
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { simulerCotisationsURSSAF, getPlafondSecuriteSociale } from "@/lib/services/openfisca.service";
 import { calculerCotisationsCarpimko } from "@/lib/services/carpimko.service";
+import { getPaidCAByMonth } from "@/lib/services/ca-paid.service";
 import { namesMatch } from "@/lib/name-matching";
 import { countWorkingDays } from "@/lib/data/fr-holidays";
 
@@ -16,12 +17,23 @@ export type CotisationsEstimate = {
   urssafParEcheance: number;
   carpimkoParEcheance: number;
   pasParEcheance: number;
-  /** Revenu professionnel annualisé NET de rétrocession (= base des cotisations). */
+  /**
+   * Revenu professionnel annualisé NET de rétrocession et de charges déductibles
+   * (= base des cotisations). En BNC réel, c'est une approximation du bénéfice
+   * (recettes − charges), pas le CA. En micro-BNC, égal au CA brut (l'abattement
+   * forfaitaire de 34 % est appliqué en aval, cf. `revenuNet`).
+   */
   revenuAnnualise: number;
-  /** CA brut annualisé (avant rétrocession). Égal à `revenuAnnualise` si pas de rétrocession. */
+  /** CA brut annualisé (avant rétrocession et charges). Égal à `revenuAnnualise` si ni rétrocession ni charges. */
   caBrutAnnualise: number;
   /** Rétrocession annualisée déduite du CA brut (0 si pas de rétrocession configurée). */
   retrocessionAnnualise: number;
+  /**
+   * Charges professionnelles annualisées effectivement retenues dans l'assiette
+   * (hors rétrocession, déjà comptée à part). 0 en micro-BNC (l'abattement 34 %
+   * couvre toutes les charges) ou si l'appelant n'a rien transmis.
+   */
+  chargesAnnualise: number;
   revenuN2: number | null;
   urssafBase: "n2" | "forfaitaire" | "annualise";
   pss: number;
@@ -54,21 +66,40 @@ function computeRetrocessionDeduction(
 /**
  * Récupère le CA payé d'une année donnée pour le praticien connecté,
  * en passant par ses cabinets liés et le name matching.
+ *
+ * Priorité aux montants ENCAISSÉS (`care_payments`, date de paiement — le CA
+ * correct en BNC), repli sur les passages (facturé, date de soin) pour les
+ * cabinets sans retours NOEMIE joignables — même règle que
+ * `getCAFromBordereaux` (effective-ca.ts).
+ *
+ * Retourne aussi la couverture des données (`monthsCovered` = nombre de mois
+ * distincts ayant au moins un encaissement/passage) : elle permet à l'appelant
+ * de détecter une année tronquée (ex. bordereaux ne démarrant qu'en décembre)
+ * dont le total ne représente pas un revenu annuel.
  */
 async function getCAForYear(
   practitionerId: string,
   fullName: string,
   lastName: string,
   year: number,
-): Promise<number> {
+): Promise<{ ca: number; monthsCovered: number }> {
   const links = await db
     .select({ practiceId: practiceLinks.practiceId })
     .from(practiceLinks)
     .where(eq(practiceLinks.practitionerId, practitionerId));
 
-  if (links.length === 0) return 0;
+  if (links.length === 0) return { ca: 0, monthsCovered: 0 };
 
   const practiceIds = links.map((l) => l.practiceId);
+
+  const paid = await getPaidCAByMonth(practiceIds, fullName, lastName, year);
+  if (paid.total > 0) {
+    return {
+      ca: paid.total,
+      monthsCovered: paid.byMonth.filter((m) => m > 0).length,
+    };
+  }
+
   const lastNamePattern = `%${lastName}%`;
   const yearStart = `${year}-01-01`;
   const yearEnd = `${year}-12-31`;
@@ -77,6 +108,7 @@ async function getCAForYear(
     .select({
       practitioner: carePassages.practitioner,
       totalAmount: carePassages.totalAmount,
+      careDate: carePassages.careDate,
     })
     .from(carePassages)
     .where(
@@ -90,15 +122,26 @@ async function getCAForYear(
     );
 
   // Affiner avec namesMatch côté JS
-  return passages
-    .filter((p) => namesMatch(fullName, p.practitioner))
-    .reduce((sum, p) => sum + Number(p.totalAmount), 0);
+  const matched = passages.filter((p) => namesMatch(fullName, p.practitioner));
+  const ca = matched.reduce((sum, p) => sum + Number(p.totalAmount), 0);
+  // `careDate` est une colonne `date` → chaîne "YYYY-MM-DD" : le mois est en position 5-6.
+  const monthsCovered = new Set(matched.map((p) => String(p.careDate).slice(5, 7))).size;
+  return { ca, monthsCovered };
 }
 
 export async function getCotisationsEstimate(
   totalCA: number,
   deductionSociale: number = 0,
   year?: number,
+  /**
+   * Charges professionnelles déductibles ANNUALISÉES (loyer, matériel, Madelin…),
+   * hors rétrocession (déduite à part via le profil) et hors cotisations sociales
+   * elles-mêmes : dans cette estimation, les cotisations de l'année ne se
+   * déduisent pas de leur propre assiette (sinon le calcul serait circulaire —
+   * l'URSSAF raisonne de toute façon sur le revenu N-2 ou une base forfaitaire).
+   * Défaut 0 = comportement historique (assiette = CA net de rétrocession).
+   */
+  chargesAnnuelles: number = 0,
 ): Promise<CotisationsEstimate | null> {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return null;
@@ -192,13 +235,15 @@ export async function getCotisationsEstimate(
 
   if (caBrutAnnualise <= 0) return null;
 
-  // ── Retrait de la rétrocession ──
-  // En BNC réel, la rétrocession est une charge déductible : on la retire du
-  // CA brut annualisé pour obtenir la base des cotisations URSSAF / CARPIMKO /
-  // PAS. En micro-BNC en revanche, l'abattement forfaitaire 34 % est censé
-  // couvrir toutes les charges (rétrocession comprise) — on n'applique donc
-  // pas de double déduction. La valeur est tout de même exposée (champ
-  // `retrocessionAnnualise`) pour usage informatif côté UI.
+  // ── Retrait de la rétrocession et des charges déductibles ──
+  // En BNC réel, les cotisations s'assoient sur le RÉSULTAT (recettes − charges
+  // déductibles), pas sur le CA : on retire du CA brut annualisé la rétrocession
+  // (issue du profil) ET les charges professionnelles annualisées transmises par
+  // l'appelant pour obtenir la base des cotisations URSSAF / CARPIMKO / PAS.
+  // En micro-BNC en revanche, l'abattement forfaitaire 34 % est censé couvrir
+  // toutes les charges (rétrocession et charges pro comprises) — on n'applique
+  // donc aucune double déduction. Les valeurs sont tout de même exposées (champs
+  // `retrocessionAnnualise` / `chargesAnnualise`) pour usage informatif côté UI.
   const retrocessionAnnualise = Math.round(computeRetrocessionDeduction(
     hp.retrocessionType,
     hp.retrocessionValue,
@@ -206,10 +251,17 @@ export async function getCotisationsEstimate(
     12,
   ));
   const isMicroBNCRegime = regime === "micro_bnc";
-  let revenuAnnualise = isMicroBNCRegime
+  // Montant de charges effectivement retenu dans l'assiette (0 en micro-BNC).
+  const chargesAnnualise = isMicroBNCRegime
+    ? 0
+    : Math.max(0, Math.round(chargesAnnuelles));
+  // Plancher à 0 : un résultat négatif (charges + rétrocession > CA) signifie
+  // simplement « pas de bénéfice », donc pas de cotisations proportionnelles.
+  // Surtout NE PAS retomber sur le CA brut dans ce cas — cotiser sur le CA
+  // alors que l'activité est déficitaire serait pire que l'assiette nulle.
+  const revenuAnnualise = isMicroBNCRegime
     ? caBrutAnnualise
-    : Math.max(0, caBrutAnnualise - retrocessionAnnualise);
-  if (revenuAnnualise <= 0) revenuAnnualise = caBrutAnnualise;
+    : Math.max(0, caBrutAnnualise - retrocessionAnnualise - chargesAnnualise);
 
   // ── Déterminer si le praticien est dans ses 2 premières années ──
   const activityStart = new Date(hp.activityStartDate);
@@ -217,13 +269,20 @@ export async function getCotisationsEstimate(
   const isDebutActivite = yearsOfActivity < 2;
 
   // ── CA N-2 (pour URSSAF) ──
+  // Règle de couverture : on n'utilise le N-2 QUE si les données couvrent au
+  // moins 10 mois distincts de l'année. Une année tronquée (ex. bordereaux ne
+  // couvrant que le 17→31 décembre) donnerait un « revenu annuel » dérisoire et
+  // non représentatif → une URSSAF quasi nulle, incohérente avec la CARPIMKO
+  // calculée sur le revenu annualisé courant. Dans ce cas, on traite comme
+  // « pas de données N-2 » → fallback sur la base annualisée ci-dessous.
+  const MIN_N2_MONTHS_COVERAGE = 10;
   const fullName = `${hp.firstName} ${hp.lastName}`;
   const anneeN2 = annee - 2;
   let revenuN2: number | null = null;
   if (!isDebutActivite) {
     try {
-      const caN2 = await getCAForYear(hp.id, fullName, hp.lastName, anneeN2);
-      if (caN2 > 0) revenuN2 = caN2;
+      const { ca: caN2, monthsCovered } = await getCAForYear(hp.id, fullName, hp.lastName, anneeN2);
+      if (caN2 > 0 && monthsCovered >= MIN_N2_MONTHS_COVERAGE) revenuN2 = caN2;
     } catch {
       // pas de données N-2 disponibles
     }
@@ -321,6 +380,7 @@ export async function getCotisationsEstimate(
     revenuAnnualise,
     caBrutAnnualise,
     retrocessionAnnualise,
+    chargesAnnualise,
     revenuN2,
     urssafBase,
     pss,
