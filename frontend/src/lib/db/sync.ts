@@ -201,7 +201,20 @@ export async function syncDatabase(pool: pg.Pool) {
     }
 
     // 2bis — Foreign keys (pass 2 : toutes les tables existent maintenant)
-    // Idempotent : DO $$ EXCEPTION attrape les FK deja existantes.
+    //
+    // INCIDENT 10/09/2026 : l'ancienne version faisait `ADD FOREIGN KEY` SANS
+    // nom, entouré d'un DO/EXCEPTION duplicate_object. Or Postgres ne lève
+    // jamais cette erreur pour une contrainte anonyme : il génère un nouveau
+    // nom (…_fkey1, _fkey2, …) et AJOUTE UNE COPIE. Chaque démarrage de l'app
+    // et chaque cron (toutes les 15 min) ajoutait donc ~24 clés étrangères :
+    // 140 399 contraintes en prod, 5 000 à 11 000 par table. Effets : chaque
+    // écriture déclenchait des milliers de triggers RI (UPDATE de `users` en
+    // 4,4 s), et chaque sync posait 24 verrous ACCESS EXCLUSIVE pendant ~25 s
+    // (validation des contraintes), figeant l'app à chaque cron.
+    //
+    // Désormais : on vérifie l'existence par DÉFINITION (table, colonnes,
+    // table référencée) dans pg_constraint, et on ne crée qu'en son absence,
+    // avec un nom explicite. Voir .ssh pour le nettoyage des doublons.
     for (const tableObj of drizzleTables) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const config = getTableConfig(tableObj as any);
@@ -210,13 +223,31 @@ export async function syncDatabase(pool: pg.Pool) {
       for (const fk of config.foreignKeys) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ref = fk.reference() as any;
-        const localCols = ref.columns.map((c: { name: string }) => `"${c.name}"`).join(", ");
+        const localColNames: string[] = ref.columns.map((c: { name: string }) => c.name);
+        const localCols = localColNames.map((n) => `"${n}"`).join(", ");
         const foreignTable = getTableConfig(ref.foreignTable).name;
         const foreignCols = ref.foreignColumns.map((c: { name: string }) => `"${c.name}"`).join(", ");
-        let fkSQL = `ALTER TABLE "${tableName}" ADD FOREIGN KEY (${localCols}) REFERENCES "${foreignTable}"(${foreignCols})`;
+
+        const { rows: fkExists } = await client.query(
+          `SELECT 1 FROM pg_constraint c
+           WHERE c.contype = 'f'
+             AND c.conrelid = $1::regclass
+             AND c.confrelid = $2::regclass
+             AND (SELECT array_agg(a.attname::text ORDER BY u.ord)
+                    FROM unnest(c.conkey) WITH ORDINALITY AS u(attnum, ord)
+                    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = u.attnum) = $3::text[]
+           LIMIT 1`,
+          [`"public"."${tableName}"`, `"public"."${foreignTable}"`, localColNames],
+        );
+        if (fkExists.length > 0) continue;
+
+        const fkName = `${tableName}_${localColNames.join("_")}_fkey`;
+        let fkSQL = `ALTER TABLE "${tableName}" ADD CONSTRAINT "${fkName}" FOREIGN KEY (${localCols}) REFERENCES "${foreignTable}"(${foreignCols})`;
         if (ref.deleteAction) fkSQL += ` ON DELETE ${String(ref.deleteAction).toUpperCase()}`;
-        // duplicate_object : la FK existe deja (re-run) -> ignore
+        // Nom explicite → duplicate_object est bien levé si le nom existe déjà
+        // (contrainte de même nom mais de définition différente) : on l'ignore.
         await client.query(`DO $$ BEGIN ${fkSQL}; EXCEPTION WHEN duplicate_object THEN null; END $$`);
+        changes.push(`+ FK "${fkName}"`);
       }
     }
 

@@ -35,9 +35,19 @@ if (process.env.NODE_ENV !== "production") {
   globalForPg.pgPool = pool;
 }
 
+// DB_SKIP_SYNC=1 : les scripts cron (Ofelia, toutes les 15 min) importent ce
+// module mais n'ont aucune raison de rejouer la synchro du schéma — c'est
+// l'app qui la fait à son démarrage (déploiement). Chaque sync coûtait ~25 s
+// de verrous en prod (cf. incident des clés étrangères dupliquées, sync.ts).
+const skipSync = process.env.DB_SKIP_SYNC === "1";
+
 export const dbReady = globalForPg.dbReady ?? pool.query("SELECT 1")
   .then(() => {
     console.log("✅ Connexion à PostgreSQL réussie");
+    if (skipSync) {
+      console.log("↷ Synchro du schéma ignorée (DB_SKIP_SYNC=1)");
+      return;
+    }
     return syncDatabase(pool);
   })
   .catch((err) => console.error("❌ Échec de connexion à PostgreSQL :", err.message));
