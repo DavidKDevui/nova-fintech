@@ -47,6 +47,26 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(amount);
 }
 
+// Appel à l'action des bandeaux « CA issu de vos bordereaux ». Le mode
+// bordereaux (`isEstimated`) signifie seulement qu'AUCUN encaissement catégorisé
+// « income »/« royalty » n'existe en banque pour l'année : ça arrive banque
+// connectée, tant que les transactions ne sont pas catégorisées. Proposer
+// « Connecter ma banque » à quelqu'un dont la banque est connectée était faux
+// et trompeur — on propose alors de catégoriser.
+function FallbackCta({ suffix }: { suffix: string }) {
+  const hp = usePractitioner();
+  const bankConnected = !!hp?.bridgeUserUuid;
+  return (
+    <>
+      {bankConnected ? "Aucun encaissement catégorisé sur votre compte bancaire pour cette période : " : ""}
+      <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-600">
+        {bankConnected ? "catégoriser mes transactions" : "Connecter ma banque"}
+      </Link>{" "}
+      {suffix}
+    </>
+  );
+}
+
 // ── Cache de données partagé entre les onglets ──
 // Les onglets se montent un par un et refetchaient chacun le même cœur de
 // données (CA effectif "transactions" + activité mensuelle + estimation cotis.)
@@ -745,10 +765,7 @@ function ActivityTab() {
             </svg>
             <span>
               CA issu de vos bordereaux.{" "}
-              <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-600">
-                Connecter ma banque
-              </Link>{" "}
-              pour voir vos dépenses et votre rémunération.
+              <FallbackCta suffix="pour voir vos dépenses et votre rémunération." />
             </span>
           </div>
         )}
@@ -1528,10 +1545,7 @@ function ContributionsTab() {
           </svg>
           <span>
             Cotisations estimées à partir de vos bordereaux.{" "}
-            <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-600">
-              Connecter ma banque
-            </Link>{" "}
-            pour les montants réels.
+            <FallbackCta suffix="pour les montants réels." />
           </span>
         </div>
       )}
@@ -2127,10 +2141,7 @@ function TaxesTab() {
         </svg>
         <span>
           BNC et PAS estimés à partir de vos bordereaux.{" "}
-          <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-600">
-            Connecter ma banque
-          </Link>{" "}
-          pour intégrer vos prélèvements réels.
+          <FallbackCta suffix="pour intégrer vos prélèvements réels." />
         </span>
       </div>
     )}
@@ -2601,12 +2612,22 @@ function SummaryTab() {
     })().catch(() => setLoading(false));
   }, [currentYear, prevYear, loadYearCore, loadEstimate, loadFiscal, bankConnected]);
 
-  // 1. Trésorerie actuelle = balance du compte par défaut
-  const defaultBalance = useMemo(() => {
-    if (!hp?.defaultBankAccountId) return 0;
-    const acc = accounts.find((a) => a.id === hp.defaultBankAccountId);
-    return acc ? parseFloat(acc.balance) : 0;
-  }, [accounts, hp]);
+  // 1. Trésorerie actuelle = balance du compte par défaut.
+  // `defaultAccount` absent = pas de compte par défaut choisi, ou compte
+  // périmé (supprimé / re-synchronisé avec un nouvel id) : dans les deux cas
+  // il n'y a pas de solde à projeter, et il faut le dire plutôt qu'afficher 0 €.
+  const defaultAccount = useMemo(
+    () => (hp?.defaultBankAccountId ? accounts.find((a) => a.id === hp.defaultBankAccountId) ?? null : null),
+    [accounts, hp],
+  );
+  const defaultBalance = defaultAccount ? parseFloat(defaultAccount.balance) : 0;
+  // La carte a besoin d'un solde réel : banque connectée ET compte par défaut
+  // présent. La SOURCE du CA (bordereaux ou transactions, `isEstimated`) n'entre
+  // pas en ligne de compte : la projection = solde + encaissements estimés −
+  // charges, et les encaissements peuvent venir des bordereaux. Avant, la carte
+  // se vidait dès que le CA venait des bordereaux, même banque connectée (cas
+  // typique : compte ajouté mais aucun encaissement encore catégorisé).
+  const hasBalance = bankConnected && defaultAccount !== null;
 
   // 2. Reste à vivre projeté au mois cible (CA − charges, sans trésorerie).
   // Calcul mutualisé avec le dashboard et l'onglet « Reste à vivre ».
@@ -2719,40 +2740,39 @@ function SummaryTab() {
     },
   ];
 
-  // En fallback bordereaux : pas de solde bancaire réel → on ne rend aucune
-  // donnée dans le chart pour ne pas afficher des bars trompeuses sous l'overlay.
+  // Sans solde réel : aucune donnée dans le chart pour ne pas afficher des
+  // barres trompeuses sous l'overlay.
   // Libellé de l'horizon de projection : "du mois courant" par défaut, sinon le
   // mois cible choisi ("de septembre 2026").
   const projTargetIdx = Math.max(currentMonthIdx, targetMonth);
   const horizonLabel = projTargetIdx === currentMonthIdx ? "du mois courant" : `de ${MONTHS_LONG[projTargetIdx]} ${currentYear}`;
 
-  const chartData = isEstimated ? [] : [
+  const chartData = !hasBalance ? [] : [
     { key: "treso", name: "Trésorerie actuelle", value: Math.round(defaultBalance) },
     { key: "reste", name: "Trésorerie projetée", value: Math.round(soldeProjete) },
   ];
 
   const formatSigned = (v: number) => `${v > 0 ? "+" : ""}${formatCurrency(v)}`;
   const isLoading = loading || transactionsLoading;
-  // La carte nécessite un solde bancaire réel (pas juste un bridgeUserUuid posé).
-  // Sans banque connectée — ou en fallback bordereaux —, on garde la carte à
-  // l'écran sous un overlay « Connecter ma banque » plutôt que de la masquer :
-  // c'est le seul point d'entrée vers la connexion du compte pro depuis cette
-  // page, et la faire disparaître retirait l'incitation en même temps que la
-  // donnée. Le chart est vide dans ce cas (cf. `chartData`), donc rien de
-  // trompeur ne transparaît sous l'overlay.
-  const tresoDataAvailable = (bankConnected && !isEstimated) || isLoading;
+  // Sans solde réel, on garde la carte à l'écran sous un overlay plutôt que de la
+  // masquer : c'est le seul point d'entrée vers la connexion du compte pro depuis
+  // cette page. L'appel à l'action dépend de ce qui manque : la banque, ou
+  // seulement le compte par défaut. Pendant le chargement, pas d'overlay (les
+  // skeletons suffisent), pour éviter un flash « Connecter ma banque ».
+  const tresoDataAvailable = hasBalance || isLoading;
+  const overlayLabel = bankConnected ? "Choisir mon compte par défaut" : "Connecter ma banque";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="relative bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-6">
-        <DataMissingOverlay bankConnected={tresoDataAvailable} />
+        <DataMissingOverlay bankConnected={tresoDataAvailable} label={overlayLabel} />
         <div className="flex items-center justify-between mb-4 gap-3">
           <h3 className="text-base font-semibold text-ardoise-900">Trésorerie prévisionnelle</h3>
           <select
             aria-label="Mois de projection"
             value={targetMonth}
             onChange={(e) => setTargetMonth(Number(e.target.value))}
-            disabled={isEstimated || isLoading || !bankConnected}
+            disabled={isLoading || !hasBalance}
             className="border border-ardoise-200 bg-transparent pl-3 pr-8 py-1.5 rounded-md text-sm capitalize transition-all hover:border-ardoise-400 focus:border-violet-500 focus:outline-none appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {MONTHS_LONG.map((label, idx) =>
@@ -2813,9 +2833,14 @@ function SummaryTab() {
                 <p className="text-xs text-ardoise-400">Trésorerie projetée fin {horizonLabel}</p>
                 <InfoTooltip text={`Trésorerie projetée à la fin ${horizonLabel} : solde actuel du compte par défaut, plus vos encaissements estimés, moins les échéances fiscales/sociales restantes et vos charges professionnelles projetées.`} />
               </div>
-              <p className={`text-3xl font-bold font-mono ${isEstimated ? "text-ardoise-300" : soldeProjete >= 0 ? "text-ardoise-900" : "text-red-500"}`}>
-                {isEstimated ? "—" : formatSigned(soldeProjete)}
+              <p className={`text-3xl font-bold font-mono ${!hasBalance ? "text-ardoise-300" : soldeProjete >= 0 ? "text-ardoise-900" : "text-red-500"}`}>
+                {!hasBalance ? "—" : formatSigned(soldeProjete)}
               </p>
+              {hasBalance && isEstimated && (
+                <p className="mt-1 text-[11px] text-ardoise-400">
+                  Encaissements estimés à partir de vos bordereaux (aucun encaissement catégorisé en banque cette année).
+                </p>
+              )}
             </div>
 
             <p className="mt-4 text-xs text-ardoise-500 leading-relaxed">
@@ -2839,10 +2864,7 @@ function SummaryTab() {
             </svg>
             <span>
               Estimations à partir de vos bordereaux.{" "}
-              <Link href="/transactions" className="underline decoration-ardoise-300 underline-offset-2 hover:text-ardoise-600">
-                Connecter ma banque
-              </Link>
-              .
+              <FallbackCta suffix="pour des montants réels." />
             </span>
           </div>
         )}
