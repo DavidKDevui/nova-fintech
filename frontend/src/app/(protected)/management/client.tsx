@@ -2938,9 +2938,18 @@ function SummaryTab() {
 // de charges ne sont pas des catégories à distinguer, elles sont toutes « ce
 // qui part ». Palette validée sur fond clair (contraste ≥ 3:1, séparation
 // daltonisme ≥ 8) ; le gris des sorties est volontairement désaturé.
-const WF_IN = "#2FA169";      // menthe-600 — encaissements
-const WF_OUT = "#847A95";     // ardoise-500 — prélèvements
-const WF_TOTAL = "#EC6C12";   // brand-600 — reste à vivre
+// Mêmes couleurs que le graphe de « Mon activité » (ActivityBarChart), pour
+// qu'un même poste garde sa teinte d'un onglet à l'autre : vert = revenus,
+// orange = cotisations sociales, rouge = autres dépenses. Le total n'existe pas
+// dans « Mon activité » : il prend un ardoise neutre, qui ne concurrence
+// aucune des trois. NB : l'orange et le rouge sont proches (ΔE 10 en vision
+// normale) ; ici chaque montant occupe SA ligne, libellée à gauche, donc
+// l'identité ne repose jamais sur la couleur — contrairement à « Mon activité »
+// où ils sont empilés dans une même barre.
+const WF_IN = "#3DB87A";      // = Bar "revenus" de Mon activité
+const WF_SOCIAL = "#f97316";  // = Bar "cotisations" de Mon activité
+const WF_EXPENSE = "#ef4444"; // = Bar "autresDepenses" de Mon activité
+const WF_TOTAL = "#2E2440";   // ardoise-800 — reste à vivre
 const WF_NEG = "#C73E3E";     // alerte-600 — reste à vivre négatif
 
 type WaterfallStep = {
@@ -2951,7 +2960,7 @@ type WaterfallStep = {
   amount: number;
   /** Solde restant APRÈS cette étape. */
   running: number;
-  kind: "in" | "out" | "total";
+  kind: "in" | "social" | "expense" | "total";
 };
 
 function buildWaterfall(b: {
@@ -2962,14 +2971,14 @@ function buildWaterfall(b: {
   let running = b.projIncome;
   steps.push({ name: "Encaissements", range: [0, b.projIncome], amount: b.projIncome, running, kind: "in" });
 
-  const charges: [string, number][] = [
-    ["URSSAF", b.urssafDue],
-    ["CARPIMKO", b.carpimkoDue],
-    ["Impôt (PAS)", b.pasDue],
-    ["Charges pro.", b.projChargesPro],
-    ["Rétro./Madelin", b.projRetroMadelin],
+  const charges: [string, number, "social" | "expense"][] = [
+    ["URSSAF", b.urssafDue, "social"],
+    ["CARPIMKO", b.carpimkoDue, "social"],
+    ["Impôt (PAS)", b.pasDue, "social"],
+    ["Charges pro.", b.projChargesPro, "expense"],
+    ["Rétro./Madelin", b.projRetroMadelin, "expense"],
   ];
-  for (const [name, v] of charges) {
+  for (const [name, v, kind] of charges) {
     if (Math.abs(v) <= 0.5) continue;
     const next = running - v;
     steps.push({
@@ -2977,7 +2986,7 @@ function buildWaterfall(b: {
       range: [Math.min(next, running), Math.max(next, running)],
       amount: -v,
       running: next,
-      kind: "out",
+      kind,
     });
     running = next;
   }
@@ -2994,7 +3003,8 @@ function buildWaterfall(b: {
 
 function stepColor(step: WaterfallStep): string {
   if (step.kind === "in") return WF_IN;
-  if (step.kind === "out") return WF_OUT;
+  if (step.kind === "social") return WF_SOCIAL;
+  if (step.kind === "expense") return WF_EXPENSE;
   return step.amount >= 0 ? WF_TOTAL : WF_NEG;
 }
 
@@ -3227,7 +3237,8 @@ function RemainderTab() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-ardoise-500">
         {[
           { c: WF_IN, l: "Encaissements estimés" },
-          { c: WF_OUT, l: "Prélèvements et charges" },
+          { c: WF_SOCIAL, l: "Cotisations sociales et impôt" },
+          { c: WF_EXPENSE, l: "Autres charges" },
           { c: WF_TOTAL, l: "Reste à vivre" },
         ].map((x) => (
           <span key={x.l} className="flex items-center gap-1.5">
