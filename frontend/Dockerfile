@@ -71,4 +71,7 @@ USER nextjs
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+# Synchro du schéma UNE fois, au démarrage du container (= au déploiement),
+# puis le serveur. L'app ne synchronise jamais d'elle-même en production
+# (lib/db/index.ts) ; si la synchro échoue, le container s'arrête (fail fast).
+CMD ["sh", "-c", "npm run db:sync && npm run start"]

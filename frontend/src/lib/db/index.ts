@@ -35,17 +35,25 @@ if (process.env.NODE_ENV !== "production") {
   globalForPg.pgPool = pool;
 }
 
-// DB_SKIP_SYNC=1 : les scripts cron (Ofelia, toutes les 15 min) importent ce
-// module mais n'ont aucune raison de rejouer la synchro du schéma — c'est
-// l'app qui la fait à son démarrage (déploiement). Chaque sync coûtait ~25 s
-// de verrous en prod (cf. incident des clés étrangères dupliquées, sync.ts).
-const skipSync = process.env.DB_SKIP_SYNC === "1";
+// Quand la synchro du schéma tourne-t-elle ?
+//  - PRODUCTION : jamais ici. C'est une étape de déploiement explicite,
+//    `npm run db:sync` (scripts/db-sync.ts), lancée UNE fois par le CMD du
+//    container avant `next start`. `dbReady` se réduit à un test de connexion.
+//  - DÉVELOPPEMENT : une fois par démarrage du serveur dev (le garde
+//    globalForPg absorbe les rechargements à chaud), pour que `next dev`
+//    reste autonome.
+//  - DB_SKIP_SYNC=1 : force le saut (scripts cron, db-sync lui-même).
+// Historique : chaque cron rejouait la synchro (~25 s de verrous en prod) et
+// l'ancienne synchro dupliquait les clés étrangères (cf. sync.ts).
+const skipSync = process.env.DB_SKIP_SYNC === "1" || process.env.NODE_ENV === "production";
 
 export const dbReady = globalForPg.dbReady ?? pool.query("SELECT 1")
   .then(() => {
     console.log("✅ Connexion à PostgreSQL réussie");
     if (skipSync) {
-      console.log("↷ Synchro du schéma ignorée (DB_SKIP_SYNC=1)");
+      console.log(process.env.NODE_ENV === "production"
+        ? "↷ Synchro du schéma : faite au déploiement par db:sync, pas par l'app"
+        : "↷ Synchro du schéma ignorée (DB_SKIP_SYNC=1)");
       return;
     }
     return syncDatabase(pool);

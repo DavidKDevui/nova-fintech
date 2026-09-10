@@ -13,6 +13,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "db:sync": "tsx --env-file-if-exists=.env scripts/db-sync.ts",
     "seed": "npx tsx scripts/seed-admin.ts",
     "admin:create": "tsx --env-file-if-exists=.env scripts/create-admin.ts",
     "cron:monthly-recap": "DB_SKIP_SYNC=1 tsx --env-file-if-exists=.env scripts/run-monthly-recap.ts",
