@@ -5,7 +5,6 @@ import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import {
   users,
-  practitioners,
   bankAccounts,
   bankTransactions,
   bankAlerts,
@@ -15,6 +14,7 @@ import {
   practitionerVacations,
 } from "@/lib/db/schema";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 // Limite : 3 exports par heure par compte (idem ancien endpoint REST).
 const EXPORT_LIMIT = 3;
@@ -58,10 +58,7 @@ export async function exportMyDataAction(): Promise<ExportResult> {
     if (!user) return { error: "Utilisateur introuvable" };
 
     // Profil praticien
-    const [practitioner] = await db
-      .select()
-      .from(practitioners)
-      .where(eq(practitioners.userId, session.id));
+    const practitioner = await getPractitionerByUserId(session.id);
 
     let banking: { accounts: unknown[]; transactions: unknown[]; alerts: unknown[] } = { accounts: [], transactions: [], alerts: [] };
     let fiscalSituations: unknown[] = [];

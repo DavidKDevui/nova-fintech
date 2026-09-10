@@ -1,6 +1,59 @@
 const OPENFISCA_API_URL = process.env.OPENFISCA_API_URL || "https://api.fr.openfisca.org/latest";
 const OPENFISCA_TIMEOUT_MS = 15_000;
 
+// ── Cache mémoire (par process) ──
+//
+// OpenFisca est une API publique distante : chaque appel coûte de quelques
+// centaines de ms à plusieurs secondes. Avant ce cache, CHAQUE estimation de
+// cotisations refaisait deux appels (PASS + /calculate), et une page en
+// déclenchait jusqu'à cinq → plusieurs secondes de latence par navigation.
+//
+//  - Paramètres (PASS, SMIC) : valeurs légales annuelles, quasi immuables →
+//    cache long (24 h) pour absorber une éventuelle correction publiée.
+//  - Simulations : déterministes pour un triplet (revenu, année, régime) →
+//    cache 6 h, borné en taille (LRU simple) car les revenus varient.
+//  - Les appels en cours sont dédupliqués (deux consommateurs simultanés du
+//    même calcul partagent la même promesse).
+//  - Les échecs ne sont JAMAIS mis en cache : l'appelant garde son fallback.
+
+const PARAMETER_TTL_MS = 24 * 60 * 60 * 1000;
+const SIMULATION_TTL_MS = 6 * 60 * 60 * 1000;
+const SIMULATION_MAX_ENTRIES = 500;
+
+type CacheEntry<T> = { value: T; expiresAt: number };
+
+const parameterCache = new Map<string, CacheEntry<OpenFiscaParameterResponse>>();
+const simulationCache = new Map<string, CacheEntry<OpenFiscaResult>>();
+const inflight = new Map<string, Promise<unknown>>();
+
+function readCache<T>(store: Map<string, CacheEntry<T>>, key: string): T | undefined {
+  const hit = store.get(key);
+  if (!hit) return undefined;
+  if (hit.expiresAt <= Date.now()) {
+    store.delete(key);
+    return undefined;
+  }
+  return hit.value;
+}
+
+function writeCache<T>(store: Map<string, CacheEntry<T>>, key: string, value: T, ttlMs: number, maxEntries?: number) {
+  if (maxEntries && store.size >= maxEntries) {
+    // Éviction du plus ancien (ordre d'insertion des Map = FIFO, suffisant ici).
+    const oldest = store.keys().next().value;
+    if (oldest !== undefined) store.delete(oldest);
+  }
+  store.set(key, { value, expiresAt: Date.now() + ttlMs });
+}
+
+/** Déduplique les appels concurrents sur une même clé. */
+function dedupe<T>(key: string, factory: () => Promise<T>): Promise<T> {
+  const pending = inflight.get(key) as Promise<T> | undefined;
+  if (pending) return pending;
+  const p = factory().finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+}
+
 // ── Types ──
 
 type TaxRegime = "bnc" | "micro_bnc";
@@ -113,16 +166,19 @@ type OpenFiscaParameterResponse = {
   values: Record<string, number>;
 };
 
-/**
- * Récupère le Plafond Annuel de la Sécurité Sociale (PASS) pour une année donnée.
- * Endpoint : /parameter/prelevements_sociaux.pss.plafond_securite_sociale_annuel
- */
-export async function getPlafondSecuriteSociale(annee: number): Promise<number> {
-  const response = await openfiscaFetch<OpenFiscaParameterResponse>(
-    "/parameter/prelevements_sociaux.pss.plafond_securite_sociale_annuel"
-  );
+/** Historique d'un paramètre OpenFisca, mis en cache par process. */
+async function getParameter(path: string): Promise<OpenFiscaParameterResponse> {
+  const cached = readCache(parameterCache, path);
+  if (cached) return cached;
+  return dedupe(`param:${path}`, async () => {
+    const response = await openfiscaFetch<OpenFiscaParameterResponse>(path);
+    writeCache(parameterCache, path, response, PARAMETER_TTL_MS);
+    return response;
+  });
+}
 
-  // Trouver la valeur applicable : la plus récente dont la date est <= au 1er janvier de l'année
+/** Valeur applicable au 1er janvier de l'année : la plus récente dont la date est <= à cette date. */
+function applicableValueForYear(response: OpenFiscaParameterResponse, annee: number): number {
   const targetDate = `${annee}-01-01`;
   let applicableValue = 0;
 
@@ -134,6 +190,15 @@ export async function getPlafondSecuriteSociale(annee: number): Promise<number> 
   }
 
   return applicableValue;
+}
+
+/**
+ * Récupère le Plafond Annuel de la Sécurité Sociale (PASS) pour une année donnée.
+ * Endpoint : /parameter/prelevements_sociaux.pss.plafond_securite_sociale_annuel
+ */
+export async function getPlafondSecuriteSociale(annee: number): Promise<number> {
+  const response = await getParameter("/parameter/prelevements_sociaux.pss.plafond_securite_sociale_annuel");
+  return applicableValueForYear(response, annee);
 }
 
 /**
@@ -141,30 +206,25 @@ export async function getPlafondSecuriteSociale(annee: number): Promise<number> 
  * Endpoint : /parameter/marche_travail.salaire_minimum.smic.smic_b_mensuel
  */
 export async function getSmicMensuel(annee: number): Promise<number> {
-  const response = await openfiscaFetch<OpenFiscaParameterResponse>(
-    "/parameter/marche_travail.salaire_minimum.smic.smic_b_mensuel"
-  );
-
-  const targetDate = `${annee}-01-01`;
-  let applicableValue = 0;
-
-  const sortedDates = Object.keys(response.values).sort();
-  for (const date of sortedDates) {
-    if (date <= targetDate) {
-      applicableValue = response.values[date];
-    }
-  }
-
-  return applicableValue;
+  const response = await getParameter("/parameter/marche_travail.salaire_minimum.smic.smic_b_mensuel");
+  return applicableValueForYear(response, annee);
 }
 
 export async function simulerCotisationsURSSAF(input: OpenFiscaInput): Promise<OpenFiscaResult> {
-  const payload = buildSimulationPayload(input);
+  // Le revenu est arrondi à l'euro pour la clé : les appelants passent des
+  // montants déjà arrondis, et un centime d'écart ne change pas la cotisation.
+  const key = `${Math.round(input.revenuAnnuel)}|${input.annee}|${input.regime}`;
+  const cached = readCache(simulationCache, key);
+  if (cached) return cached;
 
-  const response = await openfiscaFetch<Record<string, unknown>>("/calculate", {
-    method: "POST",
-    body: JSON.stringify(payload),
+  return dedupe(`sim:${key}`, async () => {
+    const payload = buildSimulationPayload(input);
+    const response = await openfiscaFetch<Record<string, unknown>>("/calculate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const result = extractResult(response, input.annee);
+    writeCache(simulationCache, key, result, SIMULATION_TTL_MS, SIMULATION_MAX_ENTRIES);
+    return result;
   });
-
-  return extractResult(response, input.annee);
 }

@@ -1,11 +1,9 @@
 "use server";
 
 import { getSession } from "@/lib/session";
-import { db } from "@/lib/db";
-import { practitioners } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { simulerCotisationsURSSAF, getPlafondSecuriteSociale } from "@/lib/services/openfisca.service";
 import { calculerCotisationsCarpimko } from "@/lib/services/carpimko.service";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 export type SimulationResult = {
   revenuAnnuel: number;
@@ -34,11 +32,7 @@ export async function simulateCotisations(revenuAnnuel: number): Promise<Simulat
   if (!session || session.accountType !== "practitioner") return null;
   if (revenuAnnuel <= 0) return null;
 
-  const [hp] = await db
-    .select()
-    .from(practitioners)
-    .where(eq(practitioners.userId, session.id))
-    .limit(1);
+  const hp = await getPractitionerByUserId(session.id);
 
   if (!hp) return null;
 

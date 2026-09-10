@@ -3,11 +3,13 @@
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { practitioners, practiceLinks, carePassages } from "@/lib/db/schema";
+import { practiceLinks, carePassages } from "@/lib/db/schema";
 import { namesMatch } from "@/lib/name-matching";
 import { getPaidCAByMonth } from "@/lib/services/ca-paid.service";
 import { addManualChargesToMonths } from "@/lib/db/manual-charges";
 import type { MonthlyActivityMonth } from "./transaction";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
+import { cache } from "react";
 
 /**
  * Fallback "Mon activité" quand le praticien n'a pas connecté sa banque mais a
@@ -23,14 +25,15 @@ export async function getMonthlyActivityFromBordereauxAction(
   year: number,
 ): Promise<{ months: MonthlyActivityMonth[] }> {
   const session = await getSession();
-  const empty = emptyMonths();
-  if (!session || session.accountType !== "practitioner") return { months: empty };
+  if (!session || session.accountType !== "practitioner") return { months: emptyMonths() };
+  return loadMonthlyFromBordereaux(session.id, year);
+}
 
+// Mémoïsé PAR REQUÊTE (utilisateur, année).
+const loadMonthlyFromBordereaux = cache(async (userId: string, year: number): Promise<{ months: MonthlyActivityMonth[] }> => {
+  const empty = emptyMonths();
   try {
-    const [hp] = await db
-      .select()
-      .from(practitioners)
-      .where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(userId);
     if (!hp) return { months: empty };
 
     const links = await db
@@ -94,7 +97,7 @@ export async function getMonthlyActivityFromBordereauxAction(
   } catch {
     return { months: empty };
   }
-}
+});
 
 function emptyMonths(): MonthlyActivityMonth[] {
   return Array.from({ length: 12 }, (_, i) => ({

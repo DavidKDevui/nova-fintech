@@ -1,9 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
-import { db } from "@/lib/db";
-import { practitioners } from "@/lib/db/schema";
 import {
   getCAHistoryForPractitioner,
   type CAHistory,
@@ -19,6 +16,7 @@ import {
   type SavedPlannedActs,
   type ActEstimateResult,
 } from "@/lib/services/ca-acts.service";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 export type { CAHistory, YearlyCA, CASource } from "@/lib/services/ca-history.service";
 export type { CAForecast } from "@/lib/services/ca-forecast.service";
@@ -38,10 +36,7 @@ function elapsedFullMonths(): number {
 async function resolvePractitioner() {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return null;
-  const [hp] = await db
-    .select()
-    .from(practitioners)
-    .where(eq(practitioners.userId, session.id));
+  const hp = await getPractitionerByUserId(session.id);
   return hp ?? null;
 }
 

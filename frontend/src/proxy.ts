@@ -63,6 +63,12 @@ export async function proxy(request: NextRequest) {
 
   const log = (...args: unknown[]) => console.log(`[PROXY] ${request.method} ${pathname} ::`, ...args);
   log("start", { hasAccess: !!accessToken, hasRefresh: !!refreshToken, prefetch });
+  // NB : Next retire les en-têtes du routeur (RSC, Next-Router-State-Tree,
+  // Next-Router-Prefetch, Next-Router-Segment-Prefetch) et le paramètre `_rsc`
+  // AVANT d'appeler le proxy (next/dist/server/web/adapter.js, FLIGHT_HEADERS).
+  // Ici, une navigation client ou un prefetch du routeur est donc indiscernable
+  // d'un fetch() quelconque : ne jamais filtrer sur ces critères dans ce fichier.
+  // Les en-têtes sont visibles dans les Server Components via headers().
 
   // Pages légales : accessibles à tous, jamais de redirection.
   if (alwaysAccessiblePaths.some((p) => pathname.startsWith(p))) {

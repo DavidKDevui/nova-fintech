@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { practitioners, practices, practiceLinks, practiceLinkSuggestions, carePassages } from "@/lib/db/schema";
 import { namesMatch } from "@/lib/name-matching";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 export async function detectAndCreateSuggestions(practitionerId: string, fullName: string) {
   // Get practice IDs already suggested or linked
@@ -104,14 +105,7 @@ export async function getPendingSuggestions() {
     return [];
   }
 
-  const [practitioner] = await db
-    .select({
-      id: practitioners.id,
-      firstName: practitioners.firstName,
-      lastName: practitioners.lastName,
-    })
-    .from(practitioners)
-    .where(eq(practitioners.userId, session.id));
+  const practitioner = await getPractitionerByUserId(session.id);
 
   if (!practitioner) return [];
 
@@ -140,10 +134,7 @@ export async function respondToSuggestion(suggestionId: string, accept: boolean)
     return { error: "Non autorise" };
   }
 
-  const [practitioner] = await db
-    .select({ id: practitioners.id })
-    .from(practitioners)
-    .where(eq(practitioners.userId, session.id));
+  const practitioner = await getPractitionerByUserId(session.id);
 
   if (!practitioner) return { error: "Profil requis" };
 
@@ -181,10 +172,7 @@ export async function getPendingSuggestionsCount(): Promise<number> {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return 0;
 
-  const [practitioner] = await db
-    .select({ id: practitioners.id })
-    .from(practitioners)
-    .where(eq(practitioners.userId, session.id));
+  const practitioner = await getPractitionerByUserId(session.id);
 
   if (!practitioner) return 0;
 

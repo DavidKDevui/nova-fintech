@@ -79,6 +79,12 @@ type ManagementDataValue = {
   loadEstimate: (year: number) => Promise<CotisationsEstimate | null>;
   /** Situation fiscale d'une année (cachée pour éviter les refetch entre onglets). */
   loadFiscal: (year: number) => Promise<YearFiscal>;
+  /** Jours travaillés saisis par mois (null = non saisi), cachés par année :
+   *  les onglets Activité et Impôts les demandaient chacun de leur côté. */
+  loadWorkedDays: (year: number) => Promise<(number | null)[]>;
+  /** Invalide le cache des jours travaillés d'une année (après une saisie dans
+   *  l'onglet Activité) : l'onglet Impôts relira les valeurs à jour. */
+  bustWorkedDays: (year: number) => void;
   /** Invalide les caches d'une année (après édition des charges manuelles ou de la
    *  situation fiscale) : les onglets non montés se rechargeront frais à leur
    *  prochaine ouverture. */
@@ -104,6 +110,7 @@ function ManagementDataProvider({ initial, children }: { initial?: ManagementIni
   const coreCacheRef = useRef(new Map<number, Promise<YearCore>>());
   const estimateCacheRef = useRef(new Map<number, Promise<CotisationsEstimate | null>>());
   const fiscalCacheRef = useRef(new Map<number, Promise<YearFiscal>>());
+  const workedDaysCacheRef = useRef(new Map<number, Promise<(number | null)[]>>());
 
   // Seed unique (au premier render) avec les données préchargées côté serveur.
   // `hp` étant une prop serveur stable, la `key` du provider ne change pas en cours
@@ -186,13 +193,32 @@ function ManagementDataProvider({ initial, children }: { initial?: ManagementIni
     return p;
   }, []);
 
+  const loadWorkedDays = useCallback((year: number) => {
+    const cache = workedDaysCacheRef.current;
+    const cached = cache.get(year);
+    if (cached) return cached;
+    const p = getWorkedDaysAction(year).catch((err) => {
+      workedDaysCacheRef.current.delete(year);
+      throw err;
+    });
+    cache.set(year, p);
+    return p;
+  }, []);
+
+  const bustWorkedDays = useCallback((year: number) => {
+    workedDaysCacheRef.current.delete(year);
+  }, []);
+
   const bustYear = useCallback((year: number) => {
     coreCacheRef.current.delete(year);
     estimateCacheRef.current.delete(year);
     fiscalCacheRef.current.delete(year);
   }, []);
 
-  const value = useMemo(() => ({ loadYearCore, loadEstimate, loadFiscal, bustYear }), [loadYearCore, loadEstimate, loadFiscal, bustYear]);
+  const value = useMemo(
+    () => ({ loadYearCore, loadEstimate, loadFiscal, loadWorkedDays, bustWorkedDays, bustYear }),
+    [loadYearCore, loadEstimate, loadFiscal, loadWorkedDays, bustWorkedDays, bustYear],
+  );
   return <ManagementDataContext.Provider value={value}>{children}</ManagementDataContext.Provider>;
 }
 
@@ -354,7 +380,7 @@ function ActivityBarChart({ data, isEstimated, single = false }: { data: MonthDa
 
 function ActivityTab() {
   const hp = usePractitioner();
-  const { loadYearCore, bustYear, loadEstimate } = useManagementData();
+  const { loadYearCore, bustYear, loadEstimate, loadWorkedDays, bustWorkedDays } = useManagementData();
   const { notifyManualChargesChanged } = useData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const currentYear = new Date().getFullYear();
@@ -390,7 +416,7 @@ function ActivityTab() {
   const fetchData = useCallback(async (y: number) => {
     setLoading(true);
     const [workedDaysResult, core, manualRows] = await Promise.all([
-      getWorkedDaysAction(y),
+      loadWorkedDays(y),
       loadYearCore(y),
       getManualChargesAction(y),
     ]);
@@ -456,12 +482,19 @@ function ActivityTab() {
     setWorkedDays(workedDaysResult);
     setIsEstimated(false);
     setLoading(false);
-  }, [loadYearCore, loadEstimate]);
+  }, [loadYearCore, loadEstimate, loadWorkedDays]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     fetchData(year);
   }, [year, fetchData]);
+
+  // Saisie d'un jour travaillé : persistance puis invalidation du cache partagé,
+  // pour que l'onglet Impôts (projection BNC) relise les valeurs à jour. L'état
+  // local `workedDays` de cet onglet est déjà patché par le onChange.
+  const saveWorkedDay = useCallback((month: number, v: number) => {
+    void upsertWorkedDayAction(year, month, v).finally(() => bustWorkedDays(year));
+  }, [year, bustWorkedDays]);
 
   const daysPerWeek = hp?.daysPerWeekWorked ?? 5;
   const chartRef = useRef<HTMLDivElement>(null);
@@ -1154,7 +1187,7 @@ function ActivityTab() {
                         }}
                         onBlur={(e) => {
                           const v = Math.max(0, Math.min(fullMonth, parseInt(e.target.value) || 0));
-                          void upsertWorkedDayAction(year, i + 1, v);
+                          saveWorkedDay(i + 1, v);
                         }}
                         className="w-10 text-center text-xs font-medium text-ardoise-700 border border-ardoise-200 rounded hover:border-ardoise-300 focus:border-brand-500 focus:outline-none bg-transparent transition-colors py-1 disabled:bg-ardoise-50 disabled:text-ardoise-300 disabled:cursor-not-allowed disabled:hover:border-ardoise-200 font-mono"
                       />
@@ -1307,7 +1340,7 @@ function ActivityTab() {
                       }}
                       onBlur={(e) => {
                         const v = Math.max(0, Math.min(fullMonth, parseInt(e.target.value) || 0));
-                        void upsertWorkedDayAction(year, mi + 1, v);
+                        saveWorkedDay(mi + 1, v);
                       }}
                       className="w-14 text-center text-sm font-medium text-ardoise-700 border border-ardoise-200 rounded hover:border-ardoise-300 focus:border-brand-500 focus:outline-none py-1 disabled:bg-ardoise-50 disabled:text-ardoise-300 disabled:cursor-not-allowed font-mono"
                     />
@@ -1818,7 +1851,7 @@ function TransactionsList({
 
 function TaxesTab() {
   const hp = usePractitioner();
-  const { loadYearCore, loadEstimate, bustYear } = useManagementData();
+  const { loadYearCore, loadEstimate, loadFiscal, loadWorkedDays, bustYear } = useManagementData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
@@ -1847,11 +1880,12 @@ function TaxesTab() {
   // Fallback bordereaux : revenuBNC dérivé du CA des passages + cotisations estimées.
   const [isEstimated, setIsEstimated] = useState(false);
 
-  // Load fiscal situation from DB when year changes
+  // Load fiscal situation when year changes — via le cache partagé du provider
+  // (seedé côté serveur pour N et N-1) : plus de POST au montage de l'onglet.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
     setDbLoaded(false);
-    getFiscalSituationAction(year).then((res) => {
+    loadFiscal(year).then((res) => {
       if (res) {
         setSituation(res.maritalStatus as "celibataire" | "marie" | "pacse");
         setEnfants(res.dependentChildren);
@@ -1869,7 +1903,7 @@ function TaxesTab() {
     }).catch(() => {
       setDbLoaded(true);
     });
-  }, [year]);
+  }, [year, loadFiscal]);
 
   // Load monthly activity + jours travaillés for the selected year.
   // En fallback (pas de banque, bordereaux présents) : on lit les passages et on
@@ -1881,7 +1915,7 @@ function TaxesTab() {
     (async () => {
       const [core, v] = await Promise.all([
         loadYearCore(year),
-        getWorkedDaysAction(year),
+        loadWorkedDays(year),
       ]);
       const useFallback = core.isEstimated;
       setIsEstimated(useFallback);
@@ -3047,7 +3081,7 @@ function RemainderTab() {
 
 function SimulationTab() {
   const hp = usePractitioner();
-  const { loadYearCore, loadEstimate } = useManagementData();
+  const { loadYearCore, loadEstimate, loadFiscal } = useManagementData();
   const bankConnected = !!hp?.bridgeUserUuid;
   const currentYear = new Date().getFullYear();
   const chartRef = useRef<HTMLDivElement>(null);
@@ -3079,7 +3113,7 @@ function SimulationTab() {
       setMonthlyCharges(core.months.map((m) => ({ chargesPro: m.chargesPro, retrocession: m.retrocession, madelin: m.madelin })));
       const [est, currFiscal] = await Promise.all([
         loadEstimate(currentYear),
-        getFiscalSituationAction(currentYear),
+        loadFiscal(currentYear),
       ]);
       if (currFiscal) {
         setCurrentYearFiscal({
@@ -3106,7 +3140,7 @@ function SimulationTab() {
       setSimulated(baseSim);
       setLoading(false);
     })().catch(() => setLoading(false));
-  }, [currentYear, loadYearCore, loadEstimate, bankConnected, hp?.taxRegime]);
+  }, [currentYear, loadYearCore, loadEstimate, loadFiscal, bankConnected, hp?.taxRegime]);
 
   // Recalcul simulé (debounced sur 300 ms)
   useEffect(() => {

@@ -3,18 +3,16 @@
 import { eq, and } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { practitioners, practitionerManualCharges } from "@/lib/db/schema";
+import { practitionerManualCharges } from "@/lib/db/schema";
 import { getManualChargeRows, type ManualChargeRow } from "@/lib/db/manual-charges";
 import { isManualChargeType } from "@/lib/data/manual-charge-types";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 /** Résout l'id du praticien courant, ou null si session non-praticien. */
 async function currentPractitionerId(): Promise<string | null> {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return null;
-  const [hp] = await db
-    .select({ id: practitioners.id })
-    .from(practitioners)
-    .where(eq(practitioners.userId, session.id));
+  const hp = await getPractitionerByUserId(session.id);
   return hp?.id ?? null;
 }
 

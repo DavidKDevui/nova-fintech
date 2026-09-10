@@ -3,15 +3,13 @@
 import { eq, and } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { practitioners, bankAlerts } from "@/lib/db/schema";
+import { bankAlerts } from "@/lib/db/schema";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 async function getPractitioner() {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return null;
-  const [p] = await db
-    .select({ id: practitioners.id, defaultBankAccountId: practitioners.defaultBankAccountId })
-    .from(practitioners)
-    .where(eq(practitioners.userId, session.id));
+  const p = await getPractitionerByUserId(session.id);
   return p ?? null;
 }
 

@@ -2,13 +2,15 @@
 
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { practitioners, practiceLinks, carePassages, practitionerVacations } from "@/lib/db/schema";
+import { practiceLinks, carePassages, practitionerVacations } from "@/lib/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { simulerCotisationsURSSAF, getPlafondSecuriteSociale } from "@/lib/services/openfisca.service";
 import { calculerCotisationsCarpimko } from "@/lib/services/carpimko.service";
 import { getPaidCAByMonth } from "@/lib/services/ca-paid.service";
 import { namesMatch } from "@/lib/name-matching";
 import { countWorkingDays } from "@/lib/data/fr-holidays";
+import { getPractitionerByUserId, type Practitioner } from "@/lib/data/current-practitioner";
+import { cache } from "react";
 
 export type CotisationsEstimate = {
   urssafAnnuel: number;
@@ -77,12 +79,13 @@ function computeRetrocessionDeduction(
  * de détecter une année tronquée (ex. bordereaux ne démarrant qu'en décembre)
  * dont le total ne représente pas un revenu annuel.
  */
-async function getCAForYear(
+// Mémoïsé PAR REQUÊTE (praticien, année) : requête groupée lourde sur les passages.
+const getCAForYear = cache(async (
   practitionerId: string,
   fullName: string,
   lastName: string,
   year: number,
-): Promise<{ ca: number; monthsCovered: number }> {
+): Promise<{ ca: number; monthsCovered: number }> => {
   const links = await db
     .select({ practiceId: practiceLinks.practiceId })
     .from(practiceLinks)
@@ -127,7 +130,7 @@ async function getCAForYear(
   // `careDate` est une colonne `date` → chaîne "YYYY-MM-DD" : le mois est en position 5-6.
   const monthsCovered = new Set(matched.map((p) => String(p.careDate).slice(5, 7))).size;
   return { ca, monthsCovered };
-}
+});
 
 export async function getCotisationsEstimate(
   totalCA: number,
@@ -145,14 +148,32 @@ export async function getCotisationsEstimate(
 ): Promise<CotisationsEstimate | null> {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return null;
+  return cachedEstimate(session.id, totalCA, deductionSociale, year ?? null, chargesAnnuelles);
+}
 
-  const [hp] = await db
-    .select()
-    .from(practitioners)
-    .where(eq(practitioners.userId, session.id))
-    .limit(1);
-
+// Mémoïsé PAR REQUÊTE (React cache) sur (utilisateur, arguments) : un rendu
+// serveur qui demande plusieurs fois la même estimation (préchargement layout,
+// page, score de santé…) ne la calcule qu'une fois. Les appels OpenFisca sont
+// en plus mis en cache par process dans openfisca.service.ts.
+const cachedEstimate = cache(async (
+  userId: string,
+  totalCA: number,
+  deductionSociale: number,
+  year: number | null,
+  chargesAnnuelles: number,
+): Promise<CotisationsEstimate | null> => {
+  const hp = await getPractitionerByUserId(userId);
   if (!hp) return null;
+  return computeCotisationsEstimate(hp, totalCA, deductionSociale, year ?? undefined, chargesAnnuelles);
+});
+
+async function computeCotisationsEstimate(
+  hp: Practitioner,
+  totalCA: number,
+  deductionSociale: number,
+  year: number | undefined,
+  chargesAnnuelles: number,
+): Promise<CotisationsEstimate | null> {
 
   const now = new Date();
   const currentYear = now.getFullYear();

@@ -7,6 +7,7 @@ import { practitioners, bankAccounts, bankTransactions } from "@/lib/db/schema";
 import { getCotisationsEstimate } from "@/actions/cotisations-estimate";
 import { getManualChargesTotal } from "@/lib/db/manual-charges";
 import { buildCalendar, getUpcomingEvents, DEFAULT_PREFERENCES, type PaymentPreferences } from "@/lib/data/fiscal-calendar";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Types
@@ -82,7 +83,7 @@ export async function getRecommendationsAction(): Promise<Recommendation[]> {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return [];
 
-  const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
+  const hp = await getPractitionerByUserId(session.id);
   if (!hp) return [];
 
   return computeRecommendations(hp);

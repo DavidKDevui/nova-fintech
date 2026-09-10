@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getPendingSuggestions, getPendingSuggestionsCount } from "@/actions/practice-links";
-import { getFacturationData, type FacturationSummary, type CarePassageRow } from "@/actions/facturation";
+import { getFacturationData, type FacturationSummary } from "@/actions/facturation";
 import { fetchLocalAccountsAction } from "@/actions/bridge";
 import { getUncategorizedCountAction } from "@/actions/transaction";
 import { getEffectiveCAAction, type EffectiveCA } from "@/actions/effective-ca";
@@ -47,9 +47,9 @@ interface DataContextValue {
   setSuggestions: React.Dispatch<React.SetStateAction<Suggestion[]>>;
   suggestionsLoading: boolean;
 
-  // Facturation
+  // Facturation (résumé seulement : la liste des passages est chargée par la
+  // page Facturation elle-même, côté serveur — voir facturation/page.tsx).
   facturationSummary: FacturationSummary | null;
-  facturationPassages: CarePassageRow[];
   facturationLoading: boolean;
 
   // Transactions
@@ -88,7 +88,6 @@ const DataContext = createContext<DataContextValue>({
   setSuggestions: () => {},
   suggestionsLoading: true,
   facturationSummary: null,
-  facturationPassages: [],
   facturationLoading: true,
   accounts: [],
   transactions: [],
@@ -115,7 +114,6 @@ export type DataProviderInitialData = {
   pendingSuggestionsCount: number;
   suggestions: Suggestion[];
   facturationSummary: FacturationSummary | null;
-  facturationPassages: CarePassageRow[];
   accounts: Account[];
   uncategorizedCount: number;
   transactionsError: string;
@@ -135,7 +133,6 @@ export function DataProvider({ initialDataPromise, children }: { initialDataProm
 
   // Facturation
   const [facturationSummary, setFacturationSummary] = useState<FacturationSummary | null>(null);
-  const [facturationPassages, setFacturationPassages] = useState<CarePassageRow[]>([]);
   const [facturationLoading, setFacturationLoading] = useState(true);
 
   // Transactions
@@ -162,9 +159,6 @@ export function DataProvider({ initialDataPromise, children }: { initialDataProm
     const result = await getFacturationData();
     if ("summary" in result && result.summary) {
       setFacturationSummary(result.summary);
-    }
-    if ("passages" in result && result.passages) {
-      setFacturationPassages(result.passages);
     }
     setFacturationLoading(false);
   }, [isAdmin, hp]);
@@ -238,7 +232,6 @@ export function DataProvider({ initialDataPromise, children }: { initialDataProm
     setSuggestions(d.suggestions);
     setSuggestionsLoading(false);
     setFacturationSummary(d.facturationSummary);
-    setFacturationPassages(d.facturationPassages);
     setFacturationLoading(false);
     setAccounts(d.accounts);
     setUncategorizedCount(d.uncategorizedCount);
@@ -249,22 +242,33 @@ export function DataProvider({ initialDataPromise, children }: { initialDataProm
     setFiscalLoading(false);
   }, []);
 
-  // Chargement initial. Si le layout a fourni une promesse de préchargement serveur,
-  // on l'attend (streamée en parallèle du rendu, un seul aller-retour) ; sinon
-  // fallback sur les refresh client. Ref stable au double-invoke du Strict Mode
-  // (dev). Les refreshs manuels (bouton Actualiser, charges) passent par
-  // refreshAll/refresh* et ne sont donc pas concernés.
-  const initialLoadDoneRef = useRef(false);
+  // Chargement des données préchargées par le layout. Le layout ne se re-rend
+  // pas sur une navigation douce (rendu partiel Next), la promesse reste donc la
+  // même ; il se re-rend sur `router.refresh()` (bouton Actualiser, sauvegarde
+  // du profil) et fournit alors une NOUVELLE promesse : on l'applique à son tour.
+  // Avant, un ref one-shot ignorait ces promesses suivantes → le préchargement
+  // relancé côté serveur était jeté, et l'estimation restait périmée après un
+  // changement de régime ou de rétrocession. La comparaison d'identité absorbe
+  // le double-invoke du Strict Mode (même promesse). Sans promesse (fallback),
+  // un seul refetch client au premier montage.
+  const lastPromiseRef = useRef<Promise<DataProviderInitialData> | null | undefined>(undefined);
   useEffect(() => {
-    if (initialLoadDoneRef.current) return;
-    initialLoadDoneRef.current = true;
+    if (lastPromiseRef.current === (initialDataPromise ?? null)) return;
+    const firstLoad = lastPromiseRef.current === undefined;
+    lastPromiseRef.current = initialDataPromise ?? null;
+
     if (initialDataPromise) {
       // `initialDataPromise` est un thenable React (promesse streamée serveur→client),
       // pas une vraie Promise : son `.then` n'est pas chaînable. On l'adopte via
       // Promise.resolve pour pouvoir enchaîner `.then().catch()`.
       Promise.resolve(initialDataPromise)
-        .then(applyInitial)
+        .then((d) => {
+          // Une promesse plus récente a pu arriver entre-temps (deux refresh
+          // rapprochés) : seule la dernière fait foi.
+          if (lastPromiseRef.current === initialDataPromise) applyInitial(d);
+        })
         .catch(() => {
+          if (lastPromiseRef.current !== initialDataPromise) return;
           // Préchargement serveur échoué → on refait le fetch côté client.
           refresh();
           refreshFacturation();
@@ -273,9 +277,10 @@ export function DataProvider({ initialDataPromise, children }: { initialDataProm
         });
       return;
     }
+    if (!firstLoad) return;
     // Fallback (pas de préchargement serveur) : refetch client. Ces refresh* font
-    // du setState, mais c'est un chargement initial one-shot gardé par
-    // initialLoadDoneRef → pas de cascade de rendus, on désactive la règle.
+    // du setState, mais c'est un chargement initial one-shot → pas de cascade de
+    // rendus, on désactive la règle.
     /* eslint-disable react-hooks/set-state-in-effect */
     refresh();
     refreshFacturation();
@@ -291,7 +296,6 @@ export function DataProvider({ initialDataPromise, children }: { initialDataProm
       setSuggestions,
       suggestionsLoading,
       facturationSummary,
-      facturationPassages,
       facturationLoading,
       accounts,
       transactions,

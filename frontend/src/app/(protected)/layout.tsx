@@ -9,6 +9,7 @@ import { OnboardingModal } from "@/components/onboarding-modal";
 import { PageTransition } from "@/components/page-transition";
 import { dbReady } from "@/lib/db";
 import * as practitionerService from "@/lib/services/practitioner.service";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 import { preloadProtectedData } from "@/lib/data/preload-protected-data";
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -37,7 +38,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     redirect("/admin/users");
   }
 
-  const practitionerProfile = await practitionerService.getByUserId(session.id);
+  // Mémoïsé par requête : les actions préchargées ci-dessous réutilisent cette lecture.
+  const practitionerProfile = await getPractitionerByUserId(session.id);
 
   // La connexion bancaire fait partie de l'onboarding : un profil créé mais sans
   // compte bancaire synchronisé = parcours inachevé (onglet fermé en cours de route,
@@ -47,7 +49,12 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     ? await practitionerService.hasBankAccount(practitionerProfile.id)
     : false;
 
-  const needsOnboarding = !practitionerProfile || !hasBankAccount;
+  // Hors production, la connexion bancaire n'est pas exigée : l'URL de retour
+  // locale n'est pas autorisée chez Bridge, l'étape ne peut donc pas aboutir.
+  // Un profil sans banque accède à l'app (bannière « connecter ma banque »
+  // sur Transactions). En prod, comportement inchangé.
+  const bankRequired = process.env.NODE_ENV === "production";
+  const needsOnboarding = !practitionerProfile || (bankRequired && !hasBankAccount);
 
   // Précharge les données du DataProvider côté serveur, mais SANS `await` : on passe
   // la promesse au provider (client) qui la déroule en streaming. Le layout ne bloque

@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
       httpOnly: true,
       secure: IS_PROD,
       sameSite: "lax",
-      maxAge: 15 * 60, // 15 min
+      maxAge: 30 * 60, // 30 min — en phase avec ACCESS_TOKEN_EXPIRY (auth.service.ts)
       path: "/",
     });
     // On ne repose le cookie refresh QUE si une rotation a réellement eu lieu.

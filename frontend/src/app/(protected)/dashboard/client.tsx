@@ -47,7 +47,6 @@ export function DashboardClient({ initial }: { initial?: DashboardInitialData })
   const hp = usePractitioner();
   const {
     facturationSummary: summary,
-    facturationPassages: passages,
     facturationLoading: loading,
     accounts,
     transactionsLoading: bankLoading,
@@ -110,17 +109,7 @@ export function DashboardClient({ initial }: { initial?: DashboardInitialData })
     });
   }, [hp?.bridgeUserUuid, hp?.defaultBankAccountId, manualChargesVersion]);
 
-  // CA et nb factures de l'année courante (cohérent avec les autres KPIs du dashboard)
   const currentYear = new Date().getFullYear();
-  const nbFacturesCurrentYear = useMemo(() => {
-    let count = 0;
-    for (const p of passages) {
-      if (p.status !== "paye") continue;
-      if (parseInt(p.careDate.split("-")[0]!, 10) !== currentYear) continue;
-      count++;
-    }
-    return count;
-  }, [passages, currentYear]);
 
   // effectiveCA + estimation cotisations : centralisés dans DataProvider (useData ci-dessus).
 
@@ -390,7 +379,7 @@ export function DashboardClient({ initial }: { initial?: DashboardInitialData })
           decaissement={kpiDecaissement}
           ca={effectiveCA.ca}
           caSource={effectiveCA.source}
-          nbFactures={nbFacturesCurrentYear}
+          nbFactures={0}
           nbTransactionsDepenses={kpiNbDepenses}
         />
         */}

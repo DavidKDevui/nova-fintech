@@ -112,6 +112,13 @@ export const bankTransactions = pgTable("bank_transactions", {
   index("idx_bank_transactions_account").on(table.bankAccountId),
   index("idx_bank_transactions_bridge_id").on(table.bridgeTransactionId),
   index("idx_bank_transactions_date").on(table.date),
+  // Agrégats par compte + année (KPI, activité mensuelle, CA transactions).
+  index("idx_bank_transactions_account_date").on(table.bankAccountId, table.date),
+  // Filtres par catégorie (encaissements, cotisations, historique par catégorie,
+  // compteur « à catégoriser » via category IS NULL).
+  index("idx_bank_transactions_account_category").on(table.bankAccountId, table.category),
+  index("idx_bank_transactions_account_category_date").on(table.bankAccountId, table.category, table.date),
+  index("idx_bank_transactions_category").on(table.category),
 ]);
 
 // ── Bank alerts ──
@@ -152,7 +159,10 @@ export const practiceLinks = pgTable("practices_links", {
     .notNull()
     .references(() => practitioners.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_practice_links_practitioner").on(table.practitionerId),
+  index("idx_practice_links_practice").on(table.practiceId),
+]);
 
 export const practiceLinkSuggestionStatusEnum = pgEnum("practice_link_suggestion_status", [
   "pending",
@@ -171,7 +181,10 @@ export const practiceLinkSuggestions = pgTable("practices_links_suggestions", {
   status: practiceLinkSuggestionStatusEnum("status").notNull().default("pending"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_practice_link_suggestions_practitioner_status").on(table.practitionerId, table.status),
+  index("idx_practice_link_suggestions_practice").on(table.practiceId),
+]);
 
 export const statementUploads = pgTable("statement_uploads", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -184,7 +197,10 @@ export const statementUploads = pgTable("statement_uploads", {
   passageCount: integer("passage_count").notNull(),
   totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_statement_uploads_practice").on(table.practiceId),
+  index("idx_statement_uploads_created_at").on(table.createdAt),
+]);
 
 export const carePassageStatusEnum = pgEnum("care_passage_status", [
   "a_securiser",
@@ -214,7 +230,20 @@ export const carePassages = pgTable("care_passages", {
   totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  // Toutes les lectures partent des cabinets liés au praticien (practice_id IN …).
+  index("idx_care_passages_practice").on(table.practiceId),
+  // Clé de rattachement paiement ↔ passages (table dérivée du CA encaissé,
+  // bascule de statut à l'import NOEMIE, dédoublonnage).
+  index("idx_care_passages_practice_invoice").on(table.practiceId, table.invoiceNumber),
+  // Pré-filtre praticien (ILIKE sur le nom, complété par un index trigram
+  // créé dans sync.ts) et filtres par statut / date de soin.
+  index("idx_care_passages_practice_practitioner").on(table.practiceId, table.practitioner),
+  index("idx_care_passages_practice_status_date").on(table.practiceId, table.status, table.careDate),
+  index("idx_care_passages_care_date").on(table.careDate),
+  index("idx_care_passages_invoice").on(table.invoiceNumber),
+  index("idx_care_passages_import").on(table.importId),
+]);
 
 export const carePaymentStatusEnum = pgEnum("care_payment_status", [
   "paid",
@@ -244,7 +273,16 @@ export const carePayments = pgTable("care_payments", {
   rejectionReason: varchar("rejection_reason", { length: 500 }),
   clientName: varchar("client_name", { length: 500 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_care_payments_practice").on(table.practiceId),
+  // Jointure avec les passages par (practice_id, invoice_number).
+  index("idx_care_payments_practice_invoice").on(table.practiceId, table.invoiceNumber),
+  // CA encaissé : status = 'paid' borné par date de paiement.
+  index("idx_care_payments_practice_status_date").on(table.practiceId, table.status, table.paymentDate),
+  index("idx_care_payments_payment_date").on(table.paymentDate),
+  index("idx_care_payments_invoice").on(table.invoiceNumber),
+  index("idx_care_payments_upload").on(table.uploadId),
+]);
 
 // ── Reconciliation entre carePayments (bordereaux) et bankTransactions (virements caisse) ──
 // Un même carePayment ne peut être réconcilié qu'une fois (UNIQUE).

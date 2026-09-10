@@ -17,10 +17,12 @@ export async function preloadProtectedData(hasBank: boolean): Promise<DataProvid
     getPendingSuggestions(),
     getPendingSuggestionsCount(),
     (async () => {
+      // Seul le résumé est envoyé au client : la liste complète des passages
+      // (potentiellement des milliers de lignes) n'est lue que par la page
+      // Facturation, qui la précharge elle-même côté serveur (facturation/page.tsx).
       const result = await getFacturationData();
       return {
         summary: "summary" in result ? (result.summary ?? null) : null,
-        passages: "passages" in result ? (result.passages ?? []) : [],
       };
     })(),
     (async () => {
@@ -44,7 +46,6 @@ export async function preloadProtectedData(hasBank: boolean): Promise<DataProvid
     pendingSuggestionsCount: count,
     suggestions,
     facturationSummary: facturation.summary,
-    facturationPassages: facturation.passages,
     accounts: transactions.accounts,
     uncategorizedCount: transactions.uncategorizedCount,
     transactionsError: transactions.error ?? "",

@@ -12,6 +12,8 @@ import {
 } from "@/lib/db/schema";
 import { namesMatch } from "@/lib/name-matching";
 import { getPaidCATotal } from "@/lib/services/ca-paid.service";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
+import { cache } from "react";
 
 export type EffectiveCASource = "bordereaux" | "transactions" | "none";
 
@@ -88,6 +90,20 @@ async function getCAFromTransactions(hp: Practitioner, year: number): Promise<nu
   return Math.abs(Number(row?.total ?? 0));
 }
 
+// Les deux totaux (bordereaux + transactions) sont mémoïsés PAR REQUÊTE et par
+// année, indépendamment de la source prioritaire demandée : le layout (priorité
+// bordereaux) et les pages (priorité transactions) partagent ainsi les mêmes
+// requêtes au lieu de les rejouer.
+const getCATotals = cache(async (userId: string, year: number) => {
+  const hp = await getPractitionerByUserId(userId);
+  if (!hp) return null;
+  const [caBordereaux, caTransactions] = await Promise.all([
+    getCAFromBordereaux(hp, year),
+    getCAFromTransactions(hp, year),
+  ]);
+  return { caBordereaux, caTransactions };
+});
+
 export async function getEffectiveCAAction(
   year: number,
   primarySource: "bordereaux" | "transactions" = "bordereaux",
@@ -97,16 +113,9 @@ export async function getEffectiveCAAction(
     return { ca: 0, source: "none" };
   }
 
-  const [hp] = await db
-    .select()
-    .from(practitioners)
-    .where(eq(practitioners.userId, session.id));
-  if (!hp) return { ca: 0, source: "none" };
-
-  const [caBordereaux, caTransactions] = await Promise.all([
-    getCAFromBordereaux(hp, year),
-    getCAFromTransactions(hp, year),
-  ]);
+  const totals = await getCATotals(session.id, year);
+  if (!totals) return { ca: 0, source: "none" };
+  const { caBordereaux, caTransactions } = totals;
 
   if (primarySource === "bordereaux") {
     if (caBordereaux > 0) return { ca: caBordereaux, source: "bordereaux" };

@@ -17,10 +17,18 @@ const connectionString = rawUrl.replace(/[?&]sslmode=[^&]*/g, "");
 
 const globalForPg = globalThis as unknown as { pgPool?: pg.Pool; dbReady?: Promise<void> };
 
+// Taille du pool : les rendus serveur lancent leurs requêtes en parallèle
+// (Promise.all dans les pages et le préchargement du layout). Avec `max: 1`
+// tout était sérialisé sur une seule connexion, et un utilisateur bloquait les
+// autres. 10 connexions restent très loin du max_connections Postgres (100) et
+// du budget mémoire du container DB. Surchargeable via DATABASE_POOL_MAX.
+const poolMax = Number.parseInt(process.env.DATABASE_POOL_MAX ?? "", 10);
+
 const pool = globalForPg.pgPool ?? new pg.Pool({
   connectionString,
   ...(wantSSL && { ssl: { rejectUnauthorized: false } }),
-  max: 1,
+  max: Number.isFinite(poolMax) && poolMax > 0 ? poolMax : 10,
+  idleTimeoutMillis: 30_000,
 });
 
 if (process.env.NODE_ENV !== "production") {

@@ -25,8 +25,13 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: "0.25"
+          # Releve le 10/09/2026 : la base tournait a 0.25 CPU / 256 Mo avec
+          # 223 Mo utilises (shared_buffers = 128 Mo) et faisait tout le
+          # travail de chaque page en parcours sequentiel. C'est elle qui
+          # borne le temps de reponse : on lui donne un coeur entier et de la
+          # marge pour le cache. VPS = 2 vCPU / 2 Go.
+          memory: 512M
+          cpus: "1.0"
 
   app:
     image: ghcr.io/davidkdevui/actidec-app:${IMAGE_TAG}
@@ -68,8 +73,10 @@ services:
           # container ~39% du temps : le rendu SSR a froid prenait plusieurs
           # secondes. Les limites ne sont pas des reservations, on peut
           # sur-souscrire sans risque pour les autres containers.
-          memory: 768M
-          cpus: "1.5"
+          # 10/09/2026 : 282 Mo utilises en regime etabli -> 640 Mo suffisent,
+          # la marge est reportee sur la base.
+          memory: 640M
+          cpus: "1.25"
     labels:
       ofelia.enabled: "true"
 
@@ -118,8 +125,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: "0.5"
+          # 10/09/2026 : 100 Mo utilises, site statique -> 192 Mo / 0.35 CPU.
+          memory: 192M
+          cpus: "0.35"
 
   ofelia:
     image: mcuadros/ofelia:latest

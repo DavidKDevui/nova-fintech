@@ -22,7 +22,12 @@ import { JWT_SECRET } from "../env";
 import { validateEmail, validatePassword } from "../validation";
 import { namesMatch } from "../name-matching";
 import * as mail from "./mail.service";
-const ACCESS_TOKEN_EXPIRY = "15m";
+// 30 min (10/09/2026, avant : 15 min). Les server actions (POST) lancées avec
+// un access expiré ne sont pas rafraîchies par le proxy et répondent vide
+// jusqu'à la navigation GET suivante : une fenêtre plus longue réduit les cas
+// « onglet Gestion resté ouvert → données vides ». Garder en phase avec les
+// maxAge des cookies (lib/session.ts, app/api/auth/refresh/route.ts).
+const ACCESS_TOKEN_EXPIRY = "30m";
 const REFRESH_TOKEN_EXPIRY = "7d";
 
 function hashToken(token: string): string {

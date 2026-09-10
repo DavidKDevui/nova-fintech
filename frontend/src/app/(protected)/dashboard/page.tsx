@@ -1,6 +1,6 @@
 import { DashboardClient, type DashboardInitialData } from "./client";
 import { getSession } from "@/lib/session";
-import * as practitionerService from "@/lib/services/practitioner.service";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 import { getHealthScoreAction } from "@/actions/health-score";
 import { getTransactionKpisAction, getMonthlyActivityAction, getAccountMonthlyNetAction } from "@/actions/transaction";
 import { getMonthlyActivityFromBordereauxAction } from "@/actions/monthly-activity-bordereaux";
@@ -24,7 +24,7 @@ async function loadRav(year: number) {
 export default async function DashboardPage() {
   const currentYear = new Date().getFullYear();
   const session = await getSession();
-  const hp = session ? await practitionerService.getByUserId(session.id) : null;
+  const hp = session ? await getPractitionerByUserId(session.id) : null;
   const bankConnected = !!hp?.bridgeUserUuid;
   const defaultAccId = hp?.defaultBankAccountId ?? null;
 

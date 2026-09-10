@@ -3,7 +3,8 @@
 import { eq, and } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { practitioners, practitionerFiscalSituations } from "@/lib/db/schema";
+import { practitionerFiscalSituations } from "@/lib/db/schema";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 const VALID_MARITAL_STATUSES = ["celibataire", "marie", "pacse"] as const;
 
@@ -11,7 +12,7 @@ export async function getFiscalSituationAction(year: number) {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return null;
 
-  const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
+  const hp = await getPractitionerByUserId(session.id);
   if (!hp) return null;
 
   const [situation] = await db
@@ -31,7 +32,7 @@ export async function upsertFiscalSituationAction(_prevState: unknown, formData:
     return { error: "Non autorisé" };
   }
 
-  const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
+  const hp = await getPractitionerByUserId(session.id);
   if (!hp) return { error: "Profil professionnel requis" };
 
   const year = parseInt(formData.get("year") as string);

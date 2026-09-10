@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logoutAction } from "@/actions/auth";
@@ -95,33 +95,35 @@ export function Navbar() {
   const initials = hp?.firstName && hp?.lastName
     ? (hp.firstName[0]! + hp.lastName[0]!).toUpperCase()
     : getInitials(user.email);
-  const { pendingSuggestionsCount: pendingCount, uncategorizedCount, defaultBankAccountMissing, refreshAll } = useData();
+  const { pendingSuggestionsCount: pendingCount, uncategorizedCount, defaultBankAccountMissing } = useData();
   const [showMenu, setShowMenu] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // Recharge les données client du provider (facturation, comptes, suggestions, fiscal…)
-  // ET les Server Components (profil praticien via router.refresh()).
-  async function handleRefresh() {
+  // Actualiser = un seul `router.refresh()` : le layout protégé se re-rend, relance
+  // le préchargement serveur (facturation, comptes, suggestions, CA, estimation)
+  // et le DataProvider applique la nouvelle promesse. Avant, on lançait en plus
+  // les mêmes lectures en POST côté client → tout était fait deux fois, et le
+  // résultat serveur était ignoré. `useTransition` tient le spinner jusqu'à ce
+  // que la réponse (préchargement inclus, il est streamé dedans) soit arrivée.
+  const [refreshing, startRefresh] = useTransition();
+  function handleRefresh() {
     if (refreshing) return;
-    setRefreshing(true);
-    try {
-      await refreshAll();
+    startRefresh(() => {
       router.refresh();
-    } finally {
-      setRefreshing(false);
-    }
+    });
   }
   const menuRef = useRef<HTMLDivElement>(null);
 
   const items = isAdmin ? adminItems : navItems;
   const navDestinations = isAdmin ? ADMIN_DESTINATIONS : PRACTITIONER_DESTINATIONS;
 
-  useEffect(() => {
-    // Ferme le drawer au changement de route.
+  // Ferme le drawer au changement de route. Pattern React d'ajustement d'état
+  // pendant le rendu (pas d'effet → pas de rendu en cascade).
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
     setMobileOpen(false);
-  }, [pathname]);
+  }
 
   useEffect(() => {
     if (!showMenu) return;

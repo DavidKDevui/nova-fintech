@@ -7,7 +7,6 @@ import { Badge, type BadgeTone } from "@/components/badge";
 import { Button } from "@/components/button";
 import { getRejectionAlertAction, upsertRejectionAlertAction } from "@/actions/rejection-alert";
 import { usePractitioner } from "@/providers/practitioner-provider";
-import { useData } from "@/providers/data-provider";
 import {
   ResponsiveContainer,
   BarChart,
@@ -36,7 +35,7 @@ function displayStatus(status: string): string {
   return status;
 }
 
-import type { CarePassageRow } from "@/actions/facturation";
+import type { CarePassageRow, FacturationSummary } from "@/actions/facturation";
 import { downloadCSV, downloadPDF } from "@/lib/export";
 import { buildPrestationBreakdown, principalCode, principalToken, prestationKey } from "@/lib/ngap/parse-cotation";
 import { actLabel } from "@/lib/ngap/acts";
@@ -44,9 +43,11 @@ import { actLabel } from "@/lib/ngap/acts";
 // Palette pour la ventilation NGAP (réutilise les teintes de la charte).
 const NGAP_COLORS = ["#7C5CFC", "#2FA169", "#d97706", "#0EA5E9", "#dc2626", "#8B5CF6", "#14B8A6", "#F59E0B", "#EC4899", "#64748B"];
 
-export function FacturationClient() {
+// Les passages et le résumé sont préchargés côté serveur par facturation/page.tsx
+// (en process, un seul rendu) : plus de liste complète transportée par le
+// DataProvider à chaque chargement de l'app.
+export function FacturationClient({ passages, summary }: { passages: CarePassageRow[]; summary: FacturationSummary | null }) {
   const hp = usePractitioner();
-  const { facturationPassages: passages, facturationSummary: summary, facturationLoading: loading } = useData();
   const [filterStatus, setFilterStatus] = useState("");
   const [filterPractice, setFilterPractice] = useState("");
   const [filterPrestation, setFilterPrestation] = useState(""); // clé prestation NGAP (code:coef)
@@ -291,20 +292,6 @@ export function FacturationClient() {
 
     return months;
   }, [passages, chartYear]);
-
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5 animate-pulse">
-          <div className="h-3 bg-ardoise-200 rounded w-24 mb-3" />
-          <div className="h-6 bg-ardoise-200 rounded w-32" />
-        </div>
-        <div className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5 animate-pulse">
-          <div className="h-48 bg-ardoise-200 rounded" />
-        </div>
-      </div>
-    );
-  }
 
   if (!hp) {
     return (

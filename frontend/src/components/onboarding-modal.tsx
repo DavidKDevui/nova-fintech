@@ -575,6 +575,19 @@ export function OnboardingModal({
                 {bankError && (
                   <p className="mt-5 bg-red-50 p-3 text-sm text-red-600">{bankError}</p>
                 )}
+
+                {/* Hors production uniquement : l'URL de retour locale n'est pas
+                    autorisée chez Bridge, l'étape ne peut pas aboutir. On laisse
+                    passer, le layout n'exige pas la banque en dev. */}
+                {process.env.NODE_ENV !== "production" && (
+                  <button
+                    type="button"
+                    onClick={finishOnboarding}
+                    className="mt-6 text-sm text-ardoise-500 underline hover:text-ardoise-900"
+                  >
+                    Passer cette étape (environnement de développement)
+                  </button>
+                )}
               </div>
             </div>
           </div>

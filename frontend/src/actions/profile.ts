@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { bankAlerts, practitioners } from "@/lib/db/schema";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 export async function updateProfileAction(_prevState: unknown, formData: FormData) {
   const session = await getSession();
@@ -101,10 +102,7 @@ export async function updateNotificationsAction(_prevState: unknown, formData: F
   }
 
   try {
-    const [p] = await db
-      .select({ id: practitioners.id, defaultBankAccountId: practitioners.defaultBankAccountId })
-      .from(practitioners)
-      .where(eq(practitioners.userId, session.id));
+    const p = await getPractitionerByUserId(session.id);
     if (!p) return { error: "Profil introuvable" };
 
     const practitionerUpdate: Record<string, unknown> = {

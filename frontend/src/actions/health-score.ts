@@ -7,6 +7,7 @@ import { practitioners, bankAccounts, bankTransactions } from "@/lib/db/schema";
 import { getCotisationsEstimate } from "@/actions/cotisations-estimate";
 import { getFacturationData } from "@/actions/facturation";
 import { getManualChargesTotal } from "@/lib/db/manual-charges";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 export type HealthSubscoreKey = "treasury" | "charges_ratio" | "data_quality" | "collection_rate";
 
@@ -98,7 +99,7 @@ export async function getHealthScoreAction(): Promise<HealthScore | null> {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return null;
 
-  const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
+  const hp = await getPractitionerByUserId(session.id);
   if (!hp) return null;
   return computeHealthScore(hp);
 }

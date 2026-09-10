@@ -15,6 +15,25 @@ for (const v of Object.values(schema)) {
   }
 }
 
+// ── Index trigram (pg_trgm) ──
+// Les filtres `ILIKE '%nom%'` (attribution des passages au praticien) et les
+// requêtes `similarity()` (catégorisation automatique) ne peuvent pas utiliser
+// un index B-tree : seul un index GIN trigram les accélère.
+const RAW_INDEXES: { name: string; sql: string }[] = [
+  {
+    name: "idx_care_passages_practitioner_trgm",
+    sql: `CREATE INDEX IF NOT EXISTS "idx_care_passages_practitioner_trgm" ON "care_passages" USING gin ("practitioner" gin_trgm_ops)`,
+  },
+  {
+    name: "idx_bank_transactions_clean_description_trgm",
+    sql: `CREATE INDEX IF NOT EXISTS "idx_bank_transactions_clean_description_trgm" ON "bank_transactions" USING gin ("clean_description" gin_trgm_ops)`,
+  },
+  {
+    name: "idx_bank_transactions_description_trgm",
+    sql: `CREATE INDEX IF NOT EXISTS "idx_bank_transactions_description_trgm" ON "bank_transactions" USING gin ("description" gin_trgm_ops)`,
+  },
+];
+
 // ── Helpers ──
 
 function colToSQL(col: PgColumn): string {
@@ -198,6 +217,19 @@ export async function syncDatabase(pool: pg.Pool) {
         if (ref.deleteAction) fkSQL += ` ON DELETE ${String(ref.deleteAction).toUpperCase()}`;
         // duplicate_object : la FK existe deja (re-run) -> ignore
         await client.query(`DO $$ BEGIN ${fkSQL}; EXCEPTION WHEN duplicate_object THEN null; END $$`);
+      }
+    }
+
+    // 2ter — Index « spéciaux » (non exprimables dans le schéma Drizzle lu par
+    // ce sync : GIN trigram). Idempotents via IF NOT EXISTS.
+    for (const raw of RAW_INDEXES) {
+      const { rows: idxExists } = await client.query(
+        `SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = $1`,
+        [raw.name],
+      );
+      if (idxExists.length === 0) {
+        await client.query(raw.sql);
+        changes.push(`+ index "${raw.name}"`);
       }
     }
 

@@ -1,11 +1,9 @@
 "use server";
 
-import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
-import { db } from "@/lib/db";
-import { practitioners } from "@/lib/db/schema";
 import { getPlafondSecuriteSociale, getSmicMensuel } from "@/lib/services/openfisca.service";
 import { countWorkingDays } from "@/lib/data/fr-holidays";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 export type OptimizationContext = {
   pass: number;
@@ -20,11 +18,7 @@ export async function getOptimizationContextAction(annee: number): Promise<Optim
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return null;
 
-  const [hp] = await db
-    .select()
-    .from(practitioners)
-    .where(eq(practitioners.userId, session.id))
-    .limit(1);
+  const hp = await getPractitionerByUserId(session.id);
 
   if (!hp) return null;
 

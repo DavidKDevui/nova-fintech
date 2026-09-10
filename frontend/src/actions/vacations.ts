@@ -3,7 +3,8 @@
 import { eq, and } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { practitioners, practitionerVacations } from "@/lib/db/schema";
+import { practitionerVacations } from "@/lib/db/schema";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 
 // Jours travaillés saisis par mois (null = non saisi → l'appelant applique le
@@ -12,7 +13,7 @@ export async function getWorkedDaysAction(year: number): Promise<(number | null)
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return Array(12).fill(null);
 
-  const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
+  const hp = await getPractitionerByUserId(session.id);
   if (!hp) return Array(12).fill(null);
 
   const rows = await db
@@ -38,7 +39,7 @@ export async function upsertWorkedDayAction(year: number, month: number, workedD
     return { error: "Non autorisé" };
   }
 
-  const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
+  const hp = await getPractitionerByUserId(session.id);
   if (!hp) return { error: "Profil professionnel requis" };
 
   if (!Number.isInteger(year) || year < 2000 || year > 2100) return { error: "Année invalide" };

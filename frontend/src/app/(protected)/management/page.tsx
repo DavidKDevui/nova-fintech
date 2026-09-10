@@ -6,7 +6,7 @@ import { getCotisationsEstimate } from "@/actions/cotisations-estimate";
 import { getFiscalSituationAction } from "@/actions/fiscal-situation";
 import { computeChargesAnnuelles, hasRetrocessionProfil } from "@/lib/data/charges-annualisees";
 import { getSession } from "@/lib/session";
-import * as practitionerService from "@/lib/services/practitioner.service";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 // Réplique server-side de ManagementDataProvider.loadYearCore (client). Les deux
 // DOIVENT rester en phase : même CA effectif "transactions" + fallback bordereaux.
@@ -46,7 +46,7 @@ export default async function ManagementPage() {
   // observée aux charges — même règle que côté client (cf. charges-annualisees.ts).
   const session = await getSession();
   const profile = session && session.accountType === "practitioner"
-    ? await practitionerService.getByUserId(session.id)
+    ? await getPractitionerByUserId(session.id)
     : null;
   const retrocessionProfil = hasRetrocessionProfil(profile?.retrocessionType, profile?.retrocessionValue);
 

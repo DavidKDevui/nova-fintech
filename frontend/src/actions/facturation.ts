@@ -3,9 +3,11 @@
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { practitioners, practiceLinks, carePassages, carePayments, carePaymentReconciliations, bankTransactions, practices } from "@/lib/db/schema";
+import { practiceLinks, carePassages, carePayments, carePaymentReconciliations, bankTransactions, practices } from "@/lib/db/schema";
 import { namesMatch } from "@/lib/name-matching";
 import { decrypt } from "@/lib/encryption";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
+import { cache } from "react";
 
 export interface CarePassageRow {
   id: string;
@@ -65,15 +67,15 @@ export async function getFacturationData() {
   if (!session || session.accountType !== "practitioner") {
     return { error: "Non autorise" };
   }
+  return loadFacturationData(session.id);
+}
 
-  const [practitioner] = await db
-    .select({
-      id: practitioners.id,
-      firstName: practitioners.firstName,
-      lastName: practitioners.lastName,
-    })
-    .from(practitioners)
-    .where(eq(practitioners.userId, session.id));
+// Mémoïsé PAR REQUÊTE : cette lecture (tous les passages du praticien, cotation
+// déchiffrée ligne par ligne) est la plus lourde de l'app. Le préchargement du
+// layout, le score de santé et les recommandations la demandent dans le même
+// rendu → une seule exécution.
+const loadFacturationData = cache(async (userId: string) => {
+  const practitioner = await getPractitionerByUserId(userId);
 
   if (!practitioner) {
     return { error: "Profil requis" };
@@ -265,7 +267,7 @@ export async function getFacturationData() {
   }
 
   return { passages: rows, summary };
-}
+});
 
 function emptySummary(): FacturationSummary {
   return {

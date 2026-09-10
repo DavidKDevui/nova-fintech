@@ -1,10 +1,8 @@
 "use server";
 
-import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
-import { db } from "@/lib/db";
-import { practitioners } from "@/lib/db/schema";
 import { reconcileIncomingForPractitioner } from "@/lib/services/reconciliation-runner";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 /**
  * Server action utilisateur : déclenche le rapprochement automatique des virements
@@ -17,10 +15,7 @@ export async function reconcileIncomingAction(): Promise<{ matched: number }> {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return { matched: 0 };
 
-  const [hp] = await db
-    .select({ id: practitioners.id })
-    .from(practitioners)
-    .where(eq(practitioners.userId, session.id));
+  const hp = await getPractitionerByUserId(session.id);
   if (!hp) return { matched: 0 };
 
   return reconcileIncomingForPractitioner(hp.id);

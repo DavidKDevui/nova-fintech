@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { practitioners, bankAccounts, bankTransactions } from "@/lib/db/schema";
 import * as bridge from "@/lib/services/bridge.service";
 import { reconcileIncomingForPractitioner } from "@/lib/services/reconciliation-runner";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
 
 export async function connectBankAction() {
   const session = await getSession();
@@ -16,10 +17,7 @@ export async function connectBankAction() {
 
   try {
     // Get HP profile
-    const [hp] = await db
-      .select()
-      .from(practitioners)
-      .where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(session.id);
 
     if (!hp) {
       return { error: "Profil professionnel requis" };
@@ -93,10 +91,7 @@ export async function bankConnectionStatusAction() {
   }
 
   try {
-    const [hp] = await db
-      .select({ id: practitioners.id })
-      .from(practitioners)
-      .where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(session.id);
 
     if (!hp) {
       return { connected: false };
@@ -122,10 +117,7 @@ export async function fetchAccountsAction() {
   }
 
   try {
-    const [hp] = await db
-      .select()
-      .from(practitioners)
-      .where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(session.id);
 
     if (!hp?.bridgeUserUuid) {
       return { error: "Aucune banque connectée" };
@@ -149,10 +141,7 @@ export async function fetchTransactionsAction(since?: string) {
   }
 
   try {
-    const [hp] = await db
-      .select()
-      .from(practitioners)
-      .where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(session.id);
 
     if (!hp?.bridgeUserUuid) {
       return { error: "Aucune banque connectée" };
@@ -176,10 +165,7 @@ export async function fetchLocalAccountsAction() {
   }
 
   try {
-    const [hp] = await db
-      .select()
-      .from(practitioners)
-      .where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(session.id);
 
     if (!hp) {
       return { error: "Profil professionnel requis" };
@@ -204,10 +190,7 @@ export async function fetchLocalTransactionsAction() {
   }
 
   try {
-    const [hp] = await db
-      .select()
-      .from(practitioners)
-      .where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(session.id);
 
     if (!hp) {
       return { error: "Profil professionnel requis" };
@@ -243,10 +226,7 @@ export async function initialSyncAction(itemId?: number) {
   }
 
   try {
-    const [hp] = await db
-      .select()
-      .from(practitioners)
-      .where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(session.id);
 
     if (!hp?.bridgeUserUuid) {
       return { error: "Aucune banque connectée" };
@@ -364,10 +344,7 @@ export async function disconnectBankAction() {
   }
 
   try {
-    const [hp] = await db
-      .select()
-      .from(practitioners)
-      .where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(session.id);
 
     if (!hp) {
       return { error: "Profil professionnel requis" };

@@ -3,9 +3,11 @@
 import { eq, and, inArray, isNull, desc, asc, count, sum, sql, gte, lte, ilike, or } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { db, pool } from "@/lib/db";
-import { practitioners, bankAccounts, bankTransactions } from "@/lib/db/schema";
+import { bankAccounts, bankTransactions } from "@/lib/db/schema";
 import { isUuid } from "@/lib/validation";
 import { getManualChargesTotal, addManualChargesToMonths } from "@/lib/db/manual-charges";
+import { getPractitionerByUserId } from "@/lib/data/current-practitioner";
+import { cache } from "react";
 
 const VALID_CATEGORIES = [
   "income", "professional_reimbursement", "royalty", "urssaf", "carpimko",
@@ -27,7 +29,7 @@ export async function updateTransactionCategoryAction(transactionId: string, cat
   }
 
   try {
-    const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(session.id);
     if (!hp) return { error: "Profil professionnel requis" };
 
     const accounts = await db.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.practitionerId, hp.id));
@@ -122,24 +124,30 @@ export async function updateTransactionCategoryAction(transactionId: string, cat
 // décaissement est un total « vos dépenses ». Laissé à false pour la page
 // Transactions, qui liste littéralement les mouvements d'un compte (les charges
 // manuelles ne sont pas des transactions et n'y ont donc pas leur place).
+// Forme unique des KPIs (tous les champs présents) : les appelants lisent
+// `remuneration`, `urssafPaid`… sans avoir à discriminer une union.
+const EMPTY_KPIS = { encaissement: 0, decaissement: 0, remuneration: 0, cotisations: 0, urssafPaid: 0, carpimkoPaid: 0, nbTransactionsDepenses: 0 };
+
 export async function getTransactionKpisAction(accountId?: string | null, year?: number, includeManualCharges = false) {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") {
-    return { encaissement: 0, decaissement: 0 };
+    return EMPTY_KPIS;
   }
+  return loadTransactionKpis(session.id, accountId ?? null, year ?? new Date().getFullYear(), includeManualCharges);
+}
 
-  const kpiYear = year ?? new Date().getFullYear();
-
+// Mémoïsé PAR REQUÊTE (utilisateur, compte, année, charges manuelles).
+const loadTransactionKpis = cache(async (userId: string, accountId: string | null, kpiYear: number, includeManualCharges: boolean) => {
   try {
-    const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
-    if (!hp) return { encaissement: 0, decaissement: 0 };
+    const hp = await getPractitionerByUserId(userId);
+    if (!hp) return EMPTY_KPIS;
 
     let accountIds: string[];
     if (accountId) {
       accountIds = [accountId];
     } else {
       const accounts = await db.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.practitionerId, hp.id));
-      if (accounts.length === 0) return { encaissement: 0, decaissement: 0 };
+      if (accounts.length === 0) return EMPTY_KPIS;
       accountIds = accounts.map((a) => a.id);
     }
 
@@ -203,7 +211,7 @@ export async function getTransactionKpisAction(accountId?: string | null, year?:
   } catch {
     return { encaissement: 0, decaissement: 0, remuneration: 0, cotisations: 0, urssafPaid: 0, carpimkoPaid: 0, nbTransactionsDepenses: 0 };
   }
-}
+});
 
 export type MonthlyActivityMonth = {
   month: number;
@@ -225,9 +233,13 @@ export async function getMonthlyActivityAction(year: number): Promise<{ months: 
   if (!session || session.accountType !== "practitioner") {
     return { months: [] };
   }
+  return loadMonthlyActivity(session.id, year);
+}
 
+// Mémoïsé PAR REQUÊTE (utilisateur, année).
+const loadMonthlyActivity = cache(async (userId: string, year: number): Promise<{ months: MonthlyActivityMonth[] }> => {
   try {
-    const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(userId);
     if (!hp) return { months: [] };
 
     const accounts = await db.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.practitionerId, hp.id));
@@ -281,7 +293,7 @@ export async function getMonthlyActivityAction(year: number): Promise<{ months: 
   } catch {
     return { months: [] };
   }
-}
+});
 
 // Mouvement net mensuel (somme signée des montants) d'UN compte pour l'année donnée.
 // Sert à la tendance « trésorerie vs mois dernier » calibrée sur le compte par défaut
@@ -291,7 +303,7 @@ export async function getAccountMonthlyNetAction(accountId: string, year: number
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return out;
   if (!isUuid(accountId)) return out;
-  const [hp] = await db.select({ id: practitioners.id }).from(practitioners).where(eq(practitioners.userId, session.id));
+  const hp = await getPractitionerByUserId(session.id);
   if (!hp) return out;
   // Le compte doit appartenir au praticien.
   const [acc] = await db
@@ -344,7 +356,7 @@ export async function getCategoryTransactionsAction(
   if (categories.length === 0) return [];
 
   try {
-    const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(session.id);
     if (!hp) return [];
 
     const accounts = await db.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.practitionerId, hp.id));
@@ -387,9 +399,13 @@ export async function getCategoryTransactionsAction(
 export async function getUncategorizedCountAction() {
   const session = await getSession();
   if (!session || session.accountType !== "practitioner") return 0;
+  return loadUncategorizedCount(session.id);
+}
 
+// Mémoïsé PAR REQUÊTE.
+const loadUncategorizedCount = cache(async (userId: string): Promise<number> => {
   try {
-    const [hp] = await db.select().from(practitioners).where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(userId);
     if (!hp) return 0;
 
     const accounts = await db.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.practitionerId, hp.id));
@@ -404,7 +420,7 @@ export async function getUncategorizedCountAction() {
   } catch {
     return 0;
   }
-}
+});
 
 export async function fetchPaginatedTransactionsAction(
   page: number = 1,
@@ -424,10 +440,7 @@ export async function fetchPaginatedTransactionsAction(
   }
 
   try {
-    const [hp] = await db
-      .select()
-      .from(practitioners)
-      .where(eq(practitioners.userId, session.id));
+    const hp = await getPractitionerByUserId(session.id);
 
     if (!hp) {
       return { error: "Profil professionnel requis" };

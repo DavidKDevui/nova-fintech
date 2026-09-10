@@ -1,0 +1,956 @@
+================================================================================
+ACTIDEC — DOCUMENTATION FONCTIONNELLE
+================================================================================
+
+Application web de gestion de trésorerie, de facturation et de fiscalité pour
+les infirmiers libéraux (IDEL). Déployée sur app.actidec.com.
+
+Le document est organisé en trois parties :
+
+  PARTIE A — Liste des fonctionnalités (vue produit)
+  PARTIE B — Fiches de calcul (données d'entrée, formule, conditions, constantes)
+  PARTIE C — Pages de l'application et ce qu'elles affichent
+
+Les renvois « [B.x] » pointent vers la fiche de calcul correspondante de la
+partie B. Les chemins de fichiers sont relatifs à frontend/src/.
+
+Vocabulaire :
+  - Bordereaux : documents PDF Ozzen importés par l'admin (rattrapages =
+    passages facturés, retours NOEMIE = paiements/rejets des caisses).
+  - Passage : un acte facturé (une ligne de bordereau de rattrapage).
+  - Transactions : mouvements bancaires importés via l'agrégateur Bridge.
+  - Praticien : l'utilisateur IDEL. Cabinet : structure de facturation
+    (identifiée par un FINESS) à laquelle il est lié.
+  - CA : chiffre d'affaires. YTD : depuis le 1er janvier de l'année en cours.
+
+
+================================================================================
+PARTIE A — LISTE DES FONCTIONNALITÉS
+================================================================================
+
+A.1 Comptes et authentification
+--------------------------------
+- Connexion par email + mot de passe (JWT : access token 15 min, refresh
+  token 7 jours, rotation dans /api/auth/refresh).
+- Création de compte sur invitation (lien valable 24 h) : page « setup-password ».
+- Mot de passe oublié / réinitialisation par email.
+- Règles de mot de passe : 8 caractères minimum, 1 majuscule, 1 minuscule,
+  1 chiffre.
+- Deux types de compte : praticien et admin. Les admins n'accèdent qu'au
+  back-office /admin.
+- Déconnexion, export RGPD (art. 20) en JSON, suppression de compte
+  (confirmation par saisie du mot « supprimer »).
+
+A.2 Onboarding praticien (modale au premier accès)
+--------------------------------------------------
+- Étapes : identité (prénom, nom, numéro RPPS à 11 chiffres vérifié via
+  l'annuaire santé ANS/FHIR), profession (infirmier), date de début
+  d'activité, régime fiscal (micro-BNC ou BNC réel), puis connexion bancaire.
+- L'onboarding est considéré inachevé tant qu'aucun compte bancaire n'est
+  synchronisé : la modale reprend directement à l'étape bancaire.
+
+A.3 Connexion bancaire (Bridge) et synchronisation
+--------------------------------------------------
+- Connexion d'une ou plusieurs banques via l'agrégateur Bridge (parcours
+  hébergé, retour sur /callback/bridge).
+- Import initial des comptes et transactions, puis resynchronisation
+  automatique tous les 15 jours par un cron (lib/jobs/sync-bank.ts).
+- Choix d'un compte bancaire « par défaut » (sert à la trésorerie affichée et
+  à l'alerte de seuil). Auto-sélection si un seul compte.
+- Suppression d'un compte bancaire.
+
+A.4 Catégorisation des transactions
+-----------------------------------
+- 12 catégories : revenus (income), rétrocession reçue (royalty),
+  remboursement pro (professional_reimbursement), URSSAF, CARPIMKO, frais
+  professionnels, rétrocession versée, Madelin, impôts (taxes), CFE,
+  rémunération (compensation), personnel.
+- Catégorisation manuelle ligne par ligne, avec propagation automatique aux
+  transactions similaires [B.28].
+- Catégorisation automatique à chaque synchronisation bancaire [B.28].
+- Compteur « à catégoriser » affiché dans la barre de navigation.
+
+A.5 Bordereaux Ozzen (import par l'admin)
+-----------------------------------------
+- Détection automatique du type de document (rattrapage / retour NOEMIE /
+  relevé mensuel) par analyse du PDF (lib/parsers/detect-document.ts).
+- Parsing des rattrapages : date, moment, praticien, cotation NGAP (chiffrée
+  en base), numéro de facture, statut, 5 montants (honoraires, majoration,
+  férié/dimanche/nuit, IFD, total).
+- Parsing des retours NOEMIE : numéro de facture, montant facturé, montant
+  payé, statut payé/rejeté, motif de rejet, référence de paiement, date.
+- Déduplication par empreinte du fichier et par clé composite de ligne.
+- Mise à jour automatique du statut des passages (payé / rejeté) à partir
+  des retours NOEMIE.
+- Liaison praticien ↔ cabinet : suggestions automatiques détectées dans les
+  bordereaux, à accepter/refuser par le praticien (bandeau sur le dashboard).
+
+A.6 Rapprochement bancaire
+--------------------------
+- Association automatique des paiements NOEMIE aux virements reçus sur le
+  compte bancaire [B.19], relancée après chaque synchro bancaire et chaque
+  import NOEMIE. Badge « Encaissé le … » sur chaque passage.
+
+A.7 Estimations fiscales et sociales
+------------------------------------
+- CA effectif de l'année [B.1], CA annualisé [B.2].
+- Estimation des cotisations URSSAF (via l'API OpenFisca), CARPIMKO, PAS,
+  annuelles et par échéance [B.3 à B.9].
+- Impôt sur le revenu au barème, parts fiscales, décote, TMI [B.21].
+- Situation fiscale du foyer (statut marital, enfants, parent isolé, autres
+  revenus, IR réel déclaré) saisie par année.
+- Jours travaillés par mois (saisie ou défaut jours ouvrés) et jours par
+  semaine, qui pilotent toutes les projections.
+- Charges professionnelles manuelles (loyer, matériel, etc.) saisies mois par
+  mois dans Gestion → Mon activité, intégrées aux dépenses.
+
+A.8 Calendrier fiscal et échéances
+----------------------------------
+- Calendrier annuel généré depuis les préférences de paiement du profil
+  (fréquences et jours URSSAF / PAS / CARPIMKO) [B.20].
+- Prochaines échéances avec montants estimés, compte à rebours, export
+  CSV/PDF.
+
+A.9 Pilotage et projections
+---------------------------
+- Reste à vivre à fin de mois / trimestre / année [B.13].
+- Trésorerie prévisionnelle [B.14].
+- Score de santé financière sur 100 [B.15].
+- Synthèse annuelle N vs N-1 [B.23].
+- Simulation de CA (slider) avec impact cotisations, IR et reste à vivre [B.24].
+- Prévision de CA (basse / probable / haute), scénarios de disponibilité et
+  leviers, saisie manuelle d'actes [B.25].
+
+A.10 Optimisation
+-----------------
+- Plafonds PER, Madelin prévoyance, blanchisserie, chèques-vacances [B.26].
+- Impact avant/après sur URSSAF, CARPIMKO, IR et gain N+1.
+- Recommandations personnalisées (8 règles) [B.27].
+- Export PDF.
+
+A.11 Alertes et notifications (crons Ofelia)
+--------------------------------------------
+- Alerte trésorerie : email si le solde du compte par défaut passe sous un
+  seuil, cooldown 7 jours (lib/jobs/check-alerts.ts).
+- Alerte taux de rejet : email si le taux sur 30 jours dépasse le seuil
+  (0,5 à 50 %, défaut 5 %), échantillon minimum 10, cooldown 14 jours
+  (lib/jobs/check-rejection-alerts.ts) [B.29].
+- Rappel hebdomadaire des échéances : le lundi, fenêtre 14 jours
+  (lib/jobs/deadlines-reminder.ts).
+- Récapitulatif d'activité mensuel ou trimestriel par email
+  (lib/jobs/monthly-recap.ts) : revenus, cotisations, alerte de données
+  non synchronisées depuis plus de 15 jours.
+- Synchronisation bancaire (lib/jobs/sync-bank.ts).
+
+A.12 Assistant IA (chat)
+------------------------
+- Chat en streaming (/api/chat, OpenAI) avec outils de lecture : ventilation
+  mensuelle, recherche de transactions, simulation de cotisations, prévision
+  de CA, calendrier fiscal, résumé des soins, projection de trésorerie,
+  totaux par catégorie, transactions récurrentes, comparaison de périodes,
+  factures rejetées, historique de compte, anomalies de dépenses, score de
+  santé, recommandations, statistiques patients.
+- Outils d'écriture : disponibilité par mois, jours par semaine, ajustements
+  de CA (scénarios), estimation d'un mois à partir d'actes. Ces actions
+  déclenchent le rafraîchissement des vues concernées.
+
+A.13 Exports
+------------
+- CSV et PDF : facturation (détail des passages, graphique), échéances,
+  Gestion → Mon activité, optimisation.
+- Export RGPD JSON de toutes les données du praticien.
+
+A.14 Back-office admin
+----------------------
+- Gestion des praticiens et invitations, des admins, des cabinets (FINESS),
+  import des bordereaux avec aperçu avant insertion et historique des
+  imports.
+
+A.15 Divers
+-----------
+- Recherche dans la barre latérale (destinations et onglets deep-linkables,
+  ex. /management?tab=taxes).
+- Bouton « Actualiser » : recharge toutes les données du provider et les
+  composants serveur.
+- Pages légales : mentions légales, politique de confidentialité.
+
+
+================================================================================
+PARTIE B — FICHES DE CALCUL
+================================================================================
+
+Conventions : « micro-BNC » = régime micro (abattement forfaitaire 34 %),
+« BNC réel » = déclaration contrôlée. « Profil » = table practitioners.
+
+--------------------------------------------------------------------------------
+B.1 CA effectif de l'année (actions/effective-ca.ts)
+--------------------------------------------------------------------------------
+Données :
+  - Bordereaux : table care_payments (retours NOEMIE, statut « paid », date de
+    PAIEMENT), rattachés au praticien via care_passages (clé cabinet + numéro
+    de facture, praticien dédupliqué par MIN), pré-filtre SQL sur le nom de
+    famille puis matching de nom exact en JS (lib/name-matching.ts).
+  - Repli bordereaux : care_passages au statut « paye », date de SOIN.
+  - Transactions : bank_transactions de tous les comptes du praticien,
+    catégories income + royalty, montants > 0, année civile.
+Formule :
+  CA_bordereaux = somme des paiements NOEMIE payés de l'année
+                  (si 0 : somme des passages payés de l'année)
+  CA_transactions = somme des transactions positives income/royalty
+Conditions :
+  - Source primaire « bordereaux » (provider partagé, Échéances,
+    Optimisation) : bordereaux si > 0, sinon transactions, sinon « none ».
+  - Source primaire « transactions » (Dashboard, Gestion) : transactions si
+    > 0, sinon bordereaux, sinon « none ».
+  - La source retenue est exposée (indicateur « source du CA » dans l'UI).
+
+--------------------------------------------------------------------------------
+B.2 CA annualisé (actions/cotisations-estimate.ts)
+--------------------------------------------------------------------------------
+Données : CA effectif [B.1] ou CA mensuel cumulé, jours travaillés saisis
+(practitioner_vacations) sinon jours ouvrés par défaut, jours par semaine et
+date de début d'activité du profil.
+Jours ouvrés (lib/data/fr-holidays.ts) : lundi→vendredi moins jours fériés
+(fériés fixes + Pâques calculé), puis × joursParSemaine / 5.
+Étapes :
+  - monthsElapsed = 12 pour une année passée ou future, mois courant pour
+    l'année en cours.
+  - startMonth = mois de début d'activité si l'activité a démarré dans
+    l'année cible, sinon janvier.
+  - workedYTD = jours travaillés de startMonth à monthsElapsed
+  - workedYear = jours travaillés de startMonth à décembre
+  - dailyRate = CA / workedYTD
+Formule :
+  - si workedYTD >= 60 jours : caBrutAnnualise = dailyRate × workedYear
+  - sinon si monthsElapsed >= 2 : caBrutAnnualise = CA / monthsElapsed × 12
+  - sinon : caBrutAnnualise = CA (brut, sans projection)
+  - Pour une année passée, workedYTD = workedYear donc pas d'extrapolation.
+Constante : MIN_WORKED_DAYS_FOR_DAILY_PROJECTION = 60.
+
+--------------------------------------------------------------------------------
+B.3 Rétrocession du profil (actions/cotisations-estimate.ts)
+--------------------------------------------------------------------------------
+Données : retrocessionType et retrocessionValue du profil.
+Formule :
+  - type « percentage » : rétrocession = CA brut annualisé × valeur / 100
+  - type « fixed » : montant MENSUEL → rétrocession = valeur × 12
+  - absent ou valeur <= 0 : 0
+Condition : ignorée dans l'assiette en micro-BNC (l'abattement couvre tout).
+
+--------------------------------------------------------------------------------
+B.4 Assiette des cotisations = bénéfice (actions/cotisations-estimate.ts)
+--------------------------------------------------------------------------------
+Données : CA brut annualisé [B.2], rétrocession [B.3], charges
+professionnelles annualisées transmises par l'appelant [B.30].
+Formule :
+  - BNC réel : revenuAnnualise = max(0, caBrut − rétrocession − charges)
+  - micro-BNC : revenuAnnualise = caBrut (charges retenues = 0)
+  - revenuNet = revenuAnnualise × 0,66 en micro-BNC, sinon revenuAnnualise
+Conditions :
+  - Plancher à 0 : une activité déficitaire ne retombe jamais sur le CA brut.
+  - Les cotisations de l'année ne sont pas déduites de leur propre assiette.
+  - Attention : Dashboard, Optimisation, Échéances et Transactions appellent
+    l'estimation SANS charges (charges = 0) ; seule Gestion les transmet.
+
+--------------------------------------------------------------------------------
+B.5 Base URSSAF (actions/cotisations-estimate.ts)
+--------------------------------------------------------------------------------
+Données : date de début d'activité, CA de l'année N-2 [B.1 par année],
+PASS (plafond annuel de la Sécurité sociale) via OpenFisca, repli 47 100 €.
+Conditions, dans l'ordre :
+  1. Début d'activité (année cible − année de début < 2) : base forfaitaire
+     = 19 % du PASS. Étiquette « forfaitaire ».
+  2. Sinon, revenu N-2 disponible : base = CA encaissé N-2, retenu UNIQUEMENT
+     si les données couvrent au moins 10 mois distincts (garde-fou contre
+     une année tronquée). Étiquette « n2 ».
+  3. Sinon : base = max(0, revenuAnnualise − déduction sociale saisie
+     (Madelin, etc.)). Étiquette « annualise ».
+Constante : MIN_N2_MONTHS_COVERAGE = 10.
+
+--------------------------------------------------------------------------------
+B.6 URSSAF PAMC (actions/cotisations-estimate.ts + lib/services/openfisca.service.ts)
+--------------------------------------------------------------------------------
+Données : base URSSAF [B.5], régime, année. Appel POST /calculate de l'API
+OpenFisca France (variable mbnc_impo en micro-BNC, abnc_impo en BNC réel,
+catégorie « profession_liberale »).
+Corrections appliquées au résultat OpenFisca (régime générique CIPAV → PAMC) :
+  - Maladie-maternité : la CPAM prend en charge 5,9 points sur 6,5 ; part
+    restante = 0,6 / 6,5 (≈ 9,2 %) de la cotisation calculée.
+  - Retraite de base : prélevée par la CARPIMKO, retirée de l'URSSAF et
+    ajoutée à la CARPIMKO.
+Formule :
+  urssafAnnuel = totalCotisationsOpenFisca
+                 − maladie × (1 − 0,6/6,5)
+                 − retraiteBase
+Repli si OpenFisca échoue ou renvoie 0 : urssafAnnuel = revenuNet de la base
+× 26 %.
+Délai d'attente API : 15 s.
+
+--------------------------------------------------------------------------------
+B.7 CARPIMKO (lib/services/carpimko.service.ts, barèmes lib/constants/taxes.json)
+--------------------------------------------------------------------------------
+Données : revenuNet [B.4], année, retraite de base OpenFisca [B.6].
+Composantes (barème 2026) :
+  - Retraite complémentaire : proportionnelle 8,7 % sur la tranche
+    [24 030 ; 144 180] (mode « tranches » pour les années <= 2025).
+  - ASV (avantage social vieillesse) : forfait 224 € + 0,4 % du revenu
+    plafonné à 235 500 €.
+  - Invalidité-décès : forfait 1 022 €.
+  - Indemnités journalières : 0,3 % du revenu plafonné à 144 180 €,
+    minimum 144 €.
+Formule : carpimkoAnnuel = somme des composantes + retraiteBase (OpenFisca).
+
+--------------------------------------------------------------------------------
+B.8 Prélèvement à la source (PAS) estimé
+--------------------------------------------------------------------------------
+Données : revenuNet [B.4], taux PAS saisi dans le profil (%).
+Formule : pasAnnuel = revenuNet × tauxPAS / 100.
+
+--------------------------------------------------------------------------------
+B.9 Montants par échéance
+--------------------------------------------------------------------------------
+Données : fréquences du profil.
+Formule :
+  - URSSAF : annuel / 12 (mensuel) ou / 4 (trimestriel)
+  - CARPIMKO : annuel / 10 (mensuel, février→novembre) ou / 2 (semestriel)
+  - PAS : annuel / 12 ou / 4
+
+--------------------------------------------------------------------------------
+B.10 Activité mensuelle (actions/transaction.ts, actions/monthly-activity-bordereaux.ts)
+--------------------------------------------------------------------------------
+Données : bank_transactions de tous les comptes, groupées par mois ; charges
+manuelles (practitioner_manual_charges).
+Formule par mois :
+  - income = montants > 0 des catégories income, royalty,
+    professional_reimbursement
+  - urssaf, carpimko, chargesPro (professional_expenses), retrocession,
+    madelin, impots (taxes), cfe, remuneration (compensation) = valeur
+    absolue des montants < 0 de chaque catégorie
+  - cotisations = urssaf + carpimko
+  - autresDepenses = chargesPro + retrocession + madelin
+  - Charges manuelles du mois ajoutées à chargesPro ET à autresDepenses.
+Condition « fallback bordereaux » (CA effectif issu des bordereaux) : seul
+income est rempli = encaissements NOEMIE par mois de paiement (repli :
+passages payés par mois de soin) ; toutes les dépenses restent à 0.
+
+--------------------------------------------------------------------------------
+B.11 KPI transactions (actions/transaction.ts : getTransactionKpisAction)
+--------------------------------------------------------------------------------
+Données : bank_transactions du compte sélectionné (ou tous), année civile.
+Formule :
+  - Encaissement = |somme| des montants > 0 en income + royalty
+  - Décaissement = |somme| des montants < 0 en urssaf, carpimko,
+    professional_expenses, retrocession, madelin
+    (+ charges manuelles de l'année sur Dashboard et Gestion uniquement)
+  - Rémunération = |somme| des montants < 0 en compensation
+  - Cotisations = urssafPayé + carpimkoPayé (par catégorie)
+  - Nombre de transactions de dépenses = count sur le filtre décaissement
+
+--------------------------------------------------------------------------------
+B.12 Solde estimé disponible (page Transactions)
+--------------------------------------------------------------------------------
+Données : soldes Bridge des comptes affichés, estimation [B.6/B.7] sur
+l'encaissement de l'année COURANTE, cotisations déjà payées [B.11].
+Formule :
+  urssafRestant = max(0, urssafAnnuel − urssafPayé)
+  carpimkoRestant = max(0, carpimkoAnnuel − carpimkoPayé)
+  soldeDispo = sommeSoldes − urssafRestant − carpimkoRestant
+Condition : toujours calculé sur l'année courante, quel que soit le
+sélecteur d'année de la page.
+
+--------------------------------------------------------------------------------
+B.13 Reste à vivre (lib/data/reste-a-vivre.ts)
+--------------------------------------------------------------------------------
+Données : activité mensuelle [B.10], estimation [B.2 à B.8], mois cible.
+Étapes :
+  - fractionRestanteMoisCourant = (joursDuMois − jourActuel) / joursDuMois
+  - Échantillon = mois écoulés avec income > 0 (repli : tous les mois
+    écoulés, puis le premier mois).
+  - Moyennes mensuelles : income, chargesPro, retrocession + madelin.
+  - monthsBetween = fraction + (moisCible − moisCourant)
+  - projIncome = moyenneIncome × monthsBetween (idem charges, rétro+Madelin)
+  - Provision au prorata du CA : taux = montantAnnuel / caBrutAnnualise pour
+    URSSAF, CARPIMKO et PAS ; provision = projIncome × taux
+Formule :
+  total = projIncome − (urssafDue + carpimkoDue + pasDue)
+          − (projChargesPro + projRetroMadelin)
+Condition : la trésorerie n'entre pas dans le calcul. Horizons proposés :
+fin du mois, fin du trimestre (mois = floor(m/3)×3+2), fin d'année.
+
+--------------------------------------------------------------------------------
+B.14 Trésorerie : solde, tendance, reconstruction, prévisionnel
+--------------------------------------------------------------------------------
+Données : bank_accounts.balance (solde Bridge tel quel), net mensuel du
+compte par défaut (somme signée des transactions par mois), activité
+mensuelle [B.10].
+Formules :
+  - Trésorerie disponible (Dashboard) = solde du compte par défaut.
+  - Tendance = (solde − soldeFinMoisPrécédent) / |soldeFinMoisPrécédent| × 100
+    avec soldeFinMoisPrécédent = solde − netMensuel[moisCourant].
+  - Courbe reconstruite (Dashboard) : à rebours depuis la trésorerie TOTALE
+    (somme de tous les comptes) : fin(M) = fin(M+1) − net(M+1), où
+    net(m) = income − (urssaf + carpimko + chargesPro + retrocession +
+    madelin + impots + cfe + remuneration). Seules les transactions
+    catégorisées comptent.
+  - Trésorerie projetée (Gestion → Synthèse) = solde compte par défaut +
+    reste à vivre [B.13] à l'horizon choisi.
+  - Solde de trésorerie (Transactions) = somme des soldes des comptes
+    filtrés.
+
+--------------------------------------------------------------------------------
+B.15 Score de santé financière (actions/health-score.ts)
+--------------------------------------------------------------------------------
+Données : soldes, transactions négatives YTD + charges manuelles, estimation
+[B.2 à B.8] calculée sur le CA payé des passages, profil, facturation.
+Sous-scores (0 à 100) et poids :
+  - Trésorerie (0,30) : couverture = soldeTotal / (décaissementYTD /
+    max(moisActifs, 0,5)) ; score = couverture / 4 × 100 borné.
+    moisActifs = jours depuis max(1er janvier, début d'activité) / 30,4375.
+    Cible : 4 mois de charges.
+  - Poids des charges (0,25) : ratio = (urssaf + carpimko + pas) /
+    revenuAnnualise ; 100 si <= 35 %, 0 si >= 55 %, linéaire entre.
+    Masqué si < 2 ans d'activité ET revenu < 12 000 € (forfaits minimums).
+  - Complétude (0,20) : 0,5 × profil (7 champs / 7) + 0,3 × banque
+    connectée + 0,2 × taux de transactions catégorisées.
+  - Recouvrement (0,25) : taux de rejet = rejetés / passages ; 100 si 0 %,
+    0 si >= 10 %.
+Score global = moyenne pondérée des sous-scores disponibles uniquement.
+Recommandations (max 3) déclenchées par seuils de sous-score (< 50, < 25,
+< 70, < 80) et CA payé > 30 000 €.
+
+--------------------------------------------------------------------------------
+B.16 Dépenses du mois et analyse des dépenses (Dashboard)
+--------------------------------------------------------------------------------
+Données : activité mensuelle [B.10] du mois sélectionné.
+Formules :
+  - Dépenses = urssaf + carpimko + autresDepenses + impots + cfe
+  - Donut : Charges sociales = urssaf + carpimko ; Frais pro = chargesPro
+    (charges manuelles incluses) ; Rétrocessions ; Impôts = impots + cfe ;
+    Madelin. Pourcentage = part / total des parts > 0.
+  - Tendance mensuelle = (mois − moisPrécédent) / |moisPrécédent| × 100
+    (inversée pour les dépenses : une baisse est positive).
+Condition : « — » si la source n'est pas les transactions (les bordereaux ne
+portent pas de dépenses).
+
+--------------------------------------------------------------------------------
+B.17 Facturation : statuts, totaux, délai moyen, taux de rejet, déclaré vs payé
+--------------------------------------------------------------------------------
+Données : care_passages des cabinets liés, attribués par matching de nom ;
+care_payments ; care_payment_reconciliations. Cotation déchiffrée à la
+lecture (actions/facturation.ts).
+Statuts affichés : a_securiser et a_envoyer → « en attente » ; paye ;
+rejete. Les retours NOEMIE forcent le statut de tous les passages d'une même
+facture (cabinet + numéro) à payé ou rejeté.
+Formules (sur l'année sélectionnée, par date de soin) :
+  - Payé / En attente / Rejeté = somme des totalAmount et nombre de passages
+    par statut.
+  - Délai moyen = moyenne arrondie de (datePaiement − dateSoin) en jours,
+    délais >= 0 uniquement, passages ayant une date de paiement.
+  - Taux de rejet = rejetés / (payés + rejetés) × 100 (en attente exclus).
+  - Déclaré = payé + en attente + rejeté ; part payée = payé / déclaré.
+  - Graphe mensuel : 12 mois par date de soin, empilé par statut, option
+    comparaison N-1.
+  - Montants : issus du bordereau (les tarifs NGAP en base sont purement
+    informatifs).
+
+--------------------------------------------------------------------------------
+B.18 Ventilation par prestation NGAP (lib/ngap/parse-cotation.ts)
+--------------------------------------------------------------------------------
+Données : cotation de chaque passage.
+Règles : virgules → points, parenthèses supprimées, diviseurs « /2 »
+ignorés, découpage sur « + », coefficient par défaut 1, AIS → BSA coef 1.
+Acte principal = premier token reconnu comme acte, sinon premier token.
+Chaque passage est rattaché à un seul acte principal, donc la somme des
+lignes = CA total. Clé = code:coef, tri par CA décroissant, part = montant /
+CA total × 100.
+
+--------------------------------------------------------------------------------
+B.19 Rapprochement bancaire (lib/services/reconciliation*.ts)
+--------------------------------------------------------------------------------
+Données : care_payments « paid » du praticien sur 18 mois glissants,
+bank_transactions positives non déjà rapprochées.
+Passe 1 : montant identique au centime, virement daté entre la date de
+paiement et J+15, un seul candidat de chaque côté, abandon si un
+sous-ensemble d'autres paiements à ±2 jours donne le même montant.
+Passe 2 : recherche d'un sous-ensemble UNIQUE de paiements à J±1 dont la
+somme égale le virement, max 20 candidats.
+Idempotent (un paiement n'est rapproché qu'une fois). Déclenché après chaque
+synchro bancaire et chaque import NOEMIE.
+Badge : « Encaissé le … » si rapproché ; « Virement non détecté » si le
+paiement date de plus de 30 jours ; sinon « En attente du virement ».
+
+--------------------------------------------------------------------------------
+B.20 Calendrier fiscal (lib/data/fiscal-calendar.ts)
+--------------------------------------------------------------------------------
+Données : préférences du profil (fréquence et jour URSSAF, fréquence PAS,
+fréquence et jour CARPIMKO, date de début d'activité).
+Règles :
+  - URSSAF : mensuel au jour choisi (5 ou 20) chaque mois ; trimestriel le 5
+    de février, mai, août, novembre. Novembre : « + CFP + URPS ».
+  - PAS / IR : le 15, tous les mois ou en février/mai/août/novembre.
+    Septembre : « nouveau taux + régularisation IR ».
+  - CARPIMKO : mensuel de février à novembre au jour choisi (5/10/15/20/25) ;
+    semestriel en avril et octobre.
+  - CFE : acompte le 15 juin (si CFE N-1 > 3 000 €), solde le 15 décembre.
+    Première année d'activité : montant 0 (« Exonéré ») et « Déclaration
+    initiale CFE » au 31 décembre.
+  - Déclarations fixes : 5 mai (2035 papier + DAS2), 20 mai
+    (télétransmission), 21 mai / 28 mai / 4 juin (2042 C Pro selon
+    département 01-19 / 20-54 / 55-976), 30 septembre (option PAS
+    trimestriel N+1).
+Montants : estimation par échéance [B.9], affectée uniquement si des
+passages existent (Échéances) ou sur les mois <= mois courant (Dashboard).
+Prochaines échéances : balayage de 3 mois, exclusion du passé du mois
+courant, fenêtre 30 jours, 6 événements max (4 sur le Dashboard).
+Compte à rebours : (date cible − aujourd'hui) en jours ; si la date est
+passée, +1 an.
+
+--------------------------------------------------------------------------------
+B.21 Impôt sur le revenu (lib/data/fr-tax.ts)
+--------------------------------------------------------------------------------
+Données : revenu imposable, situation fiscale du foyer
+(practitioner_fiscal_situations : statut marital, enfants, parent isolé,
+autres revenus), année des revenus.
+Parts fiscales : célibataire 1, marié/pacsé 2 ; +0,5 case T (parent isolé
+avec au moins 1 enfant) ; +0,5 pour chacun des deux premiers enfants ; +1
+par enfant à partir du troisième.
+Barème par part (revenus 2025) : 0 % jusqu'à 11 600 €, 11 % jusqu'à
+29 579 €, 30 % jusqu'à 84 577 €, 41 % jusqu'à 181 917 €, 45 % au-delà.
+Barèmes disponibles : 2023, 2024, 2025 ; au-delà, repli sur 2025.
+Étapes :
+  - IR brut = barème appliqué à (revenu / parts) × parts.
+  - Plafonnement du quotient familial : l'avantage lié aux demi-parts
+    supplémentaires est limité à 1 807 € par demi-part (2025 ; 1 791 € en
+    2024, 1 759 € en 2023).
+  - Décote (art. 197 CGI) : si IR < seuil (1 982 € seul / 3 277 € couple en
+    2025), IR = IR − max(0, plafond − 0,4525 × IR) avec plafond 897 € /
+    1 483 €.
+  - Taux moyen = IR / revenu imposable × 100.
+  - Tranche marginale, taux de remplissage de la tranche et distance à la
+    tranche suivante calculés sur le quotient (revenu / parts), distance
+    re-multipliée par les parts.
+Revenu imposable selon la page :
+  - Optimisation : micro-BNC → revenuAnnualise × 0,66 ; BNC réel →
+    revenuAnnualise − urssafAnnuel − carpimkoAnnuel ; + autres revenus −
+    déduction fiscale cochée.
+  - Gestion → Impôts : bénéfice BNC projeté [B.22] + autres revenus.
+  - Gestion → Synthèse : CA × 0,66 (micro) ou rémunération avant impôt
+    annualisée (réel) + autres revenus.
+
+--------------------------------------------------------------------------------
+B.22 Bénéfice BNC projeté, PAS et régularisation (Gestion → Impôts)
+--------------------------------------------------------------------------------
+Données : activité mensuelle [B.10], jours travaillés, taux PAS, situation
+fiscale.
+BNC mensuel : micro-BNC → income × 0,66 ; BNC réel → max(0, income −
+(urssaf + carpimko + chargesPro + retrocession + madelin)).
+En fallback bordereaux : URSSAF/CARPIMKO estimés injectés au prorata du CA
+mensuel (estimationAnnuelle × income du mois / CA total).
+Projection :
+  - Année passée : somme des 12 mois réels.
+  - Année courante : réel de janvier au mois courant + dailyBNC × jours
+    travaillés restants, avec dailyBNC = somme des BNC des mois passés à
+    income > 0 / jours travaillés correspondants.
+  - Année future : dailyBNC (année courante) × jours travaillés sur 12 mois.
+PAS :
+  - pasBnc = somme des transactions « taxes » (année passée) ; réel YTD +
+    BNC projeté × tauxPAS (année courante) ; BNC projeté × tauxPAS (future).
+  - pasConjoint = autres revenus × tauxPAS (approximation).
+  - PAS estimé = pasBnc + pasConjoint.
+Régularisation N payée en N+1 = IR [B.21] − PAS estimé (positif = complément
+à payer de septembre à décembre N+1, négatif = remboursement à l'été N+1).
+Écart estimé / réel = IR réel saisi (avis d'imposition) − IR estimé.
+
+--------------------------------------------------------------------------------
+B.23 Synthèse N vs N-1 (Gestion → Ma synthèse)
+--------------------------------------------------------------------------------
+Données : estimation par année (avec charges annualisées [B.30]), activité
+mensuelle, profil, situation fiscale.
+annualize(x) = x / monthsElapsed × 12 (monthsElapsed = 12 pour une année
+passée, mois courant pour l'année en cours).
+Métriques :
+  - Chiffre d'affaires = caBrutAnnualise [B.2]
+  - Charges pro = annualize(somme chargesPro)
+  - Cotisations sociales = urssafAnnuel + carpimkoAnnuel
+  - Rémunération avant impôt = max(0, CA − cotisations − chargesPro −
+    rétrocession − Madelin), la rétrocession étant celle du profil si
+    renseignée, sinon celle observée annualisée (jamais les deux).
+  - Impôt sur le revenu = IR [B.21]
+  - Reste à vivre = max(0, rémunération avant impôt − IR)
+Barre N-1 : « — » si CA N-1 = 0 ou pas d'estimation ; largeur = valeur /
+max(N, N-1).
+
+--------------------------------------------------------------------------------
+B.24 Simulation de CA (Gestion → Simulation, actions/simulate-cotisations.ts)
+--------------------------------------------------------------------------------
+Données : estimation de l'année courante, situation fiscale, activité
+mensuelle.
+CA de référence : micro-BNC → caBrutAnnualise ; BNC réel → max(0,
+caBrutAnnualise − retrocessionAnnualise) (pas le bénéfice, sinon double
+déduction des charges).
+Slider : pas de 1 000 €, maximum = max(150 000, 1,5 × référence arrondi à
+10 000). Écart = (simulé − référence) / référence × 100.
+Cotisations simulées (toujours sur l'année courante, sans base forfaitaire
+ni N-2) : revenuNet = CA × 0,66 en micro-BNC ; URSSAF OpenFisca avec les
+mêmes corrections PAMC [B.6], repli 26 % ; CARPIMKO [B.7] ; PAS = revenuNet
+× taux ; rémunération nette = max(0, CA − total).
+Reste à vivre simulé :
+  - chargesFixes = annualize(chargesPro + madelin), rétrocession =
+    annualize(rétrocession observée) × (CA simulé / CA de référence)
+  - IR au barème [B.21] sur revenuNet + autres revenus
+  - soldeAvantCharges = max(0, CA − URSSAF − CARPIMKO − IR)
+  - reste = max(0, soldeAvantCharges − chargesFixes − rétrocession)
+  - « soit / mois » = reste / 12
+Sans banque : « Solde avant charges pro » affiché à la place du reste à vivre.
+
+--------------------------------------------------------------------------------
+B.25 Prévision de CA (lib/services/ca-forecast.service.ts, ca-scenario.service.ts)
+--------------------------------------------------------------------------------
+Données : historique mensuel de CA (bordereaux par mois de paiement ou
+transactions), jours travaillés saisis, ajustements de scénario
+(practitioner_ca_adjustments), actes planifiés (practitioner_planned_acts).
+monthsElapsed = mois RÉVOLUS (mois courant exclu).
+Tendance : régression linéaire (moindres carrés) sur les totaux des années
+complètes ; une seule année → reconduction du total.
+Saisonnalité : poids mensuels normalisés par année puis moyennés, écrêtés à
+2,5 × (1/12), lissés à 15 % vers le plat.
+Probable : ytd + fractionRestante × (α × tendance + (1 − α) × projectionYTD)
+avec α = fractionRestante et projectionYTD = ytd / fractionÉcoulée
+(annualisation saisonnière).
+Fourchette basse/haute = probable ± 1,2816 × σ, avec σ = max(écart-type des
+résidus, 8 % du probable) × max(fractionRestante, 0,25).
+Évolution = probable / total de la dernière année complète − 1.
+Fiabilité : faible si historique insuffisant ou < 6 mois ; haute si >= 2
+années complètes et >= 18 mois ; sinon moyenne. « Historique insuffisant »
+si aucune tendance et moins de 3 mois écoulés.
+Scénarios : mois passés intouchables ; « month_override » prioritaire ;
+facteur de disponibilité = jours saisis / jours ouvrés (borné 0-1, perte
+sèche) ; puis leviers multiplicatifs (rate_pct, volume_pct) ; puis additifs
+(fixed_monthly, fixed_oneoff). Delta affiché = probable ajusté − probable
+de base.
+Saisie d'actes : total du mois = somme(quantité × tarif unitaire) ; tarifs
+proposés = tarif moyen réellement facturé sur 12 mois glissants (« Vos
+actes ») ou tarif conventionnel du catalogue NGAP. Mode « compléter »
+(fixed_oneoff) ou « définir tout le mois » (month_override).
+
+--------------------------------------------------------------------------------
+B.26 Optimisation : plafonds et avant/après (app/(protected)/optimization/client.tsx)
+--------------------------------------------------------------------------------
+Données : estimation (source bordereaux d'abord), PASS et SMIC via OpenFisca
+(repli 47 100 € et 1 802 €), jours travaillés de l'année, situation fiscale.
+revenuPro = revenuAnnualise [B.4].
+Plafonds :
+  - PER (art. 163 quatervicies CGI) = max(10 % PASS ; min(10 % revenuPro ;
+    10 % × 8 PASS)) + 15 % × max(0, min(revenuPro, 8 PASS) − PASS).
+    Défaut 3 000 €. Déductible fiscalement seulement.
+  - Prévoyance Madelin = min(3,75 % revenuPro + 7 % PASS ; 3 % × 8 PASS).
+    Défaut 2 000 €. Déductible fiscalement et socialement. BNC réel seul.
+  - Blanchisserie = jours travaillés de l'année × 2 € (automatique, non
+    saisissable, exclue du décaissement). BNC réel seul.
+  - Chèques-vacances = SMIC mensuel arrondi. Défaut 1 000 €. BNC réel seul.
+  - SELARL, CE, matériel, temps de travail : non disponibles.
+Agrégats des cases cochées : déduction fiscale, déduction sociale,
+décaissement (hors montants automatiques).
+Après :
+  - URSSAF : inchangée si aucune déduction sociale ou si la base n'est pas
+    « annualise » (note « effet en N+2 ») ; sinon nouvelle estimation
+    OpenFisca sur revenuAnnualise − déduction sociale.
+  - CARPIMKO : recalcul local sur max(0, revenuNet − déduction sociale) +
+    part de retraite de base conservée.
+  - IR : [B.21] sur revenu net + autres revenus − déduction fiscale.
+Gain N+1 = (URSSAF avant − après) + (CARPIMKO avant − après) + (IR avant −
+après). Décaissement N = somme des montants saisis.
+
+--------------------------------------------------------------------------------
+B.27 Recommandations personnalisées (actions/recommendations.ts)
+--------------------------------------------------------------------------------
+Prérequis : au moins un compte bancaire et CA YTD > 0.
+Données : CA YTD (transactions income/royalty/professional_reimbursement),
+décaissement YTD (négatifs + charges manuelles), estimation, facturation,
+soldes, calendrier.
+Constantes : TMI proxy 30 %, URSSAF proxy 32 %, cash dormant > 6 mois de
+charges, rendement 4 %, délai cible 30 jours, coût du cash 3 %, majoration
+URSSAF 7,5 %, grâce 15 jours, seuil micro-BNC 77 700 €, abattement 34 %.
+Règles et impact affiché :
+  1. PER sous-utilisé (détection par libellés) : (plafond − versé) × 30 % ;
+     ignoré si plafond < 500 € ou > 80 % utilisé.
+  2. Madelin sous-utilisé (BNC réel) : (plafond − versé annualisé) × 52 %.
+  3. Régularisation URSSAF (base forfaitaire) : −(revenuAnnualise × 32 % −
+     urssafAnnuel) si écart >= 1 000 €.
+  4. Échéances à 90 jours > solde : −(somme échéances − solde total).
+  5. Régime fiscal sous-optimal : |frais annualisés − 34 % du revenu| × 30 %
+     si écart >= 2 000 €.
+  6. Délai de paiement long : CA YTD × (délai − 30) / 365 × 3 %.
+  7. Trésorerie dormante : (solde − 6 × charges mensuelles) × 4 % si >= 200 €.
+  8. Cotisations en retard (échéance sans paiement détecté à ±10 jours) :
+     −(somme) × 7,5 %.
+Tri : critique > alerte > opportunité > info, puis impact décroissant.
+Impact cumulé = somme des impacts (gains positifs et risques négatifs).
+
+--------------------------------------------------------------------------------
+B.28 Catégorisation automatique par similarité (actions/transaction.ts, lib/jobs/sync-bank.ts)
+--------------------------------------------------------------------------------
+Données : clean_description des transactions, extension PostgreSQL pg_trgm.
+Après une catégorisation manuelle : toutes les transactions non catégorisées
+du même signe dont similarity(clean_description, référence) >= 0,8 reçoivent
+la même catégorie (repli JS : ratio de Levenshtein 1 − distance / longueur
+max >= 0,8). Marquées « auto_similarity » (icône étincelle).
+À la synchronisation : chaque nouvelle transaction prend la catégorie de la
+transaction catégorisée la plus similaire du même signe si similarité
+>= 0,85.
+L'UI ne propose que les catégories dont le signe correspond au montant.
+
+--------------------------------------------------------------------------------
+B.29 Alertes (jobs)
+--------------------------------------------------------------------------------
+- Seuil de trésorerie : alerte stockée par compte par défaut (bank_alerts) ;
+  email si balance < seuil, au plus une fois tous les 7 jours.
+- Taux de rejet : sur les passages des 30 derniers jours (date de soin),
+  taux = rejetés / total (en attente inclus), au moins 10 passages, seuil du
+  praticien (0,5 à 50 %), cooldown 14 jours. Fenêtre et dénominateur
+  différents de la carte Facturation [B.17].
+- Rappel des échéances : fenêtre 14 jours en UTC, regroupée par semaine,
+  praticiens ayant activé le rappel ; dates et libellés seulement.
+- Récapitulatif : mensuel (mois précédent) ou trimestriel (janvier, avril,
+  juillet, octobre) ; alerte si dernière synchro > 15 jours.
+
+--------------------------------------------------------------------------------
+B.30 Charges annualisées (lib/data/charges-annualisees.ts)
+--------------------------------------------------------------------------------
+Données : activité mensuelle [B.10], profil.
+Formule : annualize(somme chargesPro + madelin) + annualize(somme
+rétrocession) UNIQUEMENT si le profil n'a pas de rétrocession configurée
+(type + valeur > 0), sinon la rétrocession du profil [B.3] est déjà déduite
+par l'estimation. annualize = / monthsElapsed × 12.
+Utilisée uniquement par la page Gestion.
+
+--------------------------------------------------------------------------------
+B.31 Jours travaillés et rythme (Gestion → Mon activité)
+--------------------------------------------------------------------------------
+Défaut = jours ouvrés du mois × joursParSemaine / 5 ; valeur saisie bornée
+[0, jours ouvrés du mois] ; mois passés verrouillés ; persistée par mois
+(practitioner_vacations).
+Ligne CA mensuelle : mois passé = réel ; mois futur = dailyRate × jours
+travaillés ; mois courant = réel + dailyRate × (jours du mois × jours
+ouvrés restants / jours ouvrés totaux), avec dailyRate = somme des CA des
+mois passés à CA > 0 / jours travaillés correspondants.
+Rémunération avant impôt mensuelle = revenus − (urssaf + carpimko +
+chargesPro + retrocession + madelin). Provision d'impôt = réel (mois passés)
+ou rémunération × taux PAS (mois courant et futurs).
+Cotisations mensuelles affichées = réel si > 0, sinon estimation par
+échéance placée sur les mois où le calendrier prévoit un prélèvement.
+
+
+================================================================================
+PARTIE C — PAGES DE L'APPLICATION
+================================================================================
+
+C.1 Pages publiques
+-------------------
+/login : formulaire email + mot de passe, carrousel de présentation, lien
+  mot de passe oublié. Redirection vers /dashboard si déjà connecté.
+/setup-password : création du mot de passe depuis un lien d'invitation.
+/forgot-password, /reset-password : demande et réinitialisation par email.
+/callback/bridge : retour du parcours de connexion bancaire.
+/legal, /privacy : mentions légales et politique de confidentialité,
+  toujours accessibles.
+
+C.2 Onboarding (modale sur l'espace protégé)
+--------------------------------------------
+Écran d'accueil, 4 étapes de formulaire (identité + RPPS, profession, début
+d'activité, régime fiscal), barre de progression, puis étape bancaire
+(connexion Bridge, attente de la synchro par polling). Sortie = rechargement
+complet.
+
+C.3 Barre de navigation (toutes les pages praticien)
+----------------------------------------------------
+Liens : Dashboard, Transactions, Facturation, Échéances, Gestion,
+Optimisation, Aide. Badges : suggestions de liaison cabinet en attente,
+transactions à catégoriser, compte par défaut manquant. Recherche de
+destinations. Bouton Actualiser. Menu profil / déconnexion. Assistant IA.
+
+C.4 /dashboard
+--------------
+- Bandeau de suggestions de liaison praticien-cabinet (accepter/refuser).
+- Sélecteur de mois.
+- Carte Trésorerie disponible : solde du compte par défaut + tendance [B.14].
+  Message d'aide si banque non connectée / pas de compte par défaut /
+  compte introuvable.
+- Carte Chiffre d'affaires du mois + tendance [B.10, B.16].
+- Carte Dépenses du mois + tendance [B.16].
+- Carte Reste à vivre d'ici la fin du mois [B.13].
+- Bandeaux d'alerte : banque non connectée, N transactions à catégoriser.
+- Graphe Aperçu de trésorerie : aire trésorerie reconstruite + ligne charges
+  pro [B.14].
+- Carte Prochaines échéances (4) avec montants estimés [B.20, B.9].
+- Carte Score de santé financière : jauge /100, 4 sous-scores,
+  recommandations [B.15].
+- Donut Analyse des dépenses du mois [B.16].
+
+C.5 /transactions
+-----------------
+- Bannière de connexion bancaire si aucun compte.
+- Sélecteur de compte (« Tous les comptes (n) », solde par compte),
+  dernière et prochaine synchro (+15 jours), suppression de compte, choix du
+  compte par défaut (modale si plusieurs comptes et défaut manquant).
+- Solde de trésorerie [B.14] et cloche d'alerte de seuil (modale) [B.29].
+- Solde estimé disponible [B.12].
+- Sélecteur d'année (bloqué à l'année courante).
+- KPI Encaissement, Décaissement, Rémunération [B.11].
+- Onglets Toutes / À catégoriser (badge compteur).
+- Liste paginée (10 par page) : tri date / libellé / montant, recherche
+  (debounce 300 ms), filtres date et catégorie, menu de catégorisation avec
+  propagation [B.28], icône « catégorisé automatiquement ».
+- Export CSV / PDF de la liste filtrée.
+
+C.6 /facturation
+----------------
+- Sélecteur d'année.
+- Cartes Payé / En attente / Rejeté (montant + nombre) [B.17], délai moyen
+  de paiement [B.17].
+- Graphe Facturation mensuelle empilé par statut, comparaison N-1, export
+  PDF.
+- Donut CA déclaré vs payé (clic = filtre statut) [B.17].
+- Donut Taux de rejet + paramétrage de l'alerte taux de rejet [B.17, B.29].
+- Ventilation par prestation NGAP (tableau + barres, clic = filtre) [B.18].
+- Détail des passages : filtres année, statut, cabinet, prestation, plage de
+  dates ; tri ; pagination 10 ; total filtré ; colonnes date, moment,
+  cabinet, facture, prestation, honoraires, majoration, férié/dim/nuit,
+  IFD, total, statut, badge de rapprochement bancaire [B.19].
+- Exports CSV (13 colonnes) et PDF (7 colonnes).
+
+C.7 /deadlines (Échéances)
+--------------------------
+- Prochaine échéance : compte à rebours, libellé, montant [B.20].
+- Ce mois-ci : N échéances restantes.
+- Cotisations annuelles estimées = URSSAF + CARPIMKO + IR, avec détail et
+  tooltip expliquant la base retenue [B.5 à B.9].
+- Liste des prochaines échéances (30 jours, 6 max) avec montant,
+  « Exonéré » (CFE 1re année) ou « Estimation à venir ».
+- Grille calendrier mensuelle (pastilles par type, détail du jour).
+- Export CSV / PDF.
+
+C.8 /management (Gestion) — 6 onglets
+-------------------------------------
+Onglet Mon activité :
+  - Sélecteur d'année ; KPI CA, Dépenses, dont cotisations sociales,
+    Rémunération avant impôt [B.1, B.11].
+  - Graphe barres revenus / dépenses / cotisations [B.10].
+  - Tableau mensuel : CA (réel + projeté) [B.31], Charges pro (sous-lignes
+    charges pro, rétrocession, Madelin, lignes de charges manuelles
+    éditables), Impôts (URSSAF, CARPIMKO, impôts, estimé en italique),
+    Rémunération avant impôt, Provision d'impôt, Jours travaillés éditables
+    [B.31].
+  - Bandeau d'incitation à connecter la banque en mode bordereaux.
+  - Export CSV / PDF.
+Onglet Mes cotisations sociales :
+  - Cartes URSSAF et CARPIMKO : total réel ou estimé, nombre de prélèvements
+    ou montant par échéance [B.6, B.7, B.9].
+  - Graphe mensuel empilé (estimé en transparence), détail mois par mois.
+  - Historique des prélèvements URSSAF / CARPIMKO (transactions) avec total.
+Onglet Mes impôts :
+  - Situation fiscale (statut, enfants, parent isolé, autres revenus, IR réel
+    pour les années passées) ; nombre de parts [B.21].
+  - Bénéfice BNC estimé, revenu imposable du foyer, impôt estimé, taux
+    moyen, tranche marginale et remplissage [B.21, B.22].
+  - PAS estimé (BNC + conjoint), régularisation N payée en N+1, écart
+    estimé/réel [B.22].
+  - Historique des impôts (transactions taxes + CFE).
+Onglet Ma synthèse :
+  - Carte Trésorerie prévisionnelle : trésorerie actuelle, projetée,
+    sélecteur d'horizon, tooltip de décomposition [B.14, B.13]. Overlay
+    « Connecter ma banque » sans banque.
+  - Métriques N vs N-1 avec barres : CA, charges pro, cotisations,
+    rémunération avant impôt, IR, reste à vivre [B.23].
+Onglet Reste à vivre :
+  - Trois cartes (fin de mois, fin de trimestre, fin d'année) avec le détail
+    des lignes et le reste à vivre estimé [B.13].
+Onglet Simulation :
+  - Estimation du reste à régler : CA de référence, slider CA simulé, écart
+    %, URSSAF / CARPIMKO / PAS / total / solde avant charges pro [B.24].
+  - Estimation du reste à vivre simulé (et « soit / mois ») [B.24].
+  - Estimation du CA : basse / probable / haute, évolution, fiabilité,
+    graphe réalisé / projeté, scénarios (disponibilité, leviers), saisie
+    manuelle d'actes avec tarifs, prévision ajustée et delta [B.25].
+
+C.9 /optimization
+-----------------
+- Cartes d'optimisation avec case à cocher et montant : PER, Madelin,
+  blanchisserie (auto), chèques-vacances ; cartes indisponibles (SELARL,
+  CE, matériel, temps de travail) [B.26]. Cartes grisées en micro-BNC.
+- Impact sur les cotisations sociales : URSSAF et CARPIMKO avant / après,
+  note « effet en N+2 » selon la base [B.26].
+- Impact sur la fiscalité : imposition avant / après, barre de tranche
+  marginale [B.21].
+- Impact sur la rémunération : décaissement N, gain N+1 [B.26].
+- Recommandations personnalisées avec impact cumulé [B.27].
+- Export PDF.
+
+C.10 /profile — 4 onglets
+-------------------------
+Profil professionnel : prénom, nom, profession, début d'activité, régime
+  fiscal, rétrocession (activation, type %, ou € mensuel, valeur), jours
+  travaillés par semaine.
+Préférences de paiement : URSSAF (fréquence, jour 5/20), PAS (fréquence,
+  taux %), CARPIMKO (fréquence, jour 5/10/15/20/25). Pilotent [B.9, B.20].
+Notifications : récapitulatif (aucun / mensuel / trimestriel), rappel
+  hebdomadaire des échéances, alerte trésorerie (seuil), alerte taux de
+  rejet (seuil 0,5 à 50 %).
+Compte : changement de mot de passe, déconnexion, export RGPD, suppression
+  de compte.
+
+C.11 /help et /support-services
+-------------------------------
+/help : page d'aide statique.
+/support-services : page « À venir », sans contenu.
+
+C.12 Back-office /admin
+-----------------------
+/admin/users : tableau des praticiens (nom, email, régime, statut Actif /
+  En attente / Supprimé, date d'inscription), modale détail (rétrocession,
+  fréquences, début d'activité), invitations en attente avec délai
+  d'expiration (24 h), envoi d'invitation.
+/admin/admins : tableau des comptes admin, statut, dates, invitations.
+/admin/practices : cabinets (nom, FINESS, date), création, édition inline,
+  suppression bloquée si des passages ou paiements y sont rattachés.
+/admin/statements : upload d'un bordereau PDF, détection du type, aperçu
+  avant import (NOEMIE : facturé, payé, rejeté + nombre, écart ; rattrapage :
+  honoraires, majoration, férié/dim/nuit, IFD, total, filtre praticien),
+  import, historique des imports (date, type, cabinet, passages
+  nouvellement insérés, montant des nouvelles lignes).
+
+
+================================================================================
+POINTS D'ATTENTION / INCOHÉRENCES CONNUES
+================================================================================
+
+- Charges non transmises : Dashboard, Optimisation, Échéances et
+  Transactions appellent l'estimation sans charges annualisées, Gestion les
+  transmet. Les montants URSSAF / CARPIMKO / PAS / IR peuvent donc différer
+  d'une page à l'autre pour le même praticien [B.4].
+- Sources primaires opposées : le provider partagé (Échéances, Optimisation,
+  carte Échéances du Dashboard) privilégie les bordereaux, le Dashboard
+  (reste à vivre) et Gestion privilégient les transactions. Le CA affiché
+  peut différer entre blocs [B.1].
+- Trésorerie mixte sur le Dashboard : la carte montre le compte par défaut,
+  la courbe est reconstruite depuis la somme de tous les comptes [B.14].
+- Solde estimé disponible (Transactions) toujours calculé sur l'année
+  courante quel que soit le sélecteur d'année [B.12].
+- Compteur « à catégoriser » : global au chargement, puis recalculé dans le
+  périmètre filtré par la pagination.
+- Export PDF Optimisation : la ligne URSSAF « après » réutilise le montant
+  « avant » (optimization/client.tsx, ligne 268), le gain URSSAF n'y
+  apparaît jamais.
+- Taux de rejet : la carte Facturation utilise l'année entière et exclut les
+  passages en attente ; l'alerte email utilise 30 jours et inclut les
+  passages en attente au dénominateur [B.17, B.29].
+- Barèmes IR, plafonnement du quotient et décote disponibles jusqu'aux
+  revenus 2025 ; au-delà, repli silencieux sur 2025 [B.21].
+- Prochaines échéances : la coupe à 6 événements intervient avant la fin du
+  balayage des 3 mois ; des échéances de la fenêtre 30 jours peuvent être
+  omises un jour très chargé [B.20].
+- Délai d'expiration des invitations (admin) figé au rendu, non rafraîchi.
+- Historique des imports : le montant NOEMIE somme le payé, celui des
+  rattrapages le total facturé, sur les seules lignes nouvellement insérées.
+- Rappel des échéances calculé en UTC ; les échéances tombant à minuit
+  heure de Paris peuvent basculer de semaine.

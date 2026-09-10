@@ -198,33 +198,48 @@ export function TransactionsClient() {
     return () => { cancelled = true; };
   }, [txPage, selectedAccount, txSortBy, txSortDir, txTab, searchDebounced, effectiveDateFrom, effectiveDateTo, categoryFilter, hp?.bridgeUserUuid, setUncategorizedCount]);
 
-  // Fetch KPIs from server
+  // KPIs de l'année sélectionnée + KPIs de l'année courante (carte « Solde
+  // estimé dispo »). Un seul effet : quand les deux années coïncident (cas par
+  // défaut au montage), UNE seule requête sert les deux — avant, deux appels
+  // identiques partaient en parallèle. Les KPIs de l'année courante ne sont
+  // rechargés que si le compte sélectionné change (pas au changement d'année).
+  const currentYearKpiKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!hp?.bridgeUserUuid) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch with loading flag
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- early return: no user, finish loading
+    if (!hp?.bridgeUserUuid) { setDispoLoading(false); return; }
+    const currentYear = new Date().getFullYear();
+    const currentKey = selectedAccount ?? "";
+    const needCurrent = currentYearKpiKeyRef.current !== currentKey;
+    if (needCurrent) currentYearKpiKeyRef.current = currentKey;
+
+    let cancelled = false;
     setKpiLoading(true);
-    getTransactionKpisAction(selectedAccount, kpiYear).then((result) => {
+    if (needCurrent) setDispoLoading(true);
+
+    const selectedPromise = getTransactionKpisAction(selectedAccount, kpiYear);
+    const currentPromise = !needCurrent
+      ? null
+      : kpiYear === currentYear
+        ? selectedPromise
+        : getTransactionKpisAction(selectedAccount, currentYear);
+
+    selectedPromise.then((result) => {
+      if (cancelled) return;
       setKpiEncaissement(result.encaissement);
       setKpiDecaissement(result.decaissement);
       setKpiRemuneration(result.remuneration ?? 0);
       setKpiLoading(false);
     });
-  }, [selectedAccount, kpiYear, hp?.bridgeUserUuid]);
-
-  // Current-year KPIs (always, used by "Solde estimé dispo")
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- early return: no user, finish loading
-    if (!hp?.bridgeUserUuid) { setDispoLoading(false); return; }
-    setDispoLoading(true);
-    const currentYear = new Date().getFullYear();
-    getTransactionKpisAction(selectedAccount, currentYear).then((result) => {
+    currentPromise?.then((result) => {
+      if (cancelled) return;
       setCurrentYearEncaissement(result.encaissement);
       setCurrentYearUrssafPaid(result.urssafPaid ?? 0);
       setCurrentYearCarpimkoPaid(result.carpimkoPaid ?? 0);
       // No CA → no estimate to wait for, loading is done.
       if (result.encaissement <= 0) setDispoLoading(false);
     });
-  }, [selectedAccount, hp?.bridgeUserUuid]);
+    return () => { cancelled = true; };
+  }, [selectedAccount, kpiYear, hp?.bridgeUserUuid]);
 
   // Fetch cotisations estimate based on current year YTD CA
   useEffect(() => {
