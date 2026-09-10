@@ -2931,6 +2931,150 @@ function SummaryTab() {
 // PAS dans le calcul. Vue purement indicative — pas de prise en compte de régul
 // ou dépenses ponctuelles.
 
+// ── Cascade « du chiffre d'affaires au reste à vivre » ──
+// Une barre par étape, positionnée là où elle prend l'argent : on lit la
+// proportion de chaque prélèvement, pas seulement son montant. Trois couleurs
+// SÉMANTIQUES (entrée / sortie / solde), jamais une par ligne : les six lignes
+// de charges ne sont pas des catégories à distinguer, elles sont toutes « ce
+// qui part ». Palette validée sur fond clair (contraste ≥ 3:1, séparation
+// daltonisme ≥ 8) ; le gris des sorties est volontairement désaturé.
+const WF_IN = "#2FA169";      // menthe-600 — encaissements
+const WF_OUT = "#847A95";     // ardoise-500 — prélèvements
+const WF_TOTAL = "#EC6C12";   // brand-600 — reste à vivre
+const WF_NEG = "#C73E3E";     // alerte-600 — reste à vivre négatif
+
+type WaterfallStep = {
+  name: string;
+  /** [début, fin] sur l'axe : la barre flotte entre les deux. */
+  range: [number, number];
+  /** Montant signé de l'étape (+ encaissement, − prélèvement). */
+  amount: number;
+  /** Solde restant APRÈS cette étape. */
+  running: number;
+  kind: "in" | "out" | "total";
+};
+
+function buildWaterfall(b: {
+  projIncome: number; urssafDue: number; carpimkoDue: number; pasDue: number;
+  projChargesPro: number; projRetroMadelin: number;
+}): WaterfallStep[] {
+  const steps: WaterfallStep[] = [];
+  let running = b.projIncome;
+  steps.push({ name: "Encaissements", range: [0, b.projIncome], amount: b.projIncome, running, kind: "in" });
+
+  const charges: [string, number][] = [
+    ["URSSAF", b.urssafDue],
+    ["CARPIMKO", b.carpimkoDue],
+    ["Impôt (PAS)", b.pasDue],
+    ["Charges pro.", b.projChargesPro],
+    ["Rétro./Madelin", b.projRetroMadelin],
+  ];
+  for (const [name, v] of charges) {
+    if (Math.abs(v) <= 0.5) continue;
+    const next = running - v;
+    steps.push({
+      name,
+      range: [Math.min(next, running), Math.max(next, running)],
+      amount: -v,
+      running: next,
+      kind: "out",
+    });
+    running = next;
+  }
+
+  steps.push({
+    name: "Reste à vivre",
+    range: [Math.min(0, running), Math.max(0, running)],
+    amount: running,
+    running,
+    kind: "total",
+  });
+  return steps;
+}
+
+function stepColor(step: WaterfallStep): string {
+  if (step.kind === "in") return WF_IN;
+  if (step.kind === "out") return WF_OUT;
+  return step.amount >= 0 ? WF_TOTAL : WF_NEG;
+}
+
+function WaterfallTooltip({ active, payload }: { active?: boolean; payload?: { payload: WaterfallStep }[] }) {
+  if (!active || !payload?.length) return null;
+  const s = payload[0]!.payload;
+  return (
+    <div className="bg-white border border-ardoise-200 rounded-lg shadow-1 px-3 py-2">
+      <p className="text-xs font-semibold text-ardoise-900">{s.name}</p>
+      <p className="text-xs font-mono tabular-nums" style={{ color: stepColor(s) }}>
+        {s.amount > 0 ? "+" : s.amount < 0 ? "−" : ""}{formatCurrency(Math.abs(s.amount))}
+      </p>
+      {s.kind !== "total" && (
+        <p className="mt-0.5 text-[11px] text-ardoise-500">
+          Reste ensuite : <span className="font-mono tabular-nums">{formatCurrency(s.running)}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function RemainderWaterfall({ steps }: { steps: WaterfallStep[] }) {
+  // Recharts ne dessine pas une barre à partir d'une valeur [début, fin] : on
+  // empile donc une barre de base TRANSPARENTE sous la barre visible. Une pile
+  // mélangeant valeurs positives et négatives serait éclatée en deux, alors que
+  // le reste à vivre peut passer sous zéro : on décale toute la cascade d'un
+  // offset pour rester en positif. L'axe étant masqué et les montants écrits au
+  // bout des barres, ce décalage est invisible ; seul le trait du zéro le suit.
+  const lo = Math.min(0, ...steps.map((s) => s.range[0]));
+  const hi = Math.max(0, ...steps.map((s) => s.range[1]));
+  const offset = -Math.min(0, lo);
+  const data = steps.map((s) => ({
+    ...s,
+    base: s.range[0] + offset,
+    span: s.range[1] - s.range[0],
+  }));
+  // Marge à droite pour les étiquettes de valeur posées au bout des barres.
+  const pad = Math.max(1, hi - lo) * 0.58;
+
+  return (
+    <ResponsiveContainer width="100%" height={steps.length * 34 + 16}>
+      <BarChart
+        data={data}
+        layout="vertical"
+        margin={{ top: 4, right: 4, bottom: 4, left: 0 }}
+        barCategoryGap="20%"
+      >
+        <XAxis type="number" domain={[0, hi + offset + pad]} hide />
+        <YAxis
+          type="category"
+          dataKey="name"
+          width={96}
+          tick={{ fontSize: 11, fill: "#645A75" }}
+          tickLine={false}
+          axisLine={false}
+        />
+        {/* Le zéro ancre la cascade : indispensable si le reste passe sous zéro. */}
+        <ReferenceLine x={offset} stroke="#E1DBEC" strokeWidth={1} />
+        <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} content={<WaterfallTooltip />} />
+        <Bar dataKey="base" stackId="wf" fill="transparent" isAnimationActive={false} />
+        <Bar dataKey="span" stackId="wf" radius={4} maxBarSize={16} isAnimationActive={false}>
+          {data.map((s) => (
+            <Cell key={s.name} fill={stepColor(s)} />
+          ))}
+          <LabelList
+            dataKey="amount"
+            position="right"
+            offset={6}
+            formatter={(v) => {
+              const n = typeof v === "number" ? v : Number(v ?? 0);
+              return `${n > 0 ? "+" : n < 0 ? "−" : ""}${formatCurrency(Math.abs(n))}`;
+            }}
+            style={{ fontSize: 10.5, fontWeight: 600, fill: "#463C58" }}
+          />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 function RemainderTab() {
   const hp = usePractitioner();
   const { loadYearCore, loadEstimate } = useManagementData();
@@ -3047,14 +3191,9 @@ function RemainderTab() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {breakdowns.map((b) => {
-          const rows: { label: string; value: number; isCredit?: boolean }[] = [
-            { label: "Encaissements estimés", value: b.projIncome, isCredit: true },
-            { label: "URSSAF", value: b.urssafDue },
-            { label: "CARPIMKO", value: b.carpimkoDue },
-            { label: "Impôt sur le revenu (PAS)", value: b.pasDue },
-            { label: "Charges pro.", value: b.projChargesPro },
-            { label: "Rétrocession + Madelin", value: b.projRetroMadelin },
-          ].filter((r) => Math.abs(r.value) > 0.5);
+          const steps = buildWaterfall(b);
+          // Une seule étape utile = encaissements nuls ET aucune charge projetée.
+          const hasFlow = steps.some((s) => s.kind !== "total" && Math.abs(s.amount) > 0.5);
           return (
             <div key={b.key} className="bg-white/70 backdrop-blur-xl border border-ardoise-200/70 rounded-[14px] shadow-1 p-5">
               <div className="mb-4">
@@ -3065,18 +3204,11 @@ function RemainderTab() {
                 <div className="h-48 bg-ardoise-100 rounded animate-pulse" />
               ) : (
                 <>
-                  {rows.length === 0 ? (
+                  {!hasFlow ? (
                     <p className="py-4 text-xs text-ardoise-400 italic">Aucune charge ni encaissement projeté sur la période.</p>
                   ) : (
-                    <div className="py-3 space-y-1.5">
-                      {rows.map((r) => (
-                        <div key={r.label} className="flex items-baseline justify-between text-xs">
-                          <span className="text-ardoise-600">{r.label}</span>
-                          <span className={`tabular-nums font-mono ${r.isCredit ? "text-menthe-600" : "text-ardoise-700"}`}>
-                            {r.isCredit ? "+" : "−"}{formatCurrency(r.value)}
-                          </span>
-                        </div>
-                      ))}
+                    <div className="py-1 -ml-1">
+                      <RemainderWaterfall steps={steps} />
                     </div>
                   )}
                   <div className="pt-3 border-t border-ardoise-100">
@@ -3090,6 +3222,19 @@ function RemainderTab() {
             </div>
           );
         })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-ardoise-500">
+        {[
+          { c: WF_IN, l: "Encaissements estimés" },
+          { c: WF_OUT, l: "Prélèvements et charges" },
+          { c: WF_TOTAL, l: "Reste à vivre" },
+        ].map((x) => (
+          <span key={x.l} className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: x.c }} />
+            {x.l}
+          </span>
+        ))}
       </div>
 
       <p className="text-[11px] text-ardoise-400 leading-relaxed">
